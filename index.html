@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>آرسان | دستیار هوشمند تحلیل رمزارز</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0f14; --card:#141b23; --card2:#1b232d; --text:#e7edf3; --muted:#8ea0b3;
+    --green:#1fbf75; --red:#e5484d; --yellow:#f2b705; --accent:#3b82f6; --border:#232d38;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:Tahoma,Vazirmatn,sans-serif;background:var(--bg);color:var(--text);}
+  header{padding:20px;text-align:center;border-bottom:1px solid var(--border);}
+  header h1{margin:0;font-size:26px;}
+  header p{color:var(--muted);margin:6px 0 0;font-size:13px;}
+  .updated{color:var(--muted);font-size:12px;margin-top:8px;}
+  .container{max-width:1100px;margin:0 auto;padding:16px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+  .coin-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;transition:.15s;}
+  .coin-card:hover{border-color:var(--accent);}
+  .coin-card.active{border-color:var(--accent);background:var(--card2);}
+  .coin-top{display:flex;justify-content:space-between;align-items:center;}
+  .coin-sym{font-weight:bold;font-size:16px;}
+  .fav-btn{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);}
+  .fav-btn.active{color:var(--yellow);}
+  .coin-price{font-size:15px;margin-top:6px;}
+  .coin-change{font-size:12px;margin-top:2px;}
+  .up{color:var(--green);} .down{color:var(--red);}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;margin-top:8px;font-weight:bold;}
+  .badge.buy{background:rgba(31,191,117,.15);color:var(--green);}
+  .badge.sell{background:rgba(229,72,77,.15);color:var(--red);}
+  .badge.hold{background:rgba(242,183,5,.15);color:var(--yellow);}
+  .detail{margin-top:20px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;}
+  .detail h2{margin:0 0 4px;}
+  .indicators{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:16px 0;}
+  .ind-item{background:var(--card2);border-radius:10px;padding:10px;text-align:center;}
+  .ind-item .label{font-size:11px;color:var(--muted);}
+  .ind-item .value{font-size:15px;font-weight:bold;margin-top:4px;}
+  .reason-box{background:var(--card2);border-radius:10px;padding:14px;line-height:1.9;font-size:14px;}
+  .disclaimer{color:var(--muted);font-size:11px;margin-top:10px;}
+  .search{width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);margin-bottom:14px;font-size:14px;}
+  canvas{max-height:260px;margin-top:16px;}
+  .loading,.error{text-align:center;color:var(--muted);padding:40px;}
+  .tabs{display:flex;gap:8px;margin-bottom:12px;}
+  .tab{padding:6px 14px;border-radius:20px;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:13px;}
+  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🪙 آرسان</h1>
+  <p>دستیار هوشمند تحلیل بازار رمزارز — فقط برای اطلاع، تصمیم نهایی با شماست</p>
+  <div class="updated" id="updatedAt">در حال بارگذاری...</div>
+</header>
+
+<div class="container">
+  <input class="search" id="searchBox" placeholder="جست‌وجوی رمزارز (مثلاً BTC یا Bitcoin)...">
+  <div class="tabs">
+    <div class="tab active" data-tab="all">همه</div>
+    <div class="tab" data-tab="fav">⭐ علاقه‌مندی‌ها</div>
+  </div>
+  <div id="coinGrid" class="grid"><div class="loading">در حال دریافت آخرین تحلیل...</div></div>
+  <div id="detailSection"></div>
+</div>
+
+<script>
+const DATA_URL = "./data/analysis.json";
+let allData = null;
+let selectedCoin = null;
+let activeTab = "all";
+let chartInstance = null;
+
+function getFavs(){
+  try { return JSON.parse(localStorage.getItem("arsan_favs") || "[]"); } catch(e){ return []; }
+}
+function toggleFav(id){
+  let favs = getFavs();
+  if(favs.includes(id)) favs = favs.filter(f=>f!==id);
+  else favs.push(id);
+  localStorage.setItem("arsan_favs", JSON.stringify(favs));
+  render();
+}
+
+function fmtPrice(p){
+  if(p == null) return "-";
+  if(p >= 1) return "$" + p.toLocaleString(undefined,{maximumFractionDigits:2});
+  return "$" + p.toPrecision(4);
+}
+
+function fmtTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleString("fa-IR", {dateStyle:"medium", timeStyle:"short"});
+}
+
+async function loadData(){
+  try{
+    const res = await fetch(DATA_URL + "?t=" + Date.now());
+    if(!res.ok) throw new Error("no data");
+    allData = await res.json();
+    document.getElementById("updatedAt").textContent = "آخرین به‌روزرسانی: " + fmtTime(allData.generated_at);
+    if(allData.coins.length){
+      selectedCoin = allData.coins[0].id;
+    }
+    render();
+  }catch(e){
+    document.getElementById("coinGrid").innerHTML =
+      '<div class="error">هنوز داده‌ای تولید نشده. اولین اجرای GitHub Action باید کامل شود (چند دقیقه صبر کنید و صفحه را رفرش کنید).</div>';
+  }
+}
+
+function render(){
+  if(!allData) return;
+  const grid = document.getElementById("coinGrid");
+  const query = document.getElementById("searchBox").value.trim().toLowerCase();
+  const favs = getFavs();
+
+  let coins = allData.coins.filter(c =>
+    c.symbol.toLowerCase().includes(query) || c.name.toLowerCase().includes(query)
+  );
+  if(activeTab === "fav") coins = coins.filter(c => favs.includes(c.id));
+
+  if(coins.length === 0){
+    grid.innerHTML = '<div class="loading">موردی یافت نشد.</div>';
+  } else {
+    grid.innerHTML = coins.map(c => {
+      const change = c.change_24h;
+      const changeClass = change >= 0 ? "up" : "down";
+      const changeSign = change >= 0 ? "+" : "";
+      const isFav = favs.includes(c.id);
+      return `
+        <div class="coin-card ${c.id===selectedCoin?'active':''}" onclick="selectCoin('${c.id}')">
+          <div class="coin-top">
+            <span class="coin-sym">${c.symbol}</span>
+            <button class="fav-btn ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav('${c.id}')">★</button>
+          </div>
+          <div class="coin-price">${fmtPrice(c.indicators.current_price)}</div>
+          <div class="coin-change ${changeClass}">${change!=null ? changeSign+change.toFixed(2)+'%' : ''}</div>
+          <span class="badge ${c.decision.signal}">${c.decision.emoji} ${c.decision.signal_fa}</span>
+        </div>`;
+    }).join("");
+  }
+
+  renderDetail();
+}
+
+function selectCoin(id){
+  selectedCoin = id;
+  render();
+}
+
+function renderDetail(){
+  const section = document.getElementById("detailSection");
+  const coin = allData.coins.find(c => c.id === selectedCoin);
+  if(!coin){ section.innerHTML = ""; return; }
+
+  const i = coin.indicators;
+  const d = coin.decision;
+
+  section.innerHTML = `
+    <div class="detail">
+      <h2>${coin.name} (${coin.symbol}) ${d.emoji}</h2>
+      <span class="badge ${d.signal}">${d.emoji} نتیجه: ${d.signal_fa}</span>
+      <div class="indicators">
+        <div class="ind-item"><div class="label">قیمت فعلی</div><div class="value">${fmtPrice(i.current_price)}</div></div>
+        <div class="ind-item"><div class="label">روند</div><div class="value">${i.trend}</div></div>
+        <div class="ind-item"><div class="label">RSI</div><div class="value">${i.rsi ?? '-'}</div></div>
+        <div class="ind-item"><div class="label">MACD Histogram</div><div class="value">${i.macd.histogram}</div></div>
+        <div class="ind-item"><div class="label">میانگین متحرک (MA20)</div><div class="value">${fmtPrice(i.ma20)}</div></div>
+        <div class="ind-item"><div class="label">EMA20</div><div class="value">${fmtPrice(i.ema20)}</div></div>
+        <div class="ind-item"><div class="label">حجم معاملات</div><div class="value">${i.volume_trend}</div></div>
+        <div class="ind-item"><div class="label">حمایت</div><div class="value">${fmtPrice(i.support)}</div></div>
+        <div class="ind-item"><div class="label">مقاومت</div><div class="value">${fmtPrice(i.resistance)}</div></div>
+      </div>
+      <div class="reason-box">💬 ${d.reason}</div>
+      <div class="disclaimer">⚠️ ${d.disclaimer}</div>
+      <canvas id="priceChart"></canvas>
+    </div>
+  `;
+
+  drawChart(coin);
+}
+
+function drawChart(coin){
+  const ctx = document.getElementById("priceChart");
+  if(chartInstance) chartInstance.destroy();
+  const labels = coin.price_history.map(p => new Date(p.t).toLocaleDateString("fa-IR"));
+  const prices = coin.price_history.map(p => p.p);
+  chartInstance = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "قیمت (USD)",
+        data: prices,
+        borderColor: "#3b82f6",
+        backgroundColor: "rgba(59,130,246,0.1)",
+        fill: true,
+        pointRadius: 0,
+        tension: 0.25,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#8ea0b3", maxTicksLimit: 6 }, grid: { color: "#232d38" } },
+        y: { ticks: { color: "#8ea0b3" }, grid: { color: "#232d38" } },
+      }
+    }
+  });
+}
+
+document.getElementById("searchBox").addEventListener("input", render);
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    tab.classList.add("active");
+    activeTab = tab.dataset.tab;
+    render();
+  });
+});
+
+loadData();
+</script>
+</body>
+</html>
