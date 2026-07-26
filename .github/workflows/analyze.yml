@@ -1,0 +1,36 @@
+name: Arsan Market Analysis
+
+on:
+  schedule:
+    # هر ۱ ساعت یکبار اجرا می‌شود (زمان UTC)
+    - cron: "0 * * * *"
+  workflow_dispatch: {}   # امکان اجرای دستی از تب Actions در گیت‌هاب
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Arsan analysis
+        run: python analyzer/main.py
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name "arsan-bot"
+          git config user.email "arsan-bot@users.noreply.github.com"
+          git add data/analysis.json
+          git diff --cached --quiet && echo "No changes to commit" || git commit -m "chore: update market analysis [skip ci]"
+          git push
