@@ -1,67 +1,66 @@
 """
-ماژول دریافت داده بازار از CoinGecko (رایگان، بدون نیاز به API Key)
+آرسان - دریافت داده‌های بازار از CoinGecko
+نسخه ۲: بدون تغییر عمده نسبت به نسخه ۱ (فقط سازگار با ماژول‌های جدید indicators/decision)
 """
-import requests
+
 import time
+import requests
 
-BASE_URL = "https://api.coingecko.com/api/v3"
+COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 
-# لیست رمزارزهایی که آرسان در MVP روی آن‌ها تحلیل انجام می‌دهد
-# id ها باید دقیقاً همان id رسمی CoinGecko باشند
 DEFAULT_COINS = [
-    {"id": "bitcoin", "symbol": "BTC", "name": "Bitcoin"},
-    {"id": "ethereum", "symbol": "ETH", "name": "Ethereum"},
-    {"id": "binancecoin", "symbol": "BNB", "name": "BNB"},
-    {"id": "ripple", "symbol": "XRP", "name": "XRP"},
-    {"id": "solana", "symbol": "SOL", "name": "Solana"},
-    {"id": "dogecoin", "symbol": "DOGE", "name": "Dogecoin"},
-    {"id": "cardano", "symbol": "ADA", "name": "Cardano"},
-    {"id": "tron", "symbol": "TRX", "name": "TRON"},
+    "bitcoin",
+    "ethereum",
+    "binancecoin",
+    "ripple",
+    "solana",
+    "dogecoin",
+    "cardano",
+    "tron",
 ]
 
+MAX_RETRIES = 5
+BASE_BACKOFF_SECONDS = 5
 
-def _get(url, params=None, retries=3, backoff=5):
-    """درخواست HTTP با تلاش مجدد ساده در صورت خطای موقت (مثل rate limit)"""
-    for attempt in range(retries):
-        resp = requests.get(url, params=params, timeout=20)
-        if resp.status_code == 200:
-            return resp.json()
-        if resp.status_code == 429:
-            time.sleep(backoff * (attempt + 1))
+
+def _get_with_retry(url, params=None):
+    """درخواست GET با retry و backoff نمایی در صورت خطای 429 (rate limit)."""
+    for attempt in range(1, MAX_RETRIES + 1):
+        response = requests.get(url, params=params, timeout=30)
+        if response.status_code == 200:
+            return response.json()
+        if response.status_code == 429:
+            wait_time = BASE_BACKOFF_SECONDS * attempt
+            print(f"[fetch_data] Rate limited (429). Waiting {wait_time}s (attempt {attempt}/{MAX_RETRIES})...")
+            time.sleep(wait_time)
             continue
-        resp.raise_for_status()
-    resp.raise_for_status()
+        response.raise_for_status()
+    raise RuntimeError(f"Failed to fetch {url} after {MAX_RETRIES} retries (rate limited).")
 
 
-def get_market_chart(coin_id: str, days: int = 30, vs_currency: str = "usd"):
+def get_market_chart(coin_id, days=30):
     """
-    دریافت تاریخچه قیمت و حجم معاملات یک رمزارز.
-    خروجی: لیستی از دیکشنری‌ها با کلیدهای timestamp, price, volume
+    تاریخچه قیمت و حجم برای coin_id در days روز اخیر.
+    خروجی: {"prices": [[timestamp_ms, price], ...], "volumes": [[timestamp_ms, volume], ...]}
     """
-    url = f"{BASE_URL}/coins/{coin_id}/market_chart"
-    params = {"vs_currency": vs_currency, "days": days}
-    data = _get(url, params)
-
-    prices = data.get("prices", [])
-    volumes = data.get("total_volumes", [])
-
-    merged = []
-    for i in range(len(prices)):
-        merged.append({
-            "timestamp": prices[i][0],
-            "price": prices[i][1],
-            "volume": volumes[i][1] if i < len(volumes) else None,
-        })
-    return merged
+    url = f"{COINGECKO_BASE}/coins/{coin_id}/market_chart"
+    params = {"vs_currency": "usd", "days": days}
+    data = _get_with_retry(url, params)
+    return {
+        "prices": data.get("prices", []),
+        "volumes": data.get("total_volumes", []),
+    }
 
 
 def get_current_snapshot(coin_ids):
-    """دریافت قیمت لحظه‌ای و تغییرات ۲۴ ساعته برای چند رمزارز همزمان"""
-    url = f"{BASE_URL}/coins/markets"
+    """
+    قیمت لحظه‌ای و درصد تغییر ۲۴ ساعته برای لیستی از coin_id ها.
+    خروجی: {coin_id: {"usd": price, "usd_24h_change": percent}, ...}
+    """
+    url = f"{COINGECKO_BASE}/simple/price"
     params = {
-        "vs_currency": "usd",
         "ids": ",".join(coin_ids),
-        "order": "market_cap_desc",
-        "price_change_percentage": "24h",
+        "vs_currencies": "usd",
+        "include_24hr_change": "true",
     }
-    return _get(url, params)
+    return _get_with_retry(url, params)
