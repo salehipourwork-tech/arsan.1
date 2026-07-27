@@ -3,227 +3,286 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>آرسان | دستیار هوشمند تحلیل رمزارز</title>
+<title>آرسان | دستیار تحلیل رمزارز</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root{
-    --bg:#0b0f14; --card:#141b23; --card2:#1b232d; --text:#e7edf3; --muted:#8ea0b3;
-    --green:#1fbf75; --red:#e5484d; --yellow:#f2b705; --accent:#3b82f6; --border:#232d38;
+    --bg: #0b0f14;
+    --bg-elevated: #121822;
+    --bg-card: #161d29;
+    --border: #232c3a;
+    --text: #e7ecf3;
+    --text-dim: #8a97ac;
+    --gold: #d4af6a;
+    --teal: #3fb6a8;
+    --green: #3ecf8e;
+    --red: #e5636b;
+    --yellow: #e0b23c;
+    --radius: 14px;
+    --font-body: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
   }
+  @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap');
+
   *{box-sizing:border-box;}
-  body{margin:0;font-family:Tahoma,Vazirmatn,sans-serif;background:var(--bg);color:var(--text);}
-  header{padding:20px;text-align:center;border-bottom:1px solid var(--border);}
-  header h1{margin:0;font-size:26px;}
-  header p{color:var(--muted);margin:6px 0 0;font-size:13px;}
-  .updated{color:var(--muted);font-size:12px;margin-top:8px;}
-  .container{max-width:1100px;margin:0 auto;padding:16px;}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
-  .coin-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;transition:.15s;}
-  .coin-card:hover{border-color:var(--accent);}
-  .coin-card.active{border-color:var(--accent);background:var(--card2);}
-  .coin-top{display:flex;justify-content:space-between;align-items:center;}
-  .coin-sym{font-weight:bold;font-size:16px;}
-  .fav-btn{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);}
-  .fav-btn.active{color:var(--yellow);}
-  .coin-price{font-size:15px;margin-top:6px;}
-  .coin-change{font-size:12px;margin-top:2px;}
-  .up{color:var(--green);} .down{color:var(--red);}
-  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;margin-top:8px;font-weight:bold;}
-  .badge.buy{background:rgba(31,191,117,.15);color:var(--green);}
-  .badge.sell{background:rgba(229,72,77,.15);color:var(--red);}
-  .badge.hold{background:rgba(242,183,5,.15);color:var(--yellow);}
-  .detail{margin-top:20px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;}
-  .detail h2{margin:0 0 4px;}
-  .indicators{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:16px 0;}
-  .ind-item{background:var(--card2);border-radius:10px;padding:10px;text-align:center;}
-  .ind-item .label{font-size:11px;color:var(--muted);}
-  .ind-item .value{font-size:15px;font-weight:bold;margin-top:4px;}
-  .reason-box{background:var(--card2);border-radius:10px;padding:14px;line-height:1.9;font-size:14px;}
-  .disclaimer{color:var(--muted);font-size:11px;margin-top:10px;}
-  .search{width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);margin-bottom:14px;font-size:14px;}
-  canvas{max-height:260px;margin-top:16px;}
-  .loading,.error{text-align:center;color:var(--muted);padding:40px;}
-  .tabs{display:flex;gap:8px;margin-bottom:12px;}
-  .tab{padding:6px 14px;border-radius:20px;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:13px;}
-  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--font-body); min-height:100vh;
+  }
+  header{
+    padding:28px 20px 20px; text-align:center; position:relative;
+    border-bottom:1px solid var(--border);
+  }
+  header h1{
+    margin:0; font-size:28px; font-weight:700; letter-spacing:0.5px;
+    background:linear-gradient(90deg,var(--gold),var(--teal));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  header p{color:var(--text-dim); margin:6px 0 0; font-size:14px;}
+
+  #freshness{
+    display:inline-flex; align-items:center; gap:8px; margin-top:14px;
+    padding:6px 14px; border-radius:20px; font-size:12.5px; font-family:var(--font-mono);
+    border:1px solid var(--border); background:var(--bg-elevated);
+  }
+  #freshness .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);}
+  #freshness.fresh .dot{background:var(--green); box-shadow:0 0 8px var(--green);}
+  #freshness.stale .dot{background:var(--yellow); box-shadow:0 0 8px var(--yellow);}
+  #freshness.old .dot{background:var(--red); box-shadow:0 0 8px var(--red);}
+  #freshness.paused .dot{background:var(--text-dim);}
+
+  .toolbar{
+    max-width:900px; margin:24px auto 0; padding:0 20px;
+    display:flex; gap:10px;
+  }
+  #search{
+    flex:1; padding:12px 16px; border-radius:10px; border:1px solid var(--border);
+    background:var(--bg-elevated); color:var(--text); font-family:var(--font-body); font-size:14px;
+  }
+  #search:focus{outline:none; border-color:var(--teal);}
+
+  .grid{
+    max-width:900px; margin:20px auto 60px; padding:0 20px;
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px;
+  }
+  .card{
+    background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px 18px; cursor:pointer; transition:transform .15s ease, border-color .15s ease;
+    position:relative;
+  }
+  .card:hover{transform:translateY(-2px); border-color:var(--teal);}
+  .card .top-row{display:flex; justify-content:space-between; align-items:flex-start;}
+  .card .name{font-weight:600; font-size:16px;}
+  .card .fav{background:none; border:none; font-size:18px; cursor:pointer; color:var(--text-dim);}
+  .card .fav.active{color:var(--gold);}
+  .card .price{font-family:var(--font-mono); font-size:20px; margin-top:8px;}
+  .card .change{font-family:var(--font-mono); font-size:13px; margin-top:2px;}
+  .change.up{color:var(--green);} .change.down{color:var(--red);}
+
+  .badge{
+    display:inline-block; margin-top:12px; padding:5px 12px; border-radius:8px;
+    font-size:13px; font-weight:600;
+  }
+  .badge.buy{background:rgba(62,207,142,0.15); color:var(--green);}
+  .badge.sell{background:rgba(229,99,107,0.15); color:var(--red);}
+  .badge.hold{background:rgba(224,178,60,0.15); color:var(--yellow);}
+
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius);
+    max-width:560px; width:100%; max-height:88vh; overflow-y:auto; padding:24px;
+  }
+  .modal-header{display:flex; justify-content:space-between; align-items:center;}
+  .modal-header h2{margin:0; font-size:20px;}
+  .close-btn{background:none; border:none; color:var(--text-dim); font-size:22px; cursor:pointer;}
+  .modal canvas{margin-top:16px; max-height:220px;}
+  .reasons{margin-top:16px; padding-right:18px; font-size:14px; line-height:1.9; color:var(--text-dim);}
+  .indicators-table{width:100%; margin-top:16px; border-collapse:collapse; font-size:13px;}
+  .indicators-table td{padding:6px 4px; border-bottom:1px solid var(--border);}
+  .indicators-table td:first-child{color:var(--text-dim);}
+  .indicators-table td:last-child{text-align:left; font-family:var(--font-mono);}
+  .disclaimer{margin-top:16px; font-size:12px; color:var(--text-dim); border-top:1px solid var(--border); padding-top:12px;}
+
+  .empty, .loading{text-align:center; color:var(--text-dim); padding:60px 20px; grid-column:1/-1;}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🪙 آرسان</h1>
-  <p>دستیار هوشمند تحلیل بازار رمزارز — فقط برای اطلاع، تصمیم نهایی با شماست</p>
-  <div class="updated" id="updatedAt">در حال بارگذاری...</div>
+  <h1>آرسان</h1>
+  <p>دستیار تحلیل رمزارز — بر پایه شاخص‌های تکنیکال، نه پیش‌بینی قطعی</p>
+  <div id="freshness" class="paused"><span class="dot"></span><span id="freshness-text">در حال بارگذاری...</span></div>
 </header>
 
-<div class="container">
-  <input class="search" id="searchBox" placeholder="جست‌وجوی رمزارز (مثلاً BTC یا Bitcoin)...">
-  <div class="tabs">
-    <div class="tab active" data-tab="all">همه</div>
-    <div class="tab" data-tab="fav">⭐ علاقه‌مندی‌ها</div>
-  </div>
-  <div id="coinGrid" class="grid"><div class="loading">در حال دریافت آخرین تحلیل...</div></div>
-  <div id="detailSection"></div>
+<div class="toolbar">
+  <input id="search" type="text" placeholder="جست‌وجوی رمزارز... (مثلا bitcoin)">
+</div>
+
+<div class="grid" id="grid">
+  <div class="loading">در حال دریافت آخرین تحلیل...</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
 </div>
 
 <script>
-const DATA_URL = "./data/analysis.json";
-let allData = null;
-let selectedCoin = null;
-let activeTab = "all";
+const DATA_URL = './data/analysis.json';
+const FAV_KEY = 'arsan_favorites';
+let analysisData = null;
 let chartInstance = null;
 
-function getFavs(){
-  try { return JSON.parse(localStorage.getItem("arsan_favs") || "[]"); } catch(e){ return []; }
+const DECISION_LABELS = { buy: '🟢 خرید', sell: '🔴 فروش', hold: '🟡 صبر' };
+
+function getFavorites(){
+  try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch(e){ return []; }
 }
-function toggleFav(id){
-  let favs = getFavs();
+function toggleFavorite(id){
+  let favs = getFavorites();
   if(favs.includes(id)) favs = favs.filter(f=>f!==id);
   else favs.push(id);
-  localStorage.setItem("arsan_favs", JSON.stringify(favs));
+  localStorage.setItem(FAV_KEY, JSON.stringify(favs));
   render();
 }
 
-function fmtPrice(p){
-  if(p == null) return "-";
-  if(p >= 1) return "$" + p.toLocaleString(undefined,{maximumFractionDigits:2});
-  return "$" + p.toPrecision(4);
-}
+function updateFreshnessBadge(generatedAtISO){
+  const el = document.getElementById('freshness');
+  const textEl = document.getElementById('freshness-text');
+  if(!generatedAtISO){
+    el.className = 'old';
+    textEl.textContent = 'داده‌ای در دسترس نیست';
+    return;
+  }
+  const generated = new Date(generatedAtISO);
+  const now = new Date();
+  const diffMinutes = Math.round((now - generated) / 60000);
 
-function fmtTime(iso){
-  const d = new Date(iso);
-  return d.toLocaleString("fa-IR", {dateStyle:"medium", timeStyle:"short"});
+  // بررسی اینکه الان داخل بازه فعال (۸ صبح تا ۱۲ شب ایران) هستیم یا نه
+  const iranOffsetMinutes = 3.5 * 60;
+  const iranNow = new Date(now.getTime() + iranOffsetMinutes*60000 - now.getTimezoneOffset()*60000);
+  const iranHour = iranNow.getUTCHours();
+  const inActiveWindow = iranHour >= 8 && iranHour < 24;
+
+  let cls, msg;
+  if(diffMinutes < 0){
+    cls = 'fresh'; msg = 'همین الان به‌روزرسانی شد';
+  } else if(diffMinutes <= 40){
+    cls = 'fresh'; msg = `${diffMinutes} دقیقه پیش به‌روزرسانی شد`;
+  } else if(!inActiveWindow){
+    cls = 'paused'; msg = `خارج از بازه فعال (۸ صبح تا ۱۲ شب) — آخرین به‌روزرسانی ${diffMinutes} دقیقه پیش`;
+  } else if(diffMinutes <= 90){
+    cls = 'stale'; msg = `کمی قدیمی — ${diffMinutes} دقیقه از آخرین به‌روزرسانی گذشته`;
+  } else {
+    cls = 'old'; msg = `به‌روزرسانی متوقف شده — ${diffMinutes} دقیقه پیش`;
+  }
+  el.className = cls;
+  textEl.textContent = msg;
 }
 
 async function loadData(){
   try{
-    const res = await fetch(DATA_URL + "?t=" + Date.now());
-    if(!res.ok) throw new Error("no data");
-    allData = await res.json();
-    document.getElementById("updatedAt").textContent = "آخرین به‌روزرسانی: " + fmtTime(allData.generated_at);
-    if(allData.coins.length){
-      selectedCoin = allData.coins[0].id;
-    }
+    const res = await fetch(DATA_URL + '?t=' + Date.now());
+    analysisData = await res.json();
+    updateFreshnessBadge(analysisData.generated_at);
     render();
   }catch(e){
-    document.getElementById("coinGrid").innerHTML =
-      '<div class="error">هنوز داده‌ای تولید نشده. اولین اجرای GitHub Action باید کامل شود (چند دقیقه صبر کنید و صفحه را رفرش کنید).</div>';
+    document.getElementById('grid').innerHTML = '<div class="empty">خطا در بارگذاری داده. لطفا بعدا دوباره تلاش کنید.</div>';
+    updateFreshnessBadge(null);
   }
 }
 
 function render(){
-  if(!allData) return;
-  const grid = document.getElementById("coinGrid");
-  const query = document.getElementById("searchBox").value.trim().toLowerCase();
-  const favs = getFavs();
+  const grid = document.getElementById('grid');
+  if(!analysisData || !analysisData.coins || !analysisData.coins.length){
+    grid.innerHTML = '<div class="empty">داده‌ای موجود نیست.</div>';
+    return;
+  }
+  const query = document.getElementById('search').value.trim().toLowerCase();
+  const favs = getFavorites();
 
-  let coins = allData.coins.filter(c =>
-    c.symbol.toLowerCase().includes(query) || c.name.toLowerCase().includes(query)
-  );
-  if(activeTab === "fav") coins = coins.filter(c => favs.includes(c.id));
+  let coins = analysisData.coins.filter(c => c.id.toLowerCase().includes(query));
+  coins.sort((a,b) => {
+    const aFav = favs.includes(a.id), bFav = favs.includes(b.id);
+    if(aFav !== bFav) return aFav ? -1 : 1;
+    return 0;
+  });
 
-  if(coins.length === 0){
-    grid.innerHTML = '<div class="loading">موردی یافت نشد.</div>';
-  } else {
-    grid.innerHTML = coins.map(c => {
-      const change = c.change_24h;
-      const changeClass = change >= 0 ? "up" : "down";
-      const changeSign = change >= 0 ? "+" : "";
-      const isFav = favs.includes(c.id);
-      return `
-        <div class="coin-card ${c.id===selectedCoin?'active':''}" onclick="selectCoin('${c.id}')">
-          <div class="coin-top">
-            <span class="coin-sym">${c.symbol}</span>
-            <button class="fav-btn ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav('${c.id}')">★</button>
-          </div>
-          <div class="coin-price">${fmtPrice(c.indicators.current_price)}</div>
-          <div class="coin-change ${changeClass}">${change!=null ? changeSign+change.toFixed(2)+'%' : ''}</div>
-          <span class="badge ${c.decision.signal}">${c.decision.emoji} ${c.decision.signal_fa}</span>
-        </div>`;
-    }).join("");
+  if(!coins.length){
+    grid.innerHTML = '<div class="empty">رمزارزی با این نام پیدا نشد.</div>';
+    return;
   }
 
-  renderDetail();
+  grid.innerHTML = coins.map(c => {
+    const changeClass = (c.change_24h ?? 0) >= 0 ? 'up' : 'down';
+    const changeSign = (c.change_24h ?? 0) >= 0 ? '+' : '';
+    const isFav = favs.includes(c.id);
+    return `
+      <div class="card" onclick="openModal('${c.id}')">
+        <div class="top-row">
+          <span class="name">${c.id}</span>
+          <button class="fav ${isFav?'active':''}" onclick="event.stopPropagation(); toggleFavorite('${c.id}')">★</button>
+        </div>
+        <div class="price">$${Number(c.current_price).toLocaleString('en-US', {maximumFractionDigits:6})}</div>
+        <div class="change ${changeClass}">${changeSign}${(c.change_24h ?? 0).toFixed(2)}٪ (۲۴ساعت)</div>
+        <div class="badge ${c.decision}">${DECISION_LABELS[c.decision] || c.decision}</div>
+      </div>`;
+  }).join('');
 }
 
-function selectCoin(id){
-  selectedCoin = id;
-  render();
-}
+function openModal(id){
+  const coin = analysisData.coins.find(c => c.id === id);
+  if(!coin) return;
+  const ind = coin.indicators;
 
-function renderDetail(){
-  const section = document.getElementById("detailSection");
-  const coin = allData.coins.find(c => c.id === selectedCoin);
-  if(!coin){ section.innerHTML = ""; return; }
-
-  const i = coin.indicators;
-  const d = coin.decision;
-
-  section.innerHTML = `
-    <div class="detail">
-      <h2>${coin.name} (${coin.symbol}) ${d.emoji}</h2>
-      <span class="badge ${d.signal}">${d.emoji} نتیجه: ${d.signal_fa}</span>
-      <div class="indicators">
-        <div class="ind-item"><div class="label">قیمت فعلی</div><div class="value">${fmtPrice(i.current_price)}</div></div>
-        <div class="ind-item"><div class="label">روند</div><div class="value">${i.trend}</div></div>
-        <div class="ind-item"><div class="label">RSI</div><div class="value">${i.rsi ?? '-'}</div></div>
-        <div class="ind-item"><div class="label">MACD Histogram</div><div class="value">${i.macd.histogram}</div></div>
-        <div class="ind-item"><div class="label">میانگین متحرک (MA20)</div><div class="value">${fmtPrice(i.ma20)}</div></div>
-        <div class="ind-item"><div class="label">EMA20</div><div class="value">${fmtPrice(i.ema20)}</div></div>
-        <div class="ind-item"><div class="label">حجم معاملات</div><div class="value">${i.volume_trend}</div></div>
-        <div class="ind-item"><div class="label">حمایت</div><div class="value">${fmtPrice(i.support)}</div></div>
-        <div class="ind-item"><div class="label">مقاومت</div><div class="value">${fmtPrice(i.resistance)}</div></div>
-      </div>
-      <div class="reason-box">💬 ${d.reason}</div>
-      <div class="disclaimer">⚠️ ${d.disclaimer}</div>
-      <canvas id="priceChart"></canvas>
+  document.getElementById('modal').innerHTML = `
+    <div class="modal-header">
+      <h2>${coin.id}</h2>
+      <button class="close-btn" onclick="closeModal()">✕</button>
     </div>
+    <div class="badge ${coin.decision}">${DECISION_LABELS[coin.decision]} — امتیاز: ${coin.score}</div>
+    <canvas id="priceChart"></canvas>
+    <ul class="reasons">${coin.reasons.map(r=>`<li>${r}</li>`).join('')}</ul>
+    <table class="indicators-table">
+      <tr><td>RSI</td><td>${ind.rsi}</td></tr>
+      <tr><td>MACD Histogram</td><td>${ind.macd.histogram.toFixed(4)}</td></tr>
+      <tr><td>روند</td><td>${ind.trend.label}</td></tr>
+      <tr><td>قدرت روند</td><td>${ind.trend_strength} / ۱۰۰</td></tr>
+      <tr><td>حجم معاملات</td><td>${ind.volume_trend.label}</td></tr>
+      <tr><td>استوکاستیک RSI</td><td>${ind.stochastic_rsi}</td></tr>
+      <tr><td>OBV</td><td>${ind.obv_trend}</td></tr>
+      <tr><td>کراس EMA</td><td>${ind.ema_cross}</td></tr>
+      <tr><td>حمایت / مقاومت</td><td>$${ind.support.toFixed(4)} — $${ind.resistance.toFixed(4)}</td></tr>
+    </table>
+    <div class="disclaimer">${coin.disclaimer}</div>
   `;
+  document.getElementById('overlay').classList.add('open');
 
-  drawChart(coin);
-}
-
-function drawChart(coin){
-  const ctx = document.getElementById("priceChart");
+  const labels = coin.price_history.map(p => new Date(p[0]).toLocaleDateString('fa-IR'));
+  const prices = coin.price_history.map(p => p[1]);
+  const ctx = document.getElementById('priceChart').getContext('2d');
   if(chartInstance) chartInstance.destroy();
-  const labels = coin.price_history.map(p => new Date(p.t).toLocaleDateString("fa-IR"));
-  const prices = coin.price_history.map(p => p.p);
   chartInstance = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels,
-      datasets: [{
-        label: "قیمت (USD)",
-        data: prices,
-        borderColor: "#3b82f6",
-        backgroundColor: "rgba(59,130,246,0.1)",
-        fill: true,
-        pointRadius: 0,
-        tension: 0.25,
-      }]
-    },
+    type: 'line',
+    data: { labels, datasets: [{ data: prices, borderColor: '#3fb6a8', borderWidth: 2, pointRadius: 0, tension: 0.25 }] },
     options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: "#8ea0b3", maxTicksLimit: 6 }, grid: { color: "#232d38" } },
-        y: { ticks: { color: "#8ea0b3" }, grid: { color: "#232d38" } },
-      }
+      plugins:{ legend:{ display:false } },
+      scales:{ x:{ display:false }, y:{ ticks:{ color:'#8a97ac' }, grid:{ color:'#232c3a' } } }
     }
   });
 }
 
-document.getElementById("searchBox").addEventListener("input", render);
-document.querySelectorAll(".tab").forEach(tab=>{
-  tab.addEventListener("click", ()=>{
-    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-    tab.classList.add("active");
-    activeTab = tab.dataset.tab;
-    render();
-  });
-});
+function closeModal(){
+  document.getElementById('overlay').classList.remove('open');
+}
+document.getElementById('overlay').addEventListener('click', e => { if(e.target.id === 'overlay') closeModal(); });
+document.getElementById('search').addEventListener('input', render);
 
 loadData();
+setInterval(loadData, 5 * 60 * 1000); // هر ۵ دقیقه یکبار داده را دوباره چک کن
 </script>
 </body>
 </html>
