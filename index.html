@@ -18,6 +18,7 @@
     --green: #3ecf8e;
     --red: #e5636b;
     --yellow: #e0b23c;
+    --purple: #9b7fe0;
     --radius: 14px;
     --font-body: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
     --font-mono: 'JetBrains Mono', 'Courier New', monospace;
@@ -86,6 +87,7 @@
   .badge.buy{background:rgba(62,207,142,0.15); color:var(--green);}
   .badge.sell{background:rgba(229,99,107,0.15); color:var(--red);}
   .badge.hold{background:rgba(224,178,60,0.15); color:var(--yellow);}
+  .badge.uncertain{background:rgba(155,127,224,0.15); color:var(--purple);}
 
   .overlay{
     position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(3px);
@@ -136,7 +138,7 @@ const FAV_KEY = 'arsan_favorites';
 let analysisData = null;
 let chartInstance = null;
 
-const DECISION_LABELS = { buy: '🟢 خرید', sell: '🔴 فروش', hold: '🟡 صبر' };
+const DECISION_LABELS = { buy: '🟢 خرید', sell: '🔴 فروش', hold: '🟡 صبر', uncertain: '🟣 نامشخص' };
 
 function getFavorites(){
   try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch(e){ return []; }
@@ -256,6 +258,8 @@ function openModal(id){
       <tr><td>OBV</td><td>${ind.obv_trend}</td></tr>
       <tr><td>کراس EMA</td><td>${ind.ema_cross}</td></tr>
       <tr><td>حمایت / مقاومت</td><td>$${ind.support.toFixed(4)} — $${ind.resistance.toFixed(4)}</td></tr>
+      ${coin.trend_gate_triggered ? '<tr><td>وضعیت بازار</td><td>بدون روند مشخص (رِنج)</td></tr>' : ''}
+      ${(!coin.trend_gate_triggered && coin.agreement_ratio !== null && coin.agreement_ratio !== undefined) ? `<tr><td>توافق بین شاخص‌ها</td><td>${Math.round(coin.agreement_ratio*100)}٪</td></tr>` : ''}
     </table>
     <div class="disclaimer">${coin.disclaimer}</div>
   `;
