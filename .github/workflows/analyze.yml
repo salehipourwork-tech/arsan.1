@@ -1,22 +1,28 @@
 name: Arsan Market Analysis
 
 on:
+  # هر ۳۰ دقیقه، فقط بین ساعت ۸ صبح تا ۱۲ شب به وقت ایران (UTC+3:30)
+  # ۰۸:۰۰ ایران = ۰۴:۳۰ UTC   |   ۲۴:۰۰ ایران = ۲۰:۳۰ UTC
   schedule:
-    # هر ۱ ساعت یکبار اجرا می‌شود (زمان UTC)
-    - cron: "0 * * * *"
-  workflow_dispatch: {}   # امکان اجرای دستی از تب Actions در گیت‌هاب
+    - cron: "30 4 * * *"        # ساعت ۰۸:۰۰ ایران
+    - cron: "0,30 5-20 * * *"   # از ۰۸:۳۰ تا ۲۴:۰۰ ایران، هر ۳۰ دقیقه
 
-permissions:
-  contents: write
+  # اجرای دستی از تب Actions
+  workflow_dispatch:
+
+  # trigger خارجی از سرویس cron-job.org (پایدارتر از cron داخلی گیت‌هاب)
+  # نوع رویداد باید دقیقا "external-trigger" باشد
+  repository_dispatch:
+    types: [external-trigger]
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -24,13 +30,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Arsan analysis
+      - name: Run analysis
         run: python analyzer/main.py
 
-      - name: Commit and push updated data
+      - name: Commit and push updated analysis.json
         run: |
-          git config user.name "arsan-bot"
-          git config user.email "arsan-bot@users.noreply.github.com"
+          git config --global user.name "arsan-bot"
+          git config --global user.email "arsan-bot@users.noreply.github.com"
           git add data/analysis.json
-          git diff --cached --quiet && echo "No changes to commit" || git commit -m "chore: update market analysis [skip ci]"
+          git diff --staged --quiet || git commit -m "به‌روزرسانی خودکار تحلیل - $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
