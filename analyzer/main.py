@@ -43,6 +43,7 @@ def run_analysis():
                 "change_24h": coin_snapshot.get("usd_24h_change"),
                 "decision": decision_result["decision"],
                 "score": decision_result["score"],
+                "score_percent": decision_result.get("score_percent"),
                 "reasons": decision_result["reasons"],
                 "disclaimer": decision_result["disclaimer"],
                 "agreement_ratio": decision_result.get("agreement_ratio"),
