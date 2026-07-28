@@ -27,7 +27,10 @@ def run_analysis():
 
     for coin_id in DEFAULT_COINS:
         try:
-            market_chart = get_market_chart(coin_id, days=30)
+            # نکته‌ی مهم: CoinGecko برای days بین ۲ تا ۹۰ داده‌ی «ساعتی» برمی‌گردونه،
+            # نه روزانه. چون indicators.py (EMA20/50, حمایت/مقاومت ۳۰ روزه) فرض کرده
+            # هر ردیف یک روزه، باید days بالای ۹۰ باشه تا داده واقعاً روزانه بشه.
+            market_chart = get_market_chart(coin_id, days=100)
             indicators = calculate_all_indicators(market_chart)
             decision_result = make_decision(indicators)
 
