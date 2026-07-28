@@ -45,6 +45,11 @@ MIN_AGREEMENT_RATIO = 0.55
 # آستانه‌ای که پایین‌تر از اون یک شاخص «خنثی» حساب می‌شه (نه موافق نه مخالف)
 NEUTRAL_ZONE = 0.3
 
+# شاخص‌های «بازگشتی/اشباع» که وقتی حجم پایینه، کم‌اثرتر می‌شن (چون بازگشت
+# قیمتی بدون حجم کافی غیرقابل‌اعتمادتره)
+REVERSAL_INDICATORS = ["rsi", "bollinger", "stochastic_rsi"]
+LOW_VOLUME_CONFIDENCE = 0.6
+
 _WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), "weights.json")
 
 
@@ -55,6 +60,16 @@ def _load_weights():
     """
     with open(_WEIGHTS_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _to_percent(score):
+    """
+    تبدیل امتیاز داخلی (۱۰۰- تا ۱۰۰+) به یه درصد ساده‌تر (۰٪ تا ۱۰۰٪) فقط برای
+    نمایش به کاربر. منطق داخلی (آستانه‌ها، گیت‌ها) همچنان روی مقیاس ۱۰۰- تا ۱۰۰+
+    کار می‌کنه — این فقط یه لایه‌ی نمایشیه.
+    ۱۰۰- -> ۰٪ (فروش کامل) | ۰ -> ۵۰٪ (خنثی) | ۱۰۰+ -> ۱۰۰٪ (خرید کامل)
+    """
+    return round((score + 100) / 2, 1)
 
 
 def _score_rsi(rsi):
@@ -194,6 +209,7 @@ def make_decision(indicators):
         return {
             "decision": "hold",
             "score": 0.0,
+            "score_percent": None,
             "reasons": reasons,
             "factors": {},
             "agreement_ratio": None,
@@ -218,6 +234,14 @@ def make_decision(indicators):
         ),
     }
 
+    # ضریب اطمینان حجم: شاخص‌های «بازگشتی/اشباع» (RSI, بولینگر, StochRSI) وقتی
+    # حجم معاملات پایینه کم‌اثرتر می‌شن — چون یه بازگشت قیمتی بدون حجم کافی
+    # غیرقابل‌اعتمادتره (دقیقاً همون چیزی که OBV با برچسب «واگرایی هشداردهنده»
+    # نشون می‌ده، ولی قبلاً هیچ اثری روی امتیاز نداشت).
+    volume_confidence = LOW_VOLUME_CONFIDENCE if indicators["volume_trend"]["label"] == "پایین" else 1.0
+    for k in REVERSAL_INDICATORS:
+        base_scores[k] *= volume_confidence
+
     # ضریب اطمینان فقط روی شاخص‌های روندی/مومنتوم اعمال می‌شه (مثل نسخه ۲)
     scored = dict(base_scores)
     scored["macd"] *= confidence
@@ -228,12 +252,21 @@ def make_decision(indicators):
     max_possible = sum(2.0 * weights[k] for k in scored)
     final_score_pct = round((weighted_sum / max_possible) * 100, 1) if max_possible else 0.0
 
-    # ---------- گام ۲: معیار توافق (مشکل ۱ و ۳) ----------
+    # ---------- گام ۲: معیار توافق وزن‌دار (مشکل ۱ و ۳) ----------
+    # نسخه‌ی قبلی این بخش فقط «تعداد» شاخص‌های موافق/مخالف رو می‌شمرد — یعنی یه
+    # شاخص خیلی قوی (مثلاً روند نزولی قوی: -2.0) دقیقاً هم‌وزن با یه شاخص مرزی و
+    # ضعیف (مثلاً RSI=۳۹.۷: فقط +0.4) حساب می‌شد. این باعث می‌شد چند سیگنال ضعیف
+    # بتونن چند سیگنال قوی رو خنثی کنن و یه سیگنال قوی و منسجم رو «نامشخص» نشون بده.
+    # حالا به‌جای شمارش، «وزن × قدرت امتیاز» هر شاخص جمع زده می‌شه، تا سیگنال‌های
+    # قوی‌تر و مهم‌تر (طبق weights.json) واقعاً تاثیر بیشتری روی توافق داشته باشن.
     overall_sign = 1 if final_score_pct >= 0 else -1
-    directional = [v for v in base_scores.values() if abs(v) >= NEUTRAL_ZONE]
-    if directional:
-        agree_count = sum(1 for v in directional if (1 if v > 0 else -1) == overall_sign)
-        agreement_ratio = agree_count / len(directional)
+    directional_items = [(k, v) for k, v in base_scores.items() if abs(v) >= NEUTRAL_ZONE]
+    if directional_items:
+        total_strength = sum(weights[k] * abs(v) for k, v in directional_items)
+        agree_strength = sum(
+            weights[k] * abs(v) for k, v in directional_items if (1 if v > 0 else -1) == overall_sign
+        )
+        agreement_ratio = agree_strength / total_strength if total_strength else 0.0
     else:
         agreement_ratio = 0.0
 
@@ -241,13 +274,14 @@ def make_decision(indicators):
 
     if would_cross_threshold and agreement_ratio < MIN_AGREEMENT_RATIO:
         reasons = [
-            f"امتیاز خام {final_score_pct:.1f} بود، اما شاخص‌ها با هم هم‌جهت نیستن "
+            f"امتیاز خام {_to_percent(final_score_pct):.0f}٪ بود، اما شاخص‌ها با هم هم‌جهت نیستن "
             f"(فقط {agreement_ratio*100:.0f}٪ توافق) — بعضی صعودی و بعضی نزولی‌اند، "
             "پس سیگنال قطعی صادر نمی‌شه.",
         ]
         return {
             "decision": "uncertain",
             "score": final_score_pct,
+            "score_percent": _to_percent(final_score_pct),
             "reasons": reasons,
             "factors": scored,
             "agreement_ratio": round(agreement_ratio, 2),
@@ -263,11 +297,12 @@ def make_decision(indicators):
     else:
         decision = "hold"
 
-    reasons = _build_reasons(indicators, scored, confidence, agreement_ratio)
+    reasons = _build_reasons(indicators, scored, confidence, agreement_ratio, volume_confidence)
 
     return {
         "decision": decision,
         "score": final_score_pct,
+        "score_percent": _to_percent(final_score_pct),
         "reasons": reasons,
         "factors": scored,
         "agreement_ratio": round(agreement_ratio, 2),
@@ -283,7 +318,7 @@ def _disclaimer():
     )
 
 
-def _build_reasons(ind, scores, confidence, agreement_ratio):
+def _build_reasons(ind, scores, confidence, agreement_ratio, volume_confidence):
     reasons = []
 
     if scores["rsi"] > 0.3:
@@ -329,6 +364,13 @@ def _build_reasons(ind, scores, confidence, agreement_ratio):
 
     if confidence < 1.0:
         reasons.append("قدرت روند فعلی متوسط است؛ به همین دلیل امتیاز شاخص‌های روندی با احتیاط بیشتری اعمال شد.")
+
+    if volume_confidence < 1.0:
+        reasons.append(
+            "حجم معاملات پایین است؛ به همین دلیل امتیاز شاخص‌های بازگشتی/اشباع "
+            "(RSI، بولینگر، استوکاستیک RSI) با احتیاط بیشتری اعمال شد، چون بازگشت "
+            "قیمتی بدون حجم کافی کمتر قابل‌اعتماد است."
+        )
 
     reasons.append(f"توافق بین شاخص‌ها: {agreement_ratio*100:.0f}٪.")
 
