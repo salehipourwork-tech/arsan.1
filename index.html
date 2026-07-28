@@ -240,6 +240,24 @@ function openModal(id){
   if(!coin) return;
   const ind = coin.indicators;
 
+  const ns = coin.news_sentiment;
+  let sentimentRow = '';
+  let sentimentHeadlinesHtml = '';
+  if(ns){
+    if(ns.articles_analyzed > 0){
+      const label = ns.score > 0.15 ? '🟢 مثبت' : ns.score < -0.15 ? '🔴 منفی' : '🟡 خنثی';
+      sentimentRow = `<tr><td>احساسات اخبار (۲۴ ساعت)</td><td>${label} (${ns.articles_analyzed} خبر)</td></tr>`;
+      if(ns.sample_headlines && ns.sample_headlines.length){
+        sentimentHeadlinesHtml = `<div class="reasons" style="margin-top:8px; font-size:12.5px;">
+          <strong style="color:var(--text)">چند تیتر اخیر:</strong>
+          <ul>${ns.sample_headlines.map(h=>`<li>${h}</li>`).join('')}</ul>
+        </div>`;
+      }
+    } else {
+      sentimentRow = `<tr><td>احساسات اخبار (۲۴ ساعت)</td><td>خبری پیدا نشد</td></tr>`;
+    }
+  }
+
   document.getElementById('modal').innerHTML = `
     <div class="modal-header">
       <h2>${coin.id}</h2>
@@ -258,9 +276,11 @@ function openModal(id){
       <tr><td>OBV</td><td>${ind.obv_trend}</td></tr>
       <tr><td>کراس EMA</td><td>${ind.ema_cross}</td></tr>
       <tr><td>حمایت / مقاومت</td><td>$${ind.support.toFixed(4)} — $${ind.resistance.toFixed(4)}</td></tr>
+      ${sentimentRow}
       ${coin.trend_gate_triggered ? '<tr><td>وضعیت بازار</td><td>بدون روند مشخص (رِنج)</td></tr>' : ''}
       ${(!coin.trend_gate_triggered && coin.agreement_ratio !== null && coin.agreement_ratio !== undefined) ? `<tr><td>توافق بین شاخص‌ها</td><td>${Math.round(coin.agreement_ratio*100)}٪</td></tr>` : ''}
     </table>
+    ${sentimentHeadlinesHtml}
     <div class="disclaimer">${coin.disclaimer}</div>
   `;
   document.getElementById('overlay').classList.add('open');
