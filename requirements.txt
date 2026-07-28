@@ -1,11 +1,17 @@
-# این خطوط رو به انتهای requirements.txt فعلی پروژه (تو ریشه‌ی ریپازیتوری) اضافه کن.
-# فایل‌های قبلی (requests, pandas, numpy یا هرچی از قبل بود) رو پاک نکن، فقط این‌ها رو اضافه کن.
+# آرسان - وابستگی‌های پایتون کامل پروژه
 
-feedparser
+# --- بخش قدیمی (از قبل تو پروژه لازم بودن) ---
+requests          # fetch_data.py برای گرفتن داده از CoinGecko استفاده می‌کنه
+pandas            # indicators.py برای محاسبات RSI/MACD/EMA/... استفاده می‌کنه
+numpy             # indicators.py برای محاسبات عددی استفاده می‌کنه
+
+# --- بخش جدید (برای ماژول تحلیل احساسات اخبار) ---
+feedparser         # خوندن فیدهای RSS خبری (بدون نیاز به API key)
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch
-transformers
+torch               # اجرای لوکال مدل FinBERT
+transformers        # بارگذاری و اجرای مدل FinBERT
 
-# اگه به‌جای FinBERT از پلن سبک (VADER) استفاده می‌کنی (analyzer/news_sentiment.py,
-# USE_LIGHTWEIGHT_FALLBACK = True)، به‌جای سه خط بالا (torch/transformers) این یکی رو بذار:
+# اگه به‌جای FinBERT از پلن سبک (VADER) استفاده می‌کنی
+# (analyzer/news_sentiment.py -> USE_LIGHTWEIGHT_FALLBACK = True)،
+# سه خط بالا (--extra-index-url, torch, transformers) رو پاک کن و به‌جاش این رو بذار:
 # vaderSentiment
