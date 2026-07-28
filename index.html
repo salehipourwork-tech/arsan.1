@@ -245,7 +245,7 @@ function openModal(id){
       <h2>${coin.id}</h2>
       <button class="close-btn" onclick="closeModal()">✕</button>
     </div>
-    <div class="badge ${coin.decision}">${DECISION_LABELS[coin.decision]} — امتیاز: ${coin.score}</div>
+    <div class="badge ${coin.decision}">${DECISION_LABELS[coin.decision]} — امتیاز: ${coin.score_percent !== null && coin.score_percent !== undefined ? coin.score_percent + '٪' : '—'}</div>
     <canvas id="priceChart"></canvas>
     <ul class="reasons">${coin.reasons.map(r=>`<li>${r}</li>`).join('')}</ul>
     <table class="indicators-table">
