@@ -177,6 +177,17 @@ def _score_support_resistance(last_price, support, resistance):
     return 0.0
 
 
+def _score_news_sentiment(sentiment_score):
+    """
+    sentiment_score: عدد بین -۱ تا +۱ که از analyzer/news_sentiment.py میاد
+    (میانگین احساسات اخبار ۲۴ ساعت اخیر). به مقیاس -۲ تا +۲ (مثل بقیه‌ی
+    شاخص‌ها) تبدیل می‌شه. اگه خبری نبود، sentiment_score خودش ۰ میاد (خنثی)
+    و خودکار از معیار توافق و امتیاز نهایی کنار گذاشته می‌شه (چون |۰| کمتر
+    از NEUTRAL_ZONE است).
+    """
+    return max(-2.0, min(2.0, sentiment_score * 2))
+
+
 def _confidence_multiplier(trend_strength):
     """
     نسخه‌ی ۳: به‌جای پله‌ی سه‌تایی قبلی (که هیچ‌وقت زیر ۰.۵ نمی‌رفت)، حالا
@@ -190,9 +201,12 @@ def _confidence_multiplier(trend_strength):
     return 0.3 + 0.7 * (trend_strength - MIN_TREND_STRENGTH) / span
 
 
-def make_decision(indicators):
+def make_decision(indicators, news_sentiment=0.0):
     """
     indicators: خروجی indicators.calculate_all_indicators
+    news_sentiment: عدد بین -۱ تا +۱ از analyzer/news_sentiment.py (اختیاری،
+        پیش‌فرض ۰.۰ یعنی خنثی — اگه سرویس sentiment رو وصل نکرده باشی یا
+        خبری نبود، فقط این پارامتر رو پاس نده، هیچی خراب نمی‌شه)
     خروجی: {"decision": "buy"|"sell"|"hold"|"uncertain", "score": float,
             "reasons": [str,...], "factors": {...},
             "agreement_ratio": float|None, "trend_gate_triggered": bool}
@@ -232,6 +246,7 @@ def make_decision(indicators):
         "support_resistance": _score_support_resistance(
             indicators["last_price"], indicators["support"], indicators["resistance"]
         ),
+        "news_sentiment": _score_news_sentiment(news_sentiment),
     }
 
     # ضریب اطمینان حجم: شاخص‌های «بازگشتی/اشباع» (RSI, بولینگر, StochRSI) وقتی
@@ -361,6 +376,11 @@ def _build_reasons(ind, scores, confidence, agreement_ratio, volume_confidence):
         reasons.append("قیمت نزدیک سطح حمایت ۳۰ روز اخیر است.")
     elif scores["support_resistance"] < -0.3:
         reasons.append("قیمت نزدیک سطح مقاومت ۳۰ روز اخیر است.")
+
+    if scores["news_sentiment"] > 0.3:
+        reasons.append("احساسات اخبار ۲۴ ساعت اخیر مثبت بوده است.")
+    elif scores["news_sentiment"] < -0.3:
+        reasons.append("احساسات اخبار ۲۴ ساعت اخیر منفی بوده است.")
 
     if confidence < 1.0:
         reasons.append("قدرت روند فعلی متوسط است؛ به همین دلیل امتیاز شاخص‌های روندی با احتیاط بیشتری اعمال شد.")
