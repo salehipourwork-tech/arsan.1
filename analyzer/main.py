@@ -15,13 +15,23 @@ from indicators import calculate_all_indicators
 from decision import make_decision
 from history_logger import log_decision
 from evaluate_signals import evaluate_pending_signals
+from news_sentiment import compute_all_sentiments
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "analysis.json")
+SENTIMENT_OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "sentiment.json")
 DELAY_BETWEEN_COINS_SECONDS = 2
 
 
 def run_analysis():
     snapshot = get_current_snapshot(DEFAULT_COINS)
+
+    # تحلیل احساسات اخبار برای همه‌ی کوین‌ها یک‌جا (یه بار RSS گرفته می‌شه، نه هشت بار)
+    try:
+        sentiments = compute_all_sentiments(DEFAULT_COINS)
+    except Exception as exc:
+        print(f"[main] خطا در تحلیل احساسات اخبار: {exc} — امتیاز خنثی (۰) برای همه در نظر گرفته می‌شه.")
+        sentiments = {}
+
     results = []
     had_error = False
 
@@ -32,7 +42,10 @@ def run_analysis():
             # هر ردیف یک روزه، باید days بالای ۹۰ باشه تا داده واقعاً روزانه بشه.
             market_chart = get_market_chart(coin_id, days=100)
             indicators = calculate_all_indicators(market_chart)
-            decision_result = make_decision(indicators)
+
+            coin_sentiment = sentiments.get(coin_id, {})
+            news_sentiment_score = coin_sentiment.get("score", 0.0)
+            decision_result = make_decision(indicators, news_sentiment=news_sentiment_score)
 
             coin_snapshot = snapshot.get(coin_id, {})
             current_price = coin_snapshot.get("usd", indicators["last_price"])
@@ -48,6 +61,7 @@ def run_analysis():
                 "disclaimer": decision_result["disclaimer"],
                 "agreement_ratio": decision_result.get("agreement_ratio"),
                 "trend_gate_triggered": decision_result.get("trend_gate_triggered", False),
+                "news_sentiment": coin_sentiment,
                 "indicators": {
                     "rsi": round(indicators["rsi"], 2),
                     "macd": indicators["macd"],
@@ -84,6 +98,16 @@ def run_analysis():
         json.dump(output, f, ensure_ascii=False, indent=2)
 
     print(f"[main] تحلیل کامل شد. {len(results)} رمزارز پردازش شد. خروجی: {OUTPUT_PATH}")
+
+    # ذخیره‌ی جدای نتایج احساسات اخبار — برای شفافیت و دیباگ (مستقل از analysis.json)
+    sentiment_output = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "coins": sentiments,
+    }
+    os.makedirs(os.path.dirname(SENTIMENT_OUTPUT_PATH), exist_ok=True)
+    with open(SENTIMENT_OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(sentiment_output, f, ensure_ascii=False, indent=2)
+    print(f"[main] تحلیل احساسات اخبار ذخیره شد: {SENTIMENT_OUTPUT_PATH}")
 
     # بررسی سیگنال‌های قدیمی‌تر که به موعد ارزیابی (۲۴ ساعت) رسیدن
     try:
