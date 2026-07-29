@@ -1,33 +1,18 @@
 """
-analyzer/history_logger.py — نسخه ۳
+analyzer/history_logger.py — نسخه ۴
 
-هر بار که main.py برای یک کوین تصمیم می‌گیره، این ماژول یک رکورد به
-data/history.json اضافه می‌کنه. بدون این فایل، امکان سنجش دقت واقعی سیستم یا
-بک‌تست وجود نداره (مشکل شماره ۵ و ۷ گزارش وضعیت).
+تغییر نسبت به نسخه ۳: یک فیلد جدید "factors" به هر رکورد اضافه شده — همون
+dict امتیاز هر شاخص که decision.py برمی‌گردونه (مثلاً {"rsi": 1.2, "macd": -0.4, ...}).
 
-نحوه‌ی استفاده در main.py (داخل حلقه‌ی for coin_id in DEFAULT_COINS، بعد از
-decision_result = make_decision(indicators)):
+چرا لازم بود: optimize_weights.py (دسته C، وزن‌دهی پویا) برای اینکه بفهمه هر
+شاخص چقدر واقعاً «قابل‌اعتماد» بوده، باید بدونه تو لحظه‌ی صدور هر سیگنال، هر
+شاخص چه امتیازی داشته — این اطلاعات قبلاً هیچ‌جا ذخیره نمی‌شد، پس اون اسکریپت
+همیشه insufficient_data می‌داد حتی اگه ماه‌ها از history.json داده جمع می‌شد.
 
-    from history_logger import log_decision
-    current_price = coin_snapshot.get("usd", indicators["last_price"])
-    log_decision(coin_id, current_price, decision_result)
-
-ساختار هر رکورد:
-{
-    "id": "bitcoin_2026-07-27T08:00:00+03:30",
-    "coin": "bitcoin",
-    "timestamp": "2026-07-27T08:00:00+03:30",
-    "price": 62000.5,
-    "decision": "buy",          ← "buy"/"sell"/"hold"/"uncertain"
-    "score": 34.2,
-    "agreement_ratio": 0.71,
-    "trend_gate_triggered": false,
-    "outcome": null,            ← بعداً توسط evaluate_signals.py پر می‌شه
-    "outcome_price": null,
-    "outcome_checked_at": null
-}
+بقیه‌ی فایل کاملاً بدون تغییره — همون منطق پاک‌سازی MAX_HISTORY_DAYS، همون
+امضای تابع log_decision(coin_id, price, decision_result, timestamp=None).
+هیچ چیزی برای main.py یا صدا زدن این تابع عوض نشده.
 """
-
 import json
 import os
 from datetime import datetime, timedelta
@@ -63,14 +48,13 @@ def log_decision(coin_id, price, decision_result, timestamp=None):
         "score": decision_result["score"],
         "agreement_ratio": decision_result.get("agreement_ratio"),
         "trend_gate_triggered": decision_result.get("trend_gate_triggered", False),
+        "factors": decision_result.get("factors", {}),  # جدید در نسخه ۴ — برای optimize_weights.py
         "outcome": None,
         "outcome_price": None,
         "outcome_checked_at": None,
     }
-
     records = _load_history()
     records.append(record)
-
     # پاک‌سازی رکوردهای خیلی قدیمی تا فایل خیلی بزرگ نشه
     cutoff = datetime.now().astimezone() - timedelta(days=MAX_HISTORY_DAYS)
     cleaned = []
@@ -82,5 +66,4 @@ def log_decision(coin_id, price, decision_result, timestamp=None):
             continue
         if r_time >= cutoff:
             cleaned.append(r)
-
     _save_history(cleaned)
