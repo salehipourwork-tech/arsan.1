@@ -15,14 +15,8 @@
    اختیاری، چیزی رو خراب نمی‌کنه).
 ۳) بعد از evaluate_pending_signals، portfolio_tracker.run() صدا زده می‌شه تا
    data/portfolio.json به‌روز بشه (پرتفوی فرضی سراسری).
-
-نکته: volume_news_alert.py عمداً اینجا صدا زده نشده، چون به یه تابع فرضی
-(get_volume_snapshot) در fetch_data.py نیاز داره که هنوز تاییدش نکردی. وقتی
-اون تابع رو تو fetch_data.py اضافه/تایید کردی، کافیه این دو خط رو به انتهای
-run_analysis() اضافه کنی:
-
-    from volume_news_alert import run as run_alerts
-    run_alerts(coin_ids=DEFAULT_COINS)
+۴) volume_news_alert.run() هم در انتها صدا زده می‌شه — چون fetch_data.py حالا
+   واقعاً get_volume_snapshot رو داره (نسخه ۴)، دیگه فرضی نیست.
 """
 
 import json
@@ -38,6 +32,7 @@ from evaluate_signals import evaluate_pending_signals
 from news_sentiment import compute_all_sentiments
 from market_regime import calculate_market_regime
 from portfolio_tracker import run as run_portfolio_update
+from volume_news_alert import run as run_alerts
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "analysis.json")
 SENTIMENT_OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "sentiment.json")
@@ -177,6 +172,13 @@ def run_analysis():
               f"سود/زیان {portfolio_result['total_pnl_usd']}$")
     except Exception as exc:
         print(f"[main] خطا در به‌روزرسانی پرتفوی فرضی: {exc}")
+
+    # دسته B: هشدار جهش حجم/خبر — سبک و مستقل، هیچ‌کدوم به خروجی اصلی وابسته نیست
+    try:
+        alerts = run_alerts(coin_ids=DEFAULT_COINS)
+        print(f"[main] بررسی هشدار حجم/خبر انجام شد: {len(alerts)} هشدار فعال.")
+    except Exception as exc:
+        print(f"[main] خطا در بررسی هشدار حجم/خبر: {exc}")
 
 
 if __name__ == "__main__":
