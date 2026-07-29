@@ -1,113 +1,104 @@
 """
-آرسان - موتور تصمیم‌گیری امتیازدهی‌شده (نسخه ۳)
+آرسان - موتور تصمیم‌گیری امتیازدهی‌شده (نسخه ۴)
 
-تغییرات نسبت به نسخه ۲ (برای رفع مشکل‌های ۱، ۲، ۳ و ۶ گزارش وضعیت):
+--- تغییرات نسبت به نسخه ۳ ---
 
-۱) گیت واقعی «قدرت روند» (trend_strength):
-   نسخه‌ی ۲ فقط ضریب اطمینان رو کم می‌کرد (حداقل ۰.۵)، هیچ‌وقت واقعاً سیگنال رو
-   نمی‌بست. حالا اگر trend_strength از MIN_TREND_STRENGTH پایین‌تر باشه، تصمیم
-   همیشه "hold" می‌شه، بدون توجه به امتیاز — چون بازار رِنج/بی‌جهته.
+۱) فاکتور یازدهم: btc_alignment (دسته B، گزارش وضعیت)
+   آلت‌کوین‌ها معمولاً دنباله‌روی روند کلی بیت‌کوین هستن. اگه روند کوین با روند
+   BTC هم‌جهت باشه، اعتماد به اون روند تقویت می‌شه؛ اگه واگرا باشه (مثلاً کوین
+   داره صعود می‌کنه ولی BTC در حال نزوله)، این یه پرچم احتیاطه چون همچین
+   حرکتی معمولاً پایدار نیست.
+   ورودی جدید تابع: btc_trend_diff_pct (همون diff_pct که از indicators.py برای
+   خود BTC محاسبه می‌شه — دقیقاً هم‌مقیاس با indicators["trend"]["diff_pct"]).
+   اگه این مقدار پاس داده نشه (None، پیش‌فرض)، فاکتور خنثی (۰.۰) می‌مونه و
+   هیچ تاثیری نداره — یعنی کاملاً سازگار با نسخه ۳ است تا وقتی main.py آپدیت بشه.
+   نکته‌ی مهم: weights.json باید کلید "btc_alignment" رو داشته باشه. اگه نداشته
+   باشه (فایل نسخه ۳ رو عوض نکرده باشی)، خودکار وزن ۰.۸ در نظر گرفته می‌شه —
+   پس چیزی خراب نمی‌شه، ولی توصیه می‌شه دستی این خط رو به weights.json اضافه کنی:
+       "btc_alignment": 0.8
 
-۲) معیار توافق (agreement ratio):
-   قبلاً اگه فقط ۱-۲ شاخص قوی، امتیاز نهایی رو از آستانه رد می‌کردن، درحالی‌که
-   بقیه‌ی شاخص‌ها خنثی یا مخالف بودن، بازم "buy"/"sell" قطعی صادر می‌شد
-   (این دقیقاً همون باگ امتیاز ۲۱.۹ با برچسب خرید بود). حالا اگه اکثر شاخص‌های
-   «جهت‌دار» با علامت امتیاز نهایی هم‌جهت نباشن، تصمیم "uncertain" می‌شه.
+۲) حالت‌های ریسک شخصی‌سازی‌شده (دسته D، گزارش وضعیت)
+   قبلاً آستانه‌ها (BUY_THRESHOLD=20 و...) ثابت و سراسری بودن. حالا سه پروفایل
+   از پیش تعریف شده وجود داره: "conservative" / "balanced" / "aggressive".
+   پیش‌فرض "balanced" دقیقاً همون اعداد نسخه ۳ است — یعنی اگه چیزی رو صدا
+   نزنی، رفتار برنامه هیچ فرقی نمی‌کنه.
+   نکته‌ی مهم برای دفتر جلویی (index.html): چون score و agreement_ratio از قبل
+   ذخیره می‌شن، سوییچ بین پروفایل‌ها لازم نیست دوباره از main.py صدا زده بشه —
+   frontend می‌تونه با همین سه آستانه، decision رو دوباره از روی داده‌ی ذخیره‌شده
+   محاسبه کنه (به بخش risk-profile در index.html نگاه کن).
 
-۳) منبع واحد حقیقت برای برچسب:
-   تصمیم فقط و فقط از روی final_score_pct (بعد از اعمال گیت‌ها) ساخته می‌شه —
-   هیچ مسیر دیگه‌ای برای تعیین decision وجود نداره.
-
-نکته‌ی مهم سازگاری: ورودی/خروجی make_decision(indicators) دقیقاً مثل قبل
-است — main.py نیازی به تغییر ساختاری نداره، فقط دو فیلد جدید
-("trend_gate_triggered", "agreement_ratio") به خروجی اضافه شده که اختیاری‌ان
-و می‌تونن بعداً در داشبورد یا لاگ استفاده بشن.
-
-مقدار جدید "uncertain" برای decision اضافه شده (قبلاً فقط buy/sell/hold بود).
-این یعنی index.html باید یه حالت نمایشی برای "uncertain" هم اضافه کنه
-(پیشنهاد: 🟣 نامشخص یا 🟡 با متن متفاوت از "صبر").
+--- بدون تغییر نسبت به نسخه ۳ (خلاصه) ---
+گیت قدرت روند، معیار توافق وزن‌دار، منبع واحد حقیقت برای برچسب — همه دست‌نخورده.
 """
 
 import json
 import os
 
-BUY_THRESHOLD = 20     # از 100-  تا 100+
-SELL_THRESHOLD = -20
+# ---------------- پروفایل‌های ریسک (دسته D) ----------------
+RISK_PROFILES = {
+    "conservative": {
+        "buy_threshold": 30,
+        "sell_threshold": -30,
+        "min_agreement_ratio": 0.65,
+        "min_trend_strength": 20,
+    },
+    "balanced": {  # == اعداد ثابت نسخه ۳، پیش‌فرض
+        "buy_threshold": 20,
+        "sell_threshold": -20,
+        "min_agreement_ratio": 0.55,
+        "min_trend_strength": 15,
+    },
+    "aggressive": {
+        "buy_threshold": 12,
+        "sell_threshold": -12,
+        "min_agreement_ratio": 0.45,
+        "min_trend_strength": 10,
+    },
+}
 
-# گیت قدرت روند: زیر این مقدار، بازار «بی‌روند» حساب می‌شه (نگاه کن به
-# calculate_trend_direction در indicators.py: diff_pct=1 مرز خنثی/ضعیف است،
-# و trend_strength تقریباً diff_pct*10 است؛ پس MIN=15 یعنی diff_pct~1.5%)
-MIN_TREND_STRENGTH = 15
-STRONG_TREND_STRENGTH = 40   # همون مرز "صعودی/نزولی قوی" در indicators.py (diff_pct=4 -> strength=40)
-
-# حداقل نسبت توافق بین شاخص‌های «جهت‌دار» با علامت امتیاز نهایی
-MIN_AGREEMENT_RATIO = 0.55
-# آستانه‌ای که پایین‌تر از اون یک شاخص «خنثی» حساب می‌شه (نه موافق نه مخالف)
+STRONG_TREND_STRENGTH = 40
 NEUTRAL_ZONE = 0.3
-
-# شاخص‌های «بازگشتی/اشباع» که وقتی حجم پایینه، کم‌اثرتر می‌شن (چون بازگشت
-# قیمتی بدون حجم کافی غیرقابل‌اعتمادتره)
 REVERSAL_INDICATORS = ["rsi", "bollinger", "stochastic_rsi"]
 LOW_VOLUME_CONFIDENCE = 0.6
+DEFAULT_BTC_ALIGNMENT_WEIGHT = 0.8
 
 _WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), "weights.json")
 
 
 def _load_weights():
-    """
-    وزن‌ها حالا در weights.json نگه داشته می‌شن (نه هاردکد اینجا) تا فاز بک‌تست
-    آینده (مشکل شماره ۴ و ۵ گزارش) بتونه خودکار تنظیمشون کنه.
-    """
     with open(_WEIGHTS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        weights = json.load(f)
+    weights.setdefault("btc_alignment", DEFAULT_BTC_ALIGNMENT_WEIGHT)
+    return weights
 
 
 def _to_percent(score):
-    """
-    تبدیل امتیاز داخلی (۱۰۰- تا ۱۰۰+) به یه درصد ساده‌تر (۰٪ تا ۱۰۰٪) فقط برای
-    نمایش به کاربر. منطق داخلی (آستانه‌ها، گیت‌ها) همچنان روی مقیاس ۱۰۰- تا ۱۰۰+
-    کار می‌کنه — این فقط یه لایه‌ی نمایشیه.
-    ۱۰۰- -> ۰٪ (فروش کامل) | ۰ -> ۵۰٪ (خنثی) | ۱۰۰+ -> ۱۰۰٪ (خرید کامل)
-    """
     return round((score + 100) / 2, 1)
 
 
 def _score_rsi(rsi):
-    if rsi <= 25:
-        return 2.0
-    if rsi <= 35:
-        return 1.2
-    if rsi <= 45:
-        return 0.4
-    if rsi >= 75:
-        return -2.0
-    if rsi >= 65:
-        return -1.2
-    if rsi >= 55:
-        return -0.4
+    if rsi <= 25: return 2.0
+    if rsi <= 35: return 1.2
+    if rsi <= 45: return 0.4
+    if rsi >= 75: return -2.0
+    if rsi >= 65: return -1.2
+    if rsi >= 55: return -0.4
     return 0.0
 
 
 def _score_macd(macd_data):
-    hist = macd_data["histogram"]
-    hist_prev = macd_data["histogram_prev"]
+    hist, hist_prev = macd_data["histogram"], macd_data["histogram_prev"]
     rising = hist > hist_prev
-    if hist > 0:
-        return 1.6 if rising else 1.0
-    if hist < 0:
-        return -1.6 if not rising else -1.0
+    if hist > 0: return 1.6 if rising else 1.0
+    if hist < 0: return -1.6 if not rising else -1.0
     return 0.0
 
 
 def _score_trend(trend_diff_pct):
-    if trend_diff_pct > 4:
-        return 2.0
-    if trend_diff_pct > 1:
-        return 1.0
-    if trend_diff_pct < -4:
-        return -2.0
-    if trend_diff_pct < -1:
-        return -1.0
+    if trend_diff_pct > 4: return 2.0
+    if trend_diff_pct > 1: return 1.0
+    if trend_diff_pct < -4: return -2.0
+    if trend_diff_pct < -1: return -1.0
     return 0.0
 
 
@@ -118,122 +109,111 @@ def _score_volume(volume_label, trend_diff_pct):
 
 
 def _score_bollinger(position):
-    if position <= 0.05:
-        return 2.0
-    if position <= 0.2:
-        return 1.0
-    if position >= 0.95:
-        return -2.0
-    if position >= 0.8:
-        return -1.0
+    if position <= 0.05: return 2.0
+    if position <= 0.2: return 1.0
+    if position >= 0.95: return -2.0
+    if position >= 0.8: return -1.0
     return 0.0
 
 
 def _score_stochastic_rsi(value):
-    if value <= 10:
-        return 2.0
-    if value <= 20:
-        return 1.0
-    if value >= 90:
-        return -2.0
-    if value >= 80:
-        return -1.0
+    if value <= 10: return 2.0
+    if value <= 20: return 1.0
+    if value >= 90: return -2.0
+    if value >= 80: return -1.0
     return 0.0
 
 
 def _score_obv(label):
     mapping = {
-        "تاییدکننده صعود": 1.2,
-        "تاییدکننده نزول": -1.2,
+        "تاییدکننده صعود": 1.2, "تاییدکننده نزول": -1.2,
         "واگرایی هشداردهنده (صعود بدون حمایت حجم)": -0.8,
         "واگرایی هشداردهنده (نزول بدون فشار فروش واقعی)": 0.8,
-        "خنثی": 0.0,
-        "نامشخص": 0.0,
+        "خنثی": 0.0, "نامشخص": 0.0,
     }
     return mapping.get(label, 0.0)
 
 
 def _score_ema_cross(label):
-    if label == "کراس طلایی اخیر (صعودی)":
-        return 1.6
-    if label == "کراس مرگ اخیر (نزولی)":
-        return -1.6
+    if label == "کراس طلایی اخیر (صعودی)": return 1.6
+    if label == "کراس مرگ اخیر (نزولی)": return -1.6
     return 0.0
 
 
 def _score_support_resistance(last_price, support, resistance):
-    if resistance == support:
-        return 0.0
+    if resistance == support: return 0.0
     range_size = resistance - support
-    distance_to_support_pct = (last_price - support) / range_size
-    if distance_to_support_pct <= 0.08:
-        return 1.6
-    if distance_to_support_pct <= 0.2:
-        return 0.8
-    if distance_to_support_pct >= 0.92:
-        return -1.6
-    if distance_to_support_pct >= 0.8:
-        return -0.8
+    d = (last_price - support) / range_size
+    if d <= 0.08: return 1.6
+    if d <= 0.2: return 0.8
+    if d >= 0.92: return -1.6
+    if d >= 0.8: return -0.8
     return 0.0
 
 
 def _score_news_sentiment(sentiment_score):
-    """
-    sentiment_score: عدد بین -۱ تا +۱ که از analyzer/news_sentiment.py میاد
-    (میانگین احساسات اخبار ۲۴ ساعت اخیر). به مقیاس -۲ تا +۲ (مثل بقیه‌ی
-    شاخص‌ها) تبدیل می‌شه. اگه خبری نبود، sentiment_score خودش ۰ میاد (خنثی)
-    و خودکار از معیار توافق و امتیاز نهایی کنار گذاشته می‌شه (چون |۰| کمتر
-    از NEUTRAL_ZONE است).
-    """
     return max(-2.0, min(2.0, sentiment_score * 2))
 
 
-def _confidence_multiplier(trend_strength):
+def _score_btc_alignment(coin_diff_pct, btc_diff_pct):
     """
-    نسخه‌ی ۳: به‌جای پله‌ی سه‌تایی قبلی (که هیچ‌وقت زیر ۰.۵ نمی‌رفت)، حالا
-    این تابع فقط داخل «محدوده‌ی روند‌دار» (بالای MIN_TREND_STRENGTH) صدا زده
-    می‌شه، چون زیرش make_decision اصلاً گیت می‌زنه و به اینجا نمی‌رسه.
-    بین MIN_TREND_STRENGTH و STRONG_TREND_STRENGTH به‌صورت خطی از ۰.۳ به ۱.۰ می‌ره.
+    دسته B — همبستگی با روند کلی بیت‌کوین.
+    coin_diff_pct: همون indicators["trend"]["diff_pct"] خود کوین
+    btc_diff_pct: همون مقدار ولی برای BTC؛ اگه None باشه یعنی این فاکتور هنوز
+        وصل نشده (main.py قیمت BTC رو جدا نگرفته) — پس خنثی برمی‌گردونیم.
     """
+    if btc_diff_pct is None:
+        return 0.0
+    coin_sign = 1 if coin_diff_pct > 0.5 else (-1 if coin_diff_pct < -0.5 else 0)
+    btc_sign = 1 if btc_diff_pct > 0.5 else (-1 if btc_diff_pct < -0.5 else 0)
+    if coin_sign == 0 or btc_sign == 0:
+        return 0.0
+    aligned = (coin_sign == btc_sign)
+    magnitude = 1.5 if aligned else 1.0
+    alignment_sign = 1 if aligned else -1
+    return coin_sign * alignment_sign * magnitude
+
+
+def _confidence_multiplier(trend_strength, min_trend_strength):
     if trend_strength >= STRONG_TREND_STRENGTH:
         return 1.0
-    span = STRONG_TREND_STRENGTH - MIN_TREND_STRENGTH
-    return 0.3 + 0.7 * (trend_strength - MIN_TREND_STRENGTH) / span
+    span = STRONG_TREND_STRENGTH - min_trend_strength
+    return 0.3 + 0.7 * (trend_strength - min_trend_strength) / span
 
 
-def make_decision(indicators, news_sentiment=0.0):
+def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_profile="balanced"):
     """
     indicators: خروجی indicators.calculate_all_indicators
-    news_sentiment: عدد بین -۱ تا +۱ از analyzer/news_sentiment.py (اختیاری،
-        پیش‌فرض ۰.۰ یعنی خنثی — اگه سرویس sentiment رو وصل نکرده باشی یا
-        خبری نبود، فقط این پارامتر رو پاس نده، هیچی خراب نمی‌شه)
-    خروجی: {"decision": "buy"|"sell"|"hold"|"uncertain", "score": float,
-            "reasons": [str,...], "factors": {...},
-            "agreement_ratio": float|None, "trend_gate_triggered": bool}
+    news_sentiment: -۱ تا +۱ (پیش‌فرض خنثی)
+    btc_trend_diff_pct: diff_pct روند BTC، هم‌مقیاس با indicators["trend"]["diff_pct"]
+        (اختیاری؛ اگه پاس داده نشه فاکتور btc_alignment خنثی می‌مونه)
+    risk_profile: "conservative" | "balanced" (پیش‌فرض) | "aggressive"
+
+    خروجی مثل نسخه ۳ + یک فیلد جدید "risk_profile" برای شفافیت این‌که این
+    تصمیم با کدوم پروفایل محاسبه شده.
     """
+    profile = RISK_PROFILES.get(risk_profile, RISK_PROFILES["balanced"])
     weights = _load_weights()
     trend_strength = indicators["trend_strength"]
 
-    # ---------- گام ۱: گیت واقعی قدرت روند (مشکل ۲ و ۶) ----------
-    if trend_strength < MIN_TREND_STRENGTH:
-        reasons = [
-            f"قدرت روند فعلی خیلی پایینه ({trend_strength:.0f} از ۱۰۰) — بازار در حال حاضر "
-            "رِنج/بی‌جهته و سیگنال خرید یا فروش قابل‌اعتماد نیست.",
-        ]
+    if trend_strength < profile["min_trend_strength"]:
         return {
             "decision": "hold",
             "score": 0.0,
             "score_percent": None,
-            "reasons": reasons,
+            "reasons": [
+                f"قدرت روند فعلی خیلی پایینه ({trend_strength:.0f} از ۱۰۰) — بازار در حال حاضر "
+                "رِنج/بی‌جهته و سیگنال خرید یا فروش قابل‌اعتماد نیست."
+            ],
             "factors": {},
             "agreement_ratio": None,
             "trend_gate_triggered": True,
+            "risk_profile": risk_profile,
             "disclaimer": _disclaimer(),
         }
 
-    confidence = _confidence_multiplier(trend_strength)
+    confidence = _confidence_multiplier(trend_strength, profile["min_trend_strength"])
 
-    # امتیاز خام هر شاخص، قبل از اعمال ضریب اطمینان — برای معیار توافق استفاده می‌شه
     base_scores = {
         "rsi": _score_rsi(indicators["rsi"]),
         "macd": _score_macd(indicators["macd"]),
@@ -247,17 +227,13 @@ def make_decision(indicators, news_sentiment=0.0):
             indicators["last_price"], indicators["support"], indicators["resistance"]
         ),
         "news_sentiment": _score_news_sentiment(news_sentiment),
+        "btc_alignment": _score_btc_alignment(indicators["trend"]["diff_pct"], btc_trend_diff_pct),
     }
 
-    # ضریب اطمینان حجم: شاخص‌های «بازگشتی/اشباع» (RSI, بولینگر, StochRSI) وقتی
-    # حجم معاملات پایینه کم‌اثرتر می‌شن — چون یه بازگشت قیمتی بدون حجم کافی
-    # غیرقابل‌اعتمادتره (دقیقاً همون چیزی که OBV با برچسب «واگرایی هشداردهنده»
-    # نشون می‌ده، ولی قبلاً هیچ اثری روی امتیاز نداشت).
     volume_confidence = LOW_VOLUME_CONFIDENCE if indicators["volume_trend"]["label"] == "پایین" else 1.0
     for k in REVERSAL_INDICATORS:
         base_scores[k] *= volume_confidence
 
-    # ضریب اطمینان فقط روی شاخص‌های روندی/مومنتوم اعمال می‌شه (مثل نسخه ۲)
     scored = dict(base_scores)
     scored["macd"] *= confidence
     scored["trend"] *= confidence
@@ -267,13 +243,6 @@ def make_decision(indicators, news_sentiment=0.0):
     max_possible = sum(2.0 * weights[k] for k in scored)
     final_score_pct = round((weighted_sum / max_possible) * 100, 1) if max_possible else 0.0
 
-    # ---------- گام ۲: معیار توافق وزن‌دار (مشکل ۱ و ۳) ----------
-    # نسخه‌ی قبلی این بخش فقط «تعداد» شاخص‌های موافق/مخالف رو می‌شمرد — یعنی یه
-    # شاخص خیلی قوی (مثلاً روند نزولی قوی: -2.0) دقیقاً هم‌وزن با یه شاخص مرزی و
-    # ضعیف (مثلاً RSI=۳۹.۷: فقط +0.4) حساب می‌شد. این باعث می‌شد چند سیگنال ضعیف
-    # بتونن چند سیگنال قوی رو خنثی کنن و یه سیگنال قوی و منسجم رو «نامشخص» نشون بده.
-    # حالا به‌جای شمارش، «وزن × قدرت امتیاز» هر شاخص جمع زده می‌شه، تا سیگنال‌های
-    # قوی‌تر و مهم‌تر (طبق weights.json) واقعاً تاثیر بیشتری روی توافق داشته باشن.
     overall_sign = 1 if final_score_pct >= 0 else -1
     directional_items = [(k, v) for k, v in base_scores.items() if abs(v) >= NEUTRAL_ZONE]
     if directional_items:
@@ -285,34 +254,35 @@ def make_decision(indicators, news_sentiment=0.0):
     else:
         agreement_ratio = 0.0
 
-    would_cross_threshold = final_score_pct >= BUY_THRESHOLD or final_score_pct <= SELL_THRESHOLD
+    would_cross_threshold = (
+        final_score_pct >= profile["buy_threshold"] or final_score_pct <= profile["sell_threshold"]
+    )
 
-    if would_cross_threshold and agreement_ratio < MIN_AGREEMENT_RATIO:
-        reasons = [
-            f"امتیاز خام {_to_percent(final_score_pct):.0f}٪ بود، اما شاخص‌ها با هم هم‌جهت نیستن "
-            f"(فقط {agreement_ratio*100:.0f}٪ توافق) — بعضی صعودی و بعضی نزولی‌اند، "
-            "پس سیگنال قطعی صادر نمی‌شه.",
-        ]
+    if would_cross_threshold and agreement_ratio < profile["min_agreement_ratio"]:
         return {
             "decision": "uncertain",
             "score": final_score_pct,
             "score_percent": _to_percent(final_score_pct),
-            "reasons": reasons,
+            "reasons": [
+                f"امتیاز خام {_to_percent(final_score_pct):.0f}٪ بود، اما شاخص‌ها با هم هم‌جهت نیستن "
+                f"(فقط {agreement_ratio*100:.0f}٪ توافق) — بعضی صعودی و بعضی نزولی‌اند، "
+                "پس سیگنال قطعی صادر نمی‌شه."
+            ],
             "factors": scored,
             "agreement_ratio": round(agreement_ratio, 2),
             "trend_gate_triggered": False,
+            "risk_profile": risk_profile,
             "disclaimer": _disclaimer(),
         }
 
-    # ---------- گام ۳: تصمیم نهایی (منبع واحد حقیقت — مشکل ۱) ----------
-    if final_score_pct >= BUY_THRESHOLD:
+    if final_score_pct >= profile["buy_threshold"]:
         decision = "buy"
-    elif final_score_pct <= SELL_THRESHOLD:
+    elif final_score_pct <= profile["sell_threshold"]:
         decision = "sell"
     else:
         decision = "hold"
 
-    reasons = _build_reasons(indicators, scored, confidence, agreement_ratio, volume_confidence)
+    reasons = _build_reasons(indicators, scored, confidence, agreement_ratio, volume_confidence, btc_trend_diff_pct)
 
     return {
         "decision": decision,
@@ -322,6 +292,7 @@ def make_decision(indicators, news_sentiment=0.0):
         "factors": scored,
         "agreement_ratio": round(agreement_ratio, 2),
         "trend_gate_triggered": False,
+        "risk_profile": risk_profile,
         "disclaimer": _disclaimer(),
     }
 
@@ -333,68 +304,35 @@ def _disclaimer():
     )
 
 
-def _build_reasons(ind, scores, confidence, agreement_ratio, volume_confidence):
+def _build_reasons(ind, scores, confidence, agreement_ratio, volume_confidence, btc_trend_diff_pct):
     reasons = []
-
-    if scores["rsi"] > 0.3:
-        reasons.append(f"RSI در محدوده اشباع فروش قرار دارد ({ind['rsi']:.1f}) که معمولاً نشانه فرصت خرید است.")
-    elif scores["rsi"] < -0.3:
-        reasons.append(f"RSI در محدوده اشباع خرید قرار دارد ({ind['rsi']:.1f}) که معمولاً نشانه احتیاط یا فروش است.")
-
-    if scores["macd"] > 0.3:
-        reasons.append("MACD مثبت و در جهت تقویت است.")
-    elif scores["macd"] < -0.3:
-        reasons.append("MACD منفی و در جهت تضعیف است.")
-
-    if scores["trend"] > 0.3:
-        reasons.append(f"روند قیمت {ind['trend']['label']} تشخیص داده شده است.")
-    elif scores["trend"] < -0.3:
-        reasons.append(f"روند قیمت {ind['trend']['label']} تشخیص داده شده است.")
-
-    if scores["volume_trend"] != 0:
-        reasons.append(f"حجم معاملات {ind['volume_trend']['label']} است و همسو با روند فعلی حرکت می‌کند.")
-
-    if scores["bollinger"] > 0.3:
-        reasons.append("قیمت نزدیک باند پایین بولینگر است (اشباع فروش احتمالی).")
-    elif scores["bollinger"] < -0.3:
-        reasons.append("قیمت نزدیک باند بالای بولینگر است (اشباع خرید احتمالی).")
-
-    if scores["stochastic_rsi"] > 0.3:
-        reasons.append("استوکاستیک RSI در ناحیه اشباع فروش است.")
-    elif scores["stochastic_rsi"] < -0.3:
-        reasons.append("استوکاستیک RSI در ناحیه اشباع خرید است.")
-
-    if scores["obv_trend"] != 0:
-        reasons.append(f"وضعیت حجم تجمعی (OBV): {ind['obv_trend']}.")
-
-    if scores["ema_cross"] > 0.3:
-        reasons.append("کراس طلایی اخیر بین میانگین‌های متحرک رخ داده (سیگنال صعودی).")
-    elif scores["ema_cross"] < -0.3:
-        reasons.append("کراس مرگ اخیر بین میانگین‌های متحرک رخ داده (سیگنال نزولی).")
-
-    if scores["support_resistance"] > 0.3:
-        reasons.append("قیمت نزدیک سطح حمایت ۳۰ روز اخیر است.")
-    elif scores["support_resistance"] < -0.3:
-        reasons.append("قیمت نزدیک سطح مقاومت ۳۰ روز اخیر است.")
-
-    if scores["news_sentiment"] > 0.3:
-        reasons.append("احساسات اخبار ۲۴ ساعت اخیر مثبت بوده است.")
-    elif scores["news_sentiment"] < -0.3:
-        reasons.append("احساسات اخبار ۲۴ ساعت اخیر منفی بوده است.")
-
+    if scores["rsi"] > 0.3: reasons.append(f"RSI در محدوده اشباع فروش قرار دارد ({ind['rsi']:.1f}).")
+    elif scores["rsi"] < -0.3: reasons.append(f"RSI در محدوده اشباع خرید قرار دارد ({ind['rsi']:.1f}).")
+    if scores["macd"] > 0.3: reasons.append("MACD مثبت و در جهت تقویت است.")
+    elif scores["macd"] < -0.3: reasons.append("MACD منفی و در جهت تضعیف است.")
+    if scores["trend"] != 0: reasons.append(f"روند قیمت {ind['trend']['label']} تشخیص داده شده است.")
+    if scores["volume_trend"] != 0: reasons.append(f"حجم معاملات {ind['volume_trend']['label']} است.")
+    if scores["bollinger"] > 0.3: reasons.append("قیمت نزدیک باند پایین بولینگر است.")
+    elif scores["bollinger"] < -0.3: reasons.append("قیمت نزدیک باند بالای بولینگر است.")
+    if scores["stochastic_rsi"] > 0.3: reasons.append("استوکاستیک RSI در ناحیه اشباع فروش است.")
+    elif scores["stochastic_rsi"] < -0.3: reasons.append("استوکاستیک RSI در ناحیه اشباع خرید است.")
+    if scores["obv_trend"] != 0: reasons.append(f"وضعیت حجم تجمعی (OBV): {ind['obv_trend']}.")
+    if scores["ema_cross"] > 0.3: reasons.append("کراس طلایی اخیر رخ داده (سیگنال صعودی).")
+    elif scores["ema_cross"] < -0.3: reasons.append("کراس مرگ اخیر رخ داده (سیگنال نزولی).")
+    if scores["support_resistance"] > 0.3: reasons.append("قیمت نزدیک سطح حمایت ۳۰ روز اخیر است.")
+    elif scores["support_resistance"] < -0.3: reasons.append("قیمت نزدیک سطح مقاومت ۳۰ روز اخیر است.")
+    if scores["news_sentiment"] > 0.3: reasons.append("احساسات اخبار ۲۴ ساعت اخیر مثبت بوده است.")
+    elif scores["news_sentiment"] < -0.3: reasons.append("احساسات اخبار ۲۴ ساعت اخیر منفی بوده است.")
+    if btc_trend_diff_pct is not None:
+        if scores["btc_alignment"] > 0.3:
+            reasons.append("روند این کوین با روند کلی بیت‌کوین هم‌جهت است (تقویت‌کننده).")
+        elif scores["btc_alignment"] < -0.3:
+            reasons.append("روند این کوین با روند کلی بیت‌کوین واگرا است (نیازمند احتیاط بیشتر).")
     if confidence < 1.0:
-        reasons.append("قدرت روند فعلی متوسط است؛ به همین دلیل امتیاز شاخص‌های روندی با احتیاط بیشتری اعمال شد.")
-
+        reasons.append("قدرت روند فعلی متوسط است؛ امتیاز شاخص‌های روندی با احتیاط بیشتری اعمال شد.")
     if volume_confidence < 1.0:
-        reasons.append(
-            "حجم معاملات پایین است؛ به همین دلیل امتیاز شاخص‌های بازگشتی/اشباع "
-            "(RSI، بولینگر، استوکاستیک RSI) با احتیاط بیشتری اعمال شد، چون بازگشت "
-            "قیمتی بدون حجم کافی کمتر قابل‌اعتماد است."
-        )
-
+        reasons.append("حجم معاملات پایین است؛ امتیاز شاخص‌های بازگشتی/اشباع با احتیاط بیشتری اعمال شد.")
     reasons.append(f"توافق بین شاخص‌ها: {agreement_ratio*100:.0f}٪.")
-
     if not reasons:
         reasons.append("هیچ سیگنال قوی خرید یا فروشی مشاهده نشد؛ بازار در وضعیت خنثی است.")
-
     return reasons
