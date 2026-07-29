@@ -204,6 +204,36 @@
     border:1px dashed var(--rule-strong); border-radius:var(--radius); padding:26px 20px; text-align:center;
     color:var(--ink-dim); font-size:13.5px; margin-bottom:20px;
   }
+
+  /* ---------------- Alert banner (دسته B) ---------------- */
+  .alert-banner{
+    display:none; max-width:980px; margin:0 auto; padding:9px 20px; background:var(--hold-bg);
+    border-bottom:1px solid var(--rule-strong); font-size:12.5px; color:var(--ink);
+  }
+  .alert-banner.show{ display:block; }
+  .alert-banner b{ font-family:var(--font-mono); }
+
+  /* ---------------- Risk profile selector (دسته D) ---------------- */
+  .toolbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .toolbar #search{ flex:1; min-width:180px; }
+  #riskProfile{
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink); background:var(--paper-raised);
+    border:1px solid var(--rule-strong); border-radius:var(--radius); padding:10px 10px;
+  }
+  .risk-note{ font-size:11.5px; color:var(--ink-faint); margin:6px 2px 14px; }
+
+  /* ---------------- Market regime chip ---------------- */
+  .regime-chip{
+    display:inline-flex; align-items:center; gap:6px; font-size:12px; font-family:var(--font-mono);
+    color:var(--ink-dim); border:1px solid var(--rule); border-radius:var(--radius); padding:3px 8px;
+  }
+
+  /* ---------------- Portfolio panel (دسته D) ---------------- */
+  .trades-table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }
+  .trades-table td, .trades-table th{ padding:6px 4px; border-bottom:1px solid var(--rule); text-align:right; }
+  .trades-table th{ color:var(--ink-faint); font-family:var(--font-mono); font-weight:500; font-size:11px; }
+  .trades-table td:last-child, .trades-table th:last-child{ text-align:left; font-family:var(--font-mono); }
+  .pnl-pos{ color:var(--buy); } .pnl-neg{ color:var(--sell); }
 </style>
 </head>
 <body>
@@ -220,14 +250,25 @@
   <div class="ticker-track" id="tickerTrack"></div>
 </div>
 
+<div class="alert-banner" id="alertBanner"></div>
+
 <nav class="tabs">
   <button class="tab active" data-tab="live">تحلیل زنده</button>
   <button class="tab" data-tab="transparency">شفافیت عملکرد</button>
+  <button class="tab" data-tab="portfolio">پرتفوی فرضی</button>
 </nav>
 
 <main>
   <section id="panel-live" class="panel active">
-    <div class="toolbar"><input id="search" type="text" placeholder="جست‌وجوی رمزارز… (مثلا bitcoin)"></div>
+    <div class="toolbar">
+      <input id="search" type="text" placeholder="جست‌وجوی رمزارز… (مثلا bitcoin)">
+      <select id="riskProfile">
+        <option value="conservative">پروفایل: محافظه‌کار</option>
+        <option value="balanced" selected>پروفایل: متعادل</option>
+        <option value="aggressive">پروفایل: تهاجمی</option>
+      </select>
+    </div>
+    <p class="risk-note">تغییر پروفایل، آستانه‌های خرید/فروش را روی همون امتیاز محاسبه‌شده دوباره اعمال می‌کند. برای کوین‌هایی که به‌دلیل بی‌روند بودن بازار اصلاً امتیازی محاسبه نشده («صبر»)، تغییر پروفایل اثری ندارد.</p>
     <div class="table-head"><span>نام</span><span>قیمت</span><span>تغییر ۲۴ساعت</span><span>وضعیت</span></div>
     <div id="watchlist"><div class="loading">در حال دریافت آخرین تحلیل…</div></div>
   </section>
@@ -236,6 +277,11 @@
     <p class="transparency-intro">نرخ موفقیت واقعی سیگنال‌های «خرید» و «فروش» گذشته — هر سیگنال ۲۴ ساعت بعد از صدور، با قیمت واقعی بازار مقایسه و به‌صورت خودکار ارزیابی می‌شود. اینجا هیچ عددی دستکاری یا حذف نمی‌شود.</p>
     <div id="transparencyBody"><div class="loading">در حال دریافت آمار…</div></div>
   </section>
+
+  <section id="panel-portfolio" class="panel">
+    <p class="transparency-intro">شبیه‌سازی: اگر کسی از ابتدا با مبلغ ثابت، همه‌ی سیگنال‌های خرید/فروش سیستم را دنبال می‌کرد، نتیجه چه می‌شد؟ این یک پرتفوی فرضی <b>سراسری</b> است، نه حساب شخصی شما — هیچ معامله‌ی واقعی انجام نشده.</p>
+    <div id="portfolioBody"><div class="loading">در حال دریافت داده‌ی پرتفوی…</div></div>
+  </section>
 </main>
 
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
@@ -243,17 +289,44 @@
 <script>
 const ANALYSIS_URL = './data/analysis.json';
 const SUMMARY_URL = './data/accuracy_summary.json';
+const ALERTS_URL = './data/alerts.json';
+const PORTFOLIO_URL = './data/portfolio.json';
 const FAV_KEY = 'arsan_favorites';
 const NEUTRAL_ZONE = 0.3; // همون آستانه‌ی decision.py — برای تشخیص خنثی بودن یک شاخص
 
+// همون سه پروفایل RISK_PROFILES در decision.py — باید همیشه هم‌گام نگه داشته بشن
+const RISK_PROFILES = {
+  conservative: { buy_threshold: 30, sell_threshold: -30, min_agreement_ratio: 0.65 },
+  balanced:     { buy_threshold: 20, sell_threshold: -20, min_agreement_ratio: 0.55 },
+  aggressive:   { buy_threshold: 12, sell_threshold: -12, min_agreement_ratio: 0.45 },
+};
+let currentRiskProfile = 'balanced';
+
 let analysisData = null;
 let chartInstance = null;
+
+/* بازآرایی سبک تصمیم روی همون امتیاز/توافق ذخیره‌شده، بدون نیاز به اجرای دوباره‌ی main.py.
+   محدودیت صادقانه: اگه backend خودش با پروفایل balanced کوین رو trend-gate کرده (hold به
+   دلیل بی‌روند بودن)، factors و score اصلاً محاسبه نشدن؛ پس نمی‌تونیم برای پروفایل دیگه
+   حدس بزنیم — همون hold می‌مونه (به کاربر هم در risk-note گفته شده). */
+function effectiveDecision(coin){
+  if(coin.trend_gate_triggered || coin.score === null || coin.score === undefined){
+    return coin.decision;
+  }
+  const p = RISK_PROFILES[currentRiskProfile];
+  const crosses = coin.score >= p.buy_threshold || coin.score <= p.sell_threshold;
+  if(crosses && (coin.agreement_ratio ?? 0) < p.min_agreement_ratio) return 'uncertain';
+  if(coin.score >= p.buy_threshold) return 'buy';
+  if(coin.score <= p.sell_threshold) return 'sell';
+  return 'hold';
+}
 
 const DECISION_LABELS = { buy: 'خرید', sell: 'فروش', hold: 'صبر', uncertain: 'نامشخص' };
 const FACTOR_LABELS = {
   rsi: 'RSI', macd: 'MACD', trend: 'روند قیمت', volume_trend: 'روند حجم',
   bollinger: 'باند بولینگر', stochastic_rsi: 'استوکاستیک RSI', obv_trend: 'حجم تجمعی (OBV)',
   ema_cross: 'کراس EMA', support_resistance: 'حمایت/مقاومت', news_sentiment: 'احساسات اخبار',
+  btc_alignment: 'همبستگی با روند بیت‌کوین',
 };
 
 function getFavorites(){
@@ -304,10 +377,11 @@ function renderTicker(coins){
   if(!coins.length){ track.innerHTML=''; return; }
   const items = coins.map(c=>{
     const up = (c.change_24h ?? 0) >= 0;
+    const dec = effectiveDecision(c);
     return `<span class="ticker-item"><b>${c.id.toUpperCase()}</b>
       $${Number(c.current_price).toLocaleString('en-US',{maximumFractionDigits:6})}
       <span class="${up?'tk-up':'tk-down'}">${up?'▲':'▼'}${Math.abs(c.change_24h ?? 0).toFixed(2)}٪</span>
-      <span class="tk-code ${c.decision}">${DECISION_LABELS[c.decision]||c.decision}</span></span>`;
+      <span class="tk-code ${dec}">${DECISION_LABELS[dec]||dec}</span></span>`;
   }).join('');
   track.innerHTML = items + items; // duplicated for seamless loop
 }
@@ -330,12 +404,13 @@ function renderWatchlist(){
   list.innerHTML = coins.map(c=>{
     const up = (c.change_24h ?? 0) >= 0;
     const isFav = favs.includes(c.id);
+    const dec = effectiveDecision(c);
     return `
       <div class="watchlist-row" onclick="openModal('${c.id}')">
         <div class="wl-name"><button class="wl-fav ${isFav?'active':''}" onclick="event.stopPropagation(); toggleFavorite('${c.id}')">★</button>${c.id}</div>
         <div><span class="wl-mobile-label">قیمت</span><span class="wl-price">$${Number(c.current_price).toLocaleString('en-US',{maximumFractionDigits:6})}</span></div>
         <div><span class="wl-mobile-label">۲۴ساعت</span><span class="wl-change ${up?'up':'down'}">${up?'+':''}${(c.change_24h ?? 0).toFixed(2)}٪</span></div>
-        <div><span class="code ${c.decision}">${DECISION_LABELS[c.decision]||c.decision}</span></div>
+        <div><span class="code ${dec}">${DECISION_LABELS[dec]||dec}</span></div>
       </div>`;
   }).join('');
 }
@@ -378,14 +453,18 @@ function openModal(id){
     }
   }
 
+  const dec = effectiveDecision(coin);
+  const regime = coin.market_regime;
   document.getElementById('modal').innerHTML = `
     <div class="modal-header">
       <h2>${coin.id}</h2>
       <button class="close-btn" onclick="closeModal()">✕</button>
     </div>
     <div class="score-line">
-      <span class="code ${coin.decision}">${DECISION_LABELS[coin.decision]}</span>
+      <span class="code ${dec}">${DECISION_LABELS[dec]}</span>
       <span class="score-num">امتیاز: ${coin.score_percent !== null && coin.score_percent !== undefined ? coin.score_percent+'٪' : '—'}</span>
+      ${dec !== coin.decision ? `<span class="score-num" style="color:var(--ink-faint)">(با پروفایل اصلی: ${DECISION_LABELS[coin.decision]})</span>` : ''}
+      ${regime ? `<span class="regime-chip">${regime.label_fa}${regime.volatility_pct!==null?` — نوسان ${regime.volatility_pct}٪`:''}</span>` : ''}
     </div>
     <canvas id="priceChart"></canvas>
 
@@ -430,6 +509,55 @@ function openModal(id){
 function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
 document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
 document.getElementById('search').addEventListener('input', renderWatchlist);
+document.getElementById('riskProfile').addEventListener('change', e=>{
+  currentRiskProfile = e.target.value;
+  renderWatchlist();
+  if(analysisData) renderTicker(analysisData.coins || []);
+});
+
+/* ---------------- Alert banner (دسته B) ---------------- */
+function renderAlerts(data){
+  const el = document.getElementById('alertBanner');
+  const now = new Date();
+  const active = (data && data.alerts || []).filter(a => new Date(a.expires_at) > now);
+  if(!active.length){ el.classList.remove('show'); el.innerHTML=''; return; }
+  el.innerHTML = '⚡ ' + active.map(a => `<b>${a.coin}</b>: ${a.message}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+  el.classList.add('show');
+}
+
+/* ---------------- Portfolio panel (دسته D) ---------------- */
+function renderPortfolio(p){
+  const body = document.getElementById('portfolioBody');
+  if(!p || !p.total_trades){
+    body.innerHTML = `<div class="empty-state">${p ? p.note : 'داده‌ی پرتفوی در دسترس نیست.'}</div>`;
+    return;
+  }
+  const pnlClass = p.total_pnl_usd >= 0 ? 'pnl-pos' : 'pnl-neg';
+  const rows = (p.recent_trades || []).slice().reverse().map(t => `
+    <tr>
+      <td>${t.coin}</td>
+      <td><span class="code ${t.decision}">${DECISION_LABELS[t.decision]||t.decision}</span></td>
+      <td>$${Number(t.entry_price).toLocaleString('en-US',{maximumFractionDigits:6})}</td>
+      <td>$${Number(t.exit_price).toLocaleString('en-US',{maximumFractionDigits:6})}</td>
+      <td class="${t.pnl_usd>=0?'pnl-pos':'pnl-neg'}">${t.pnl_usd>=0?'+':''}$${t.pnl_usd}</td>
+    </tr>`).join('');
+  body.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">سود/زیان کل (فرضی)</div>
+        <div class="stat-num ${pnlClass}">${p.total_pnl_usd>=0?'+':''}$${p.total_pnl_usd}</div>
+        <div class="stat-sub">بازده: ${p.return_percent !== null ? p.return_percent+'٪' : '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">تعداد معاملات فرضی</div>
+        <div class="stat-num">${p.total_trades}</div>
+        <div class="stat-sub">هر کدام ${p.position_size_usd}$ — نگه‌داری ${p.hold_hours} ساعته</div>
+      </div>
+    </div>
+    <p class="method-note">${p.note}</p>
+    ${rows ? `<table class="trades-table"><tr><th>کوین</th><th>سیگنال</th><th>ورود</th><th>خروج</th><th>سود/زیان</th></tr>${rows}</table>` : ''}
+  `;
+}
 
 /* ---------------- Transparency panel ---------------- */
 function renderTransparency(summary){
@@ -488,11 +616,29 @@ async function loadSummary(){
     document.getElementById('transparencyBody').innerHTML = '<div class="empty">آمار عملکرد در دسترس نیست.</div>';
   }
 }
+async function loadAlerts(){
+  try{
+    const res = await fetch(ALERTS_URL + '?t=' + Date.now());
+    renderAlerts(await res.json());
+  }catch(e){ /* alerts.json ممکنه هنوز وجود نداشته باشه — بی‌سروصدا نادیده گرفته می‌شه */ }
+}
+async function loadPortfolio(){
+  try{
+    const res = await fetch(PORTFOLIO_URL + '?t=' + Date.now());
+    renderPortfolio(await res.json());
+  }catch(e){
+    document.getElementById('portfolioBody').innerHTML = '<div class="empty">داده‌ی پرتفوی در دسترس نیست.</div>';
+  }
+}
 
 loadAnalysis();
 loadSummary();
+loadAlerts();
+loadPortfolio();
 setInterval(loadAnalysis, 5 * 60 * 1000);
 setInterval(loadSummary, 15 * 60 * 1000);
+setInterval(loadAlerts, 5 * 60 * 1000);
+setInterval(loadPortfolio, 15 * 60 * 1000);
 </script>
 </body>
 </html>
