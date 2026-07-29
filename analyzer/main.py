@@ -1,8 +1,28 @@
 """
-آرسان - اجرای کامل زنجیره تحلیل (نسخه ۳)
+آرسان - اجرای کامل زنجیره تحلیل (نسخه ۴)
 دریافت داده -> محاسبه شاخص‌ها -> تصمیم‌گیری -> ذخیره در data/analysis.json
                                               -> ثبت در data/history.json
                                               -> ارزیابی سیگنال‌های قدیمی‌تر
+                                              -> به‌روزرسانی پرتفوی فرضی سراسری
+
+--- تغییرات نسبت به نسخه ۳ ---
+۱) قبل از حلقه‌ی اصلی، یک‌بار روند خود BTC محاسبه می‌شه (btc_trend_diff_pct) و به
+   make_decision هر کوین پاس داده می‌شه — این همون فاکتور btc_alignment در
+   decision.py نسخه ۴ رو فعال می‌کنه. اگه این مرحله به هر دلیلی خطا بده، برنامه
+   کرش نمی‌کنه؛ فقط btc_trend_diff_pct=None می‌مونه (دقیقاً رفتار نسخه ۳).
+۲) بعد از محاسبه‌ی indicators هر کوین، market_regime.calculate_market_regime روی
+   همون price_history صدا زده می‌شه و به خروجی هر کوین اضافه می‌شه (فیلد جدید،
+   اختیاری، چیزی رو خراب نمی‌کنه).
+۳) بعد از evaluate_pending_signals، portfolio_tracker.run() صدا زده می‌شه تا
+   data/portfolio.json به‌روز بشه (پرتفوی فرضی سراسری).
+
+نکته: volume_news_alert.py عمداً اینجا صدا زده نشده، چون به یه تابع فرضی
+(get_volume_snapshot) در fetch_data.py نیاز داره که هنوز تاییدش نکردی. وقتی
+اون تابع رو تو fetch_data.py اضافه/تایید کردی، کافیه این دو خط رو به انتهای
+run_analysis() اضافه کنی:
+
+    from volume_news_alert import run as run_alerts
+    run_alerts(coin_ids=DEFAULT_COINS)
 """
 
 import json
@@ -16,16 +36,36 @@ from decision import make_decision
 from history_logger import log_decision
 from evaluate_signals import evaluate_pending_signals
 from news_sentiment import compute_all_sentiments
+from market_regime import calculate_market_regime
+from portfolio_tracker import run as run_portfolio_update
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "analysis.json")
 SENTIMENT_OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "sentiment.json")
 DELAY_BETWEEN_COINS_SECONDS = 2
 
+BTC_COIN_ID = "bitcoin"
+
+
+def _get_btc_trend_diff_pct():
+    """
+    روند خود BTC رو جدا محاسبه می‌کنه تا به‌عنوان مبنای فاکتور btc_alignment در
+    decision.py هر کوین دیگه استفاده بشه. اگه خطا بده، None برمی‌گردونه —
+    یعنی فاکتور btc_alignment برای همه‌ی کوین‌ها خنثی می‌مونه (دقیقاً رفتار
+    نسخه ۳، بدون کرش).
+    """
+    try:
+        btc_chart = get_market_chart(BTC_COIN_ID, days=100)
+        btc_indicators = calculate_all_indicators(btc_chart)
+        return btc_indicators["trend"]["diff_pct"]
+    except Exception as exc:
+        print(f"[main] نتونستم روند BTC رو برای فاکتور btc_alignment بگیرم: {exc} — این فاکتور خنثی می‌مونه.")
+        return None
+
 
 def run_analysis():
     snapshot = get_current_snapshot(DEFAULT_COINS)
+    btc_trend_diff_pct = _get_btc_trend_diff_pct()
 
-    # تحلیل احساسات اخبار برای همه‌ی کوین‌ها یک‌جا (یه بار RSS گرفته می‌شه، نه هشت بار)
     try:
         sentiments = compute_all_sentiments(DEFAULT_COINS)
     except Exception as exc:
@@ -37,15 +77,24 @@ def run_analysis():
 
     for coin_id in DEFAULT_COINS:
         try:
-            # نکته‌ی مهم: CoinGecko برای days بین ۲ تا ۹۰ داده‌ی «ساعتی» برمی‌گردونه،
-            # نه روزانه. چون indicators.py (EMA20/50, حمایت/مقاومت ۳۰ روزه) فرض کرده
-            # هر ردیف یک روزه، باید days بالای ۹۰ باشه تا داده واقعاً روزانه بشه.
             market_chart = get_market_chart(coin_id, days=100)
             indicators = calculate_all_indicators(market_chart)
 
             coin_sentiment = sentiments.get(coin_id, {})
             news_sentiment_score = coin_sentiment.get("score", 0.0)
-            decision_result = make_decision(indicators, news_sentiment=news_sentiment_score)
+
+            # برای خود BTC، مقایسه‌ی روند با روند خودش بی‌معنیه — پس None پاس داده
+            # می‌شه (فاکتور btc_alignment برای BTC خودش خنثی می‌مونه).
+            coin_btc_diff = None if coin_id == BTC_COIN_ID else btc_trend_diff_pct
+
+            decision_result = make_decision(
+                indicators,
+                news_sentiment=news_sentiment_score,
+                btc_trend_diff_pct=coin_btc_diff,
+                risk_profile="balanced",  # پیش‌فرض سراسری؛ سوییچ ریسک در frontend سمت کاربر انجام می‌شه
+            )
+
+            regime_info = calculate_market_regime(market_chart["prices"])
 
             coin_snapshot = snapshot.get(coin_id, {})
             current_price = coin_snapshot.get("usd", indicators["last_price"])
@@ -58,9 +107,12 @@ def run_analysis():
                 "score": decision_result["score"],
                 "score_percent": decision_result.get("score_percent"),
                 "reasons": decision_result["reasons"],
+                "factors": decision_result.get("factors", {}),
                 "disclaimer": decision_result["disclaimer"],
                 "agreement_ratio": decision_result.get("agreement_ratio"),
                 "trend_gate_triggered": decision_result.get("trend_gate_triggered", False),
+                "risk_profile": decision_result.get("risk_profile", "balanced"),
+                "market_regime": regime_info,
                 "news_sentiment": coin_sentiment,
                 "indicators": {
                     "rsi": round(indicators["rsi"], 2),
@@ -78,7 +130,10 @@ def run_analysis():
                 "price_history": market_chart["prices"],
             })
 
-            # ثبت این تصمیم در تاریخچه، برای ارزیابی دقت در آینده (مشکل ۵ و ۷ گزارش)
+            # نکته‌ی مهم برای optimize_weights.py (دسته C): این تصمیم رو کامل لاگ کن،
+            # از جمله فیلد "factors" — اگه log_decision فعلی این فیلد رو ذخیره نمی‌کنه،
+            # باید داخل history_logger.py اضافه‌ش کنی وگرنه optimize_weights.py همیشه
+            # insufficient_data می‌مونه.
             log_decision(coin_id, current_price, decision_result)
 
         except Exception as exc:
@@ -99,7 +154,6 @@ def run_analysis():
 
     print(f"[main] تحلیل کامل شد. {len(results)} رمزارز پردازش شد. خروجی: {OUTPUT_PATH}")
 
-    # ذخیره‌ی جدای نتایج احساسات اخبار — برای شفافیت و دیباگ (مستقل از analysis.json)
     sentiment_output = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "coins": sentiments,
@@ -109,12 +163,20 @@ def run_analysis():
         json.dump(sentiment_output, f, ensure_ascii=False, indent=2)
     print(f"[main] تحلیل احساسات اخبار ذخیره شد: {SENTIMENT_OUTPUT_PATH}")
 
-    # بررسی سیگنال‌های قدیمی‌تر که به موعد ارزیابی (۲۴ ساعت) رسیدن
     try:
         eval_result = evaluate_pending_signals()
         print(f"[main] ارزیابی سیگنال‌های قدیمی: {eval_result['updated_records']} رکورد به‌روزرسانی شد.")
     except Exception as exc:
         print(f"[main] خطا در ارزیابی سیگنال‌های قدیمی: {exc}")
+
+    # دسته D: بعد از هر ارزیابی، پرتفوی فرضی سراسری هم به‌روز بشه (سبک، فقط از
+    # history.json می‌خونه، هزینه‌ی اضافه‌ای نداره)
+    try:
+        portfolio_result = run_portfolio_update()
+        print(f"[main] پرتفوی فرضی به‌روز شد: {portfolio_result['total_trades']} معامله، "
+              f"سود/زیان {portfolio_result['total_pnl_usd']}$")
+    except Exception as exc:
+        print(f"[main] خطا در به‌روزرسانی پرتفوی فرضی: {exc}")
 
 
 if __name__ == "__main__":
