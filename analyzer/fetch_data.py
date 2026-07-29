@@ -1,13 +1,13 @@
 """
 آرسان - دریافت داده‌های بازار از CoinGecko
-نسخه ۲: بدون تغییر عمده نسبت به نسخه ۱ (فقط سازگار با ماژول‌های جدید indicators/decision)
+نسخه ۴: یک تابع جدید اضافه شده — get_volume_snapshot — که volume_news_alert.py
+(دسته B، گزارش وضعیت) برای تشخیص جهش حجم بهش نیاز داشت. بقیه‌ی فایل دقیقاً
+همون نسخه ۲ است، هیچ رفتاری عوض نشده.
 """
-
 import time
 import requests
 
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
-
 DEFAULT_COINS = [
     "bitcoin",
     "ethereum",
@@ -18,7 +18,6 @@ DEFAULT_COINS = [
     "cardano",
     "tron",
 ]
-
 MAX_RETRIES = 5
 BASE_BACKOFF_SECONDS = 5
 
@@ -64,3 +63,28 @@ def get_current_snapshot(coin_ids):
         "include_24hr_change": "true",
     }
     return _get_with_retry(url, params)
+
+
+def get_volume_snapshot(coin_ids):
+    """
+    جدید در نسخه ۴ — حجم معاملات ۲۴ ساعته (بر حسب دلار) برای لیستی از coin_id ها.
+    برای volume_news_alert.py (دسته B) لازمه تا جهش ناگهانی حجم رو تشخیص بده.
+
+    از همون اندپوینت /simple/price استفاده می‌کنه (بدون درخواست جدا و بدون فشار
+    اضافه به rate limit)، فقط با include_24hr_vol=true.
+
+    خروجی: {coin_id: usd_24h_volume, ...} — یه dict مسطح از عدد، نه تودرتو،
+    دقیقاً همون چیزی که volume_news_alert.check_volume_spikes انتظارش رو داره.
+    """
+    url = f"{COINGECKO_BASE}/simple/price"
+    params = {
+        "ids": ",".join(coin_ids),
+        "vs_currencies": "usd",
+        "include_24hr_vol": "true",
+    }
+    data = _get_with_retry(url, params)
+    return {
+        coin_id: info["usd_24h_vol"]
+        for coin_id, info in data.items()
+        if "usd_24h_vol" in info and info["usd_24h_vol"] is not None
+    }
