@@ -1,0 +1,39 @@
+name: Arsan Backtest Lab (مستقل از تحلیل زنده)
+on:
+  # هر یکشنبه ساعت ۰۳:۰۰ UTC (تقریبا ۰۶:۳۰ صبح ایران) — هفته‌ای یک‌بار، طبق تصمیم
+  schedule:
+    - cron: "0 3 * * 0"
+  # اجرای دستی از تب Actions، هر وقت خواستی
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backtest lab (کاملاً جدا از analyze.yml و main.py)
+        run: python analyzer/backtest_lab.py
+
+      - name: Commit and push backtest results only
+        run: |
+          git config --global user.name "arsan-bot"
+          git config --global user.email "arsan-bot@users.noreply.github.com"
+          git add data/backtest_summary.json
+          git diff --staged --quiet || git commit -m "به‌روزرسانی هفتگی آزمایشگاه بک‌تست - $(date -u +'%Y-%m-%d')"
+          git push
