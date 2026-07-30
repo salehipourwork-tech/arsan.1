@@ -234,6 +234,24 @@
   .trades-table th{ color:var(--ink-faint); font-family:var(--font-mono); font-weight:500; font-size:11px; }
   .trades-table td:last-child, .trades-table th:last-child{ text-align:left; font-family:var(--font-mono); }
   .pnl-pos{ color:var(--buy); } .pnl-neg{ color:var(--sell); }
+
+  /* ---------------- Backtest Lab panel (آزمایشگاه — کاملاً مستقل از تحلیل زنده) ---------------- */
+  .lab-disclaimer{
+    background:var(--unc-bg); border:1px dashed var(--unc); border-radius:var(--radius);
+    padding:14px 16px; margin-bottom:18px; font-size:13px; color:var(--ink); line-height:1.85;
+  }
+  .lab-disclaimer b{ font-family:var(--font-mono); color:var(--unc); }
+  .lab-disclaimer ul{ margin:8px 0 0; padding-right:18px; }
+  .window-toggle{ display:flex; gap:6px; align-items:center; margin-bottom:16px; }
+  .window-btn{
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-dim); background:var(--paper-raised);
+    border:1px solid var(--rule-strong); border-radius:var(--radius); padding:7px 14px; cursor:pointer;
+  }
+  .window-btn.active{ background:var(--ink); color:var(--paper-raised); border-color:var(--ink); }
+  .lab-coin-table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px; }
+  .lab-coin-table td, .lab-coin-table th{ padding:6px 4px; border-bottom:1px solid var(--rule); text-align:right; }
+  .lab-coin-table th{ color:var(--ink-faint); font-family:var(--font-mono); font-weight:500; font-size:11px; }
+  .lab-coin-table td:last-child, .lab-coin-table th:last-child{ text-align:left; font-family:var(--font-mono); }
 </style>
 </head>
 <body>
@@ -256,6 +274,7 @@
   <button class="tab active" data-tab="live">تحلیل زنده</button>
   <button class="tab" data-tab="transparency">شفافیت عملکرد</button>
   <button class="tab" data-tab="portfolio">پرتفوی فرضی</button>
+  <button class="tab" data-tab="lab">🧪 آزمایشگاه</button>
 </nav>
 
 <main>
@@ -282,6 +301,20 @@
     <p class="transparency-intro">شبیه‌سازی: اگر کسی از ابتدا با مبلغ ثابت، همه‌ی سیگنال‌های خرید/فروش سیستم را دنبال می‌کرد، نتیجه چه می‌شد؟ این یک پرتفوی فرضی <b>سراسری</b> است، نه حساب شخصی شما — هیچ معامله‌ی واقعی انجام نشده.</p>
     <div id="portfolioBody"><div class="loading">در حال دریافت داده‌ی پرتفوی…</div></div>
   </section>
+
+  <section id="panel-lab" class="panel">
+    <div class="lab-disclaimer">
+      <b>⚠️ این یک شبیه‌سازی روی داده‌ی گذشته است، نه عملکرد زنده‌ی سیستم.</b>
+      آرسان فرض می‌کند در ۳۰ یا ۶۰ روز پیش قرار دارد و فقط با داده‌ی همان روز (بدون دیدن آینده) تصمیم می‌گیرد؛
+      یک روز بعد، نتیجه‌ی واقعی بازار را چک می‌کند. کاملاً جدا از تب «شفافیت عملکرد» و از هیچ داده‌ی زنده‌ای اثر نمی‌گیرد.
+      <ul id="labLimitations"></ul>
+    </div>
+    <div class="window-toggle">
+      <button class="window-btn active" data-window="30">بازه ۳۰ روزه</button>
+      <button class="window-btn" data-window="60">بازه ۶۰ روزه</button>
+    </div>
+    <div id="labBody"><div class="loading">در حال دریافت نتایج آزمایشگاه…</div></div>
+  </section>
 </main>
 
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
@@ -291,7 +324,14 @@ const ANALYSIS_URL = './data/analysis.json';
 const SUMMARY_URL = './data/accuracy_summary.json';
 const ALERTS_URL = './data/alerts.json';
 const PORTFOLIO_URL = './data/portfolio.json';
+const LAB_URL = './data/backtest_summary.json';
 const FAV_KEY = 'arsan_favorites';
+let labData = null;
+let currentLabWindow = '30';
+const LAB_COIN_LABELS = {
+  bitcoin:'بیت‌کوین', ethereum:'اتریوم', binancecoin:'بایننس‌کوین',
+  ripple:'ریپل', solana:'سولانا', cardano:'کاردانو',
+};
 const NEUTRAL_ZONE = 0.3; // همون آستانه‌ی decision.py — برای تشخیص خنثی بودن یک شاخص
 
 // همون سه پروفایل RISK_PROFILES در decision.py — باید همیشه هم‌گام نگه داشته بشن
@@ -595,6 +635,68 @@ function methodNote(){
   return 'روش ارزیابی: هر سیگنال خرید یا فروش، ۲۴ ساعت پس از صدور با قیمت واقعی بازار مقایسه می‌شود؛ اگر قیمت حداقل ۰.۵٪ در جهت پیش‌بینی‌شده حرکت کرده باشد، سیگنال «درست» ثبت می‌شود.';
 }
 
+/* ---------------- Backtest Lab panel (کاملاً مستقل از تحلیل زنده) ---------------- */
+document.querySelectorAll('.window-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.window-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLabWindow = btn.dataset.window;
+    renderLab();
+  });
+});
+
+function renderLab(){
+  const body = document.getElementById('labBody');
+  const limitationsEl = document.getElementById('labLimitations');
+  if(!labData || !labData.windows){
+    body.innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از آزمایشگاه بک‌تست در دسترس نیست — این بخش هفته‌ای یک‌بار به‌روز می‌شود.</div>';
+    if(limitationsEl) limitationsEl.innerHTML = '';
+    return;
+  }
+  if(limitationsEl){
+    limitationsEl.innerHTML = (labData.limitations || []).map(l=>`<li>${l}</li>`).join('');
+  }
+  const w = labData.windows[currentLabWindow];
+  if(!w || !w.overall || w.overall.total === 0){
+    body.innerHTML = `<div class="empty-state">برای بازه‌ی ${currentLabWindow} روزه، سیگنال «خرید» یا «فروش» قابل‌ارزیابی‌ای شبیه‌سازی نشد (اکثر روزها «صبر» تشخیص داده شده).</div>`;
+    return;
+  }
+  const o = w.overall, b = w.by_decision.buy, s = w.by_decision.sell;
+  const fmt = p => p === null || p === undefined ? '—' : p+'٪';
+  const coinRows = Object.entries(w.by_coin || {}).map(([coin, c]) => `
+    <tr>
+      <td>${LAB_COIN_LABELS[coin] || coin}</td>
+      <td>${fmt(c.accuracy_percent)}</td>
+      <td>${c.correct} از ${c.total}</td>
+      <td>${c.hold_or_uncertain_days}</td>
+    </tr>`).join('');
+
+  body.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">دقت کلی شبیه‌سازی (${currentLabWindow} روزه)</div>
+        <div class="stat-num">${fmt(o.accuracy_percent)}</div>
+        <div class="stat-sub">${o.correct} درست از ${o.total} سیگنال قابل‌ارزیابی</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">دقت سیگنال‌های خرید</div>
+        <div class="stat-num buy">${fmt(b.accuracy_percent)}</div>
+        <div class="stat-sub">${b.correct} درست از ${b.total}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">دقت سیگنال‌های فروش</div>
+        <div class="stat-num sell">${fmt(s.accuracy_percent)}</div>
+        <div class="stat-sub">${s.correct} درست از ${s.total}</div>
+      </div>
+    </div>
+    ${coinRows ? `<table class="lab-coin-table">
+      <tr><th>کوین</th><th>دقت</th><th>درست/کل</th><th>روزهای صبر/نامشخص</th></tr>
+      ${coinRows}
+    </table>` : ''}
+    <p class="method-note">کوین‌های این آزمایشگاه: ${(labData.coins||[]).map(c=>LAB_COIN_LABELS[c]||c).join('، ')}. آخرین اجرا: ${new Date(labData.generated_at).toLocaleString('fa-IR')}.</p>
+  `;
+}
+
 /* ---------------- Load data ---------------- */
 async function loadAnalysis(){
   try{
@@ -630,15 +732,27 @@ async function loadPortfolio(){
     document.getElementById('portfolioBody').innerHTML = '<div class="empty">داده‌ی پرتفوی در دسترس نیست.</div>';
   }
 }
+async function loadLab(){
+  try{
+    const res = await fetch(LAB_URL + '?t=' + Date.now());
+    labData = await res.json();
+    renderLab();
+  }catch(e){
+    labData = null;
+    document.getElementById('labBody').innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از آزمایشگاه بک‌تست در دسترس نیست — این بخش هفته‌ای یک‌بار به‌روز می‌شود.</div>';
+  }
+}
 
 loadAnalysis();
 loadSummary();
 loadAlerts();
 loadPortfolio();
+loadLab();
 setInterval(loadAnalysis, 5 * 60 * 1000);
 setInterval(loadSummary, 15 * 60 * 1000);
 setInterval(loadAlerts, 5 * 60 * 1000);
 setInterval(loadPortfolio, 15 * 60 * 1000);
+setInterval(loadLab, 60 * 60 * 1000);
 </script>
 </body>
 </html>
