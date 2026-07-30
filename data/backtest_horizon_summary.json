@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-30T10:04:35.186487+00:00",
+  "generated_at": "2026-07-30T12:04:16.974332+00:00",
   "type": "horizon_diagnostic",
   "purpose": "این یه ابزار تشخیصیه، نه بخشی از سیستم زنده. سوالی که جواب می‌ده: آیا با چک‌کردن نتیجه‌ی سیگنال بعد از ۳ یا ۵ روز (به‌جای ۱ روز)، دقت بهتر می‌شه؟ اگه بله، یعنی تاخیر ذاتی EMA۲۰/۵۰ علت اصلی خطاهای فعلیه.",
   "coins": [
@@ -17,20 +17,20 @@
       "days_ahead": 1,
       "min_move_percent": 0.5,
       "overall": {
-        "total": 21,
-        "correct": 8,
-        "accuracy_percent": 38.1
+        "total": 43,
+        "correct": 15,
+        "accuracy_percent": 34.9
       },
       "by_decision": {
         "buy": {
-          "total": 1,
-          "correct": 0,
-          "accuracy_percent": 0.0
+          "total": 6,
+          "correct": 1,
+          "accuracy_percent": 16.7
         },
         "sell": {
-          "total": 20,
-          "correct": 8,
-          "accuracy_percent": 40.0
+          "total": 37,
+          "correct": 14,
+          "accuracy_percent": 37.8
         }
       }
     },
@@ -39,20 +39,20 @@
       "days_ahead": 3,
       "min_move_percent": 1.5,
       "overall": {
-        "total": 21,
-        "correct": 6,
-        "accuracy_percent": 28.6
+        "total": 43,
+        "correct": 12,
+        "accuracy_percent": 27.9
       },
       "by_decision": {
         "buy": {
-          "total": 1,
+          "total": 6,
           "correct": 1,
-          "accuracy_percent": 100.0
+          "accuracy_percent": 16.7
         },
         "sell": {
-          "total": 20,
-          "correct": 5,
-          "accuracy_percent": 25.0
+          "total": 37,
+          "correct": 11,
+          "accuracy_percent": 29.7
         }
       }
     },
@@ -61,20 +61,20 @@
       "days_ahead": 5,
       "min_move_percent": 2.0,
       "overall": {
-        "total": 21,
-        "correct": 10,
-        "accuracy_percent": 47.6
+        "total": 43,
+        "correct": 13,
+        "accuracy_percent": 30.2
       },
       "by_decision": {
         "buy": {
-          "total": 1,
+          "total": 6,
           "correct": 1,
-          "accuracy_percent": 100.0
+          "accuracy_percent": 16.7
         },
         "sell": {
-          "total": 20,
-          "correct": 9,
-          "accuracy_percent": 45.0
+          "total": 37,
+          "correct": 12,
+          "accuracy_percent": 32.4
         }
       }
     }
