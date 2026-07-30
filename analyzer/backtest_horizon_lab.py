@@ -100,6 +100,11 @@ def _simulate_coin(coin_id, prices, volumes, btc_prices, btc_volumes):
             news_sentiment=0.0,
             btc_trend_diff_pct=coin_btc_diff,
             risk_profile="balanced",
+            # این تست فقط اثر «افق ارزیابی» رو می‌سنجه، نه فیلتر momentum رو —
+            # پس اون فیلتر رو موقتاً خاموش می‌کنیم تا نمونه کامل بمونه و دو
+            # متغیر با هم قاطی نشن. سیستم زنده و backtest_lab.py هیچ‌کدوم از
+            # این سوییچ استفاده نمی‌کنن؛ پیش‌فرضشون (True) دست‌نخورده می‌مونه.
+            apply_momentum_gate=False,
         )
         decision = decision_result["decision"]
         entry_price = prices[t][1]
