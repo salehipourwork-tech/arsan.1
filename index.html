@@ -252,6 +252,11 @@
   .lab-coin-table td, .lab-coin-table th{ padding:6px 4px; border-bottom:1px solid var(--rule); text-align:right; }
   .lab-coin-table th{ color:var(--ink-faint); font-family:var(--font-mono); font-weight:500; font-size:11px; }
   .lab-coin-table td:last-child, .lab-coin-table th:last-child{ text-align:left; font-family:var(--font-mono); }
+
+  .horizon-section{
+    margin-top:26px; padding-top:18px; border-top:1px dashed var(--rule-strong);
+  }
+  .horizon-title{ font-size:14px; margin:0 0 8px; }
 </style>
 </head>
 <body>
@@ -314,6 +319,12 @@
       <button class="window-btn" data-window="60">بازه ۶۰ روزه</button>
     </div>
     <div id="labBody"><div class="loading">در حال دریافت نتایج آزمایشگاه…</div></div>
+
+    <div class="horizon-section">
+      <h3 class="horizon-title">🔍 تست تشخیصی افق ارزیابی</h3>
+      <p class="method-note">همون سیگنال‌های بالا، فقط با فاصله‌ی زمانی متفاوت چک شدن: «۱ روزه» دقیقاً همون قانون استانداردِ سایته؛ «۳ روزه» و «۵ روزه» صرفاً برای بررسی این‌ان که آیا تاخیر شاخص‌های روندی (EMA) باعث خطای زودهنگام می‌شه یا نه. این بخش هیچ اثری روی سیگنال‌های واقعی سایت نداره و فقط دستی به‌روز می‌شه.</p>
+      <div id="horizonBody"><div class="loading">در حال دریافت نتایج تست افق…</div></div>
+    </div>
   </section>
 </main>
 
@@ -325,6 +336,7 @@ const SUMMARY_URL = './data/accuracy_summary.json';
 const ALERTS_URL = './data/alerts.json';
 const PORTFOLIO_URL = './data/portfolio.json';
 const LAB_URL = './data/backtest_summary.json';
+const HORIZON_URL = './data/backtest_horizon_summary.json';
 const FAV_KEY = 'arsan_favorites';
 let labData = null;
 let currentLabWindow = '30';
@@ -697,6 +709,31 @@ function renderLab(){
   `;
 }
 
+/* ---------------- Horizon diagnostic (کاملاً مستقل، فقط دستی) ---------------- */
+function renderHorizon(data){
+  const body = document.getElementById('horizonBody');
+  if(!data || !data.horizons){
+    body.innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از تست تشخیصی افق در دسترس نیست — این بخش فقط دستی اجرا می‌شود.</div>';
+    return;
+  }
+  const fmt = p => p === null || p === undefined ? '—' : p+'٪';
+  const order = ['1d', '3d', '5d'];
+  const cards = order.filter(k => data.horizons[k]).map(k => {
+    const h = data.horizons[k];
+    const o = h.overall;
+    return `
+      <div class="stat-card">
+        <div class="stat-label">${h.label_fa}</div>
+        <div class="stat-num">${fmt(o.accuracy_percent)}</div>
+        <div class="stat-sub">${o.correct} درست از ${o.total} (حداقل ${h.min_move_percent}٪ حرکت)</div>
+      </div>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="stat-grid">${cards}</div>
+    <p class="method-note">${data.purpose || ''} آخرین اجرا: ${new Date(data.generated_at).toLocaleString('fa-IR')}.</p>
+  `;
+}
+
 /* ---------------- Load data ---------------- */
 async function loadAnalysis(){
   try{
@@ -742,12 +779,21 @@ async function loadLab(){
     document.getElementById('labBody').innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از آزمایشگاه بک‌تست در دسترس نیست — این بخش هفته‌ای یک‌بار به‌روز می‌شود.</div>';
   }
 }
+async function loadHorizon(){
+  try{
+    const res = await fetch(HORIZON_URL + '?t=' + Date.now());
+    renderHorizon(await res.json());
+  }catch(e){
+    document.getElementById('horizonBody').innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از تست تشخیصی افق در دسترس نیست — این بخش فقط دستی اجرا می‌شود.</div>';
+  }
+}
 
 loadAnalysis();
 loadSummary();
 loadAlerts();
 loadPortfolio();
 loadLab();
+loadHorizon();
 setInterval(loadAnalysis, 5 * 60 * 1000);
 setInterval(loadSummary, 15 * 60 * 1000);
 setInterval(loadAlerts, 5 * 60 * 1000);
