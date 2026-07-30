@@ -27,6 +27,16 @@
    frontend می‌تونه با همین سه آستانه، decision رو دوباره از روی داده‌ی ذخیره‌شده
    محاسبه کنه (به بخش risk-profile در index.html نگاه کن).
 
+۳) گیت برگشت روند اخیر (momentum reversal gate) — یافته‌ی بک‌تست
+   توی داده‌های بک‌تست دیدیم سیستم دقیقاً سر نقاطی که روند تازه داشت برمی‌گشت
+   (مثلاً بیت‌کوین در حال صعود، ولی EMA۲۰/۵۰ هنوز به‌خاطر افت‌های قبلی «نزولی»
+   نشون می‌داد) بیشترین سیگنال‌های غلط رو صادر می‌کرد. علتش تاخیر ذاتی EMA۲۰/۵۰ است.
+   راه‌حل: indicators.py حالا recent_momentum_pct رو هم می‌ده (تغییر خام قیمت در
+   ۳ روز اخیر، مستقل از EMA). اگه سیگنال خرید/فروش با جهت این حرکت اخیر در تضاد
+   باشه (مثلاً سیگنال فروشه ولی قیمت تازه ≥۱٪ بالا رفته)، به‌جای صدور سیگنال
+   قطعی، «uncertain» برمی‌گردونیم — دقیقاً مثل گیت agreement_ratio موجود، فقط با
+   منبع دیگه‌ای از شک. weights.json و بقیه‌ی امتیازدهی دست‌نخورده مونده.
+
 --- بدون تغییر نسبت به نسخه ۳ (خلاصه) ---
 گیت قدرت روند، معیار توافق وزن‌دار، منبع واحد حقیقت برای برچسب — همه دست‌نخورده.
 """
@@ -61,6 +71,11 @@ NEUTRAL_ZONE = 0.3
 REVERSAL_INDICATORS = ["rsi", "bollinger", "stochastic_rsi"]
 LOW_VOLUME_CONFIDENCE = 0.6
 DEFAULT_BTC_ALIGNMENT_WEIGHT = 0.8
+
+# گیت برگشت روند اخیر (نسخه ۴) — این‌قدر درصد حرکت اخیر خلاف جهت سیگنال کافیه
+# که به‌جای خرید/فروش قطعی، «صبر» بدیم. عدد اولیه‌ی معقول است، نه علمی‌کالیبره‌شده؛
+# بعد از جمع‌شدن داده‌ی زنده‌ی بیشتر قابل تنظیم دقیق‌تره.
+MOMENTUM_REVERSAL_THRESHOLD = 1.0
 
 _WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), "weights.json")
 
@@ -208,6 +223,7 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
             "factors": {},
             "agreement_ratio": None,
             "trend_gate_triggered": True,
+            "momentum_gate_triggered": False,
             "risk_profile": risk_profile,
             "disclaimer": _disclaimer(),
         }
@@ -271,6 +287,7 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
             "factors": scored,
             "agreement_ratio": round(agreement_ratio, 2),
             "trend_gate_triggered": False,
+            "momentum_gate_triggered": False,
             "risk_profile": risk_profile,
             "disclaimer": _disclaimer(),
         }
@@ -282,6 +299,35 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
     else:
         decision = "hold"
 
+    # --- گیت برگشت روند اخیر ---
+    # سیگنال قطعیه (buy/sell)، ولی قیمت در چند روز اخیر خلاف همون جهت حرکت کرده؟
+    # این دقیقاً همون الگویی بود که در بک‌تست بیشترین خطا رو ایجاد می‌کرد.
+    if decision in ("buy", "sell"):
+        recent_momentum_pct = indicators.get("recent_momentum_pct", 0.0)
+        signal_sign = 1 if decision == "buy" else -1
+        momentum_opposes = (
+            (signal_sign > 0 and recent_momentum_pct <= -MOMENTUM_REVERSAL_THRESHOLD) or
+            (signal_sign < 0 and recent_momentum_pct >= MOMENTUM_REVERSAL_THRESHOLD)
+        )
+        if momentum_opposes:
+            direction_fa = "صعودی" if decision == "buy" else "نزولی"
+            return {
+                "decision": "uncertain",
+                "score": final_score_pct,
+                "score_percent": _to_percent(final_score_pct),
+                "reasons": [
+                    f"شاخص‌های میان‌مدت روند {direction_fa} نشون می‌دن، اما قیمت در ۳ روز اخیر "
+                    f"{abs(recent_momentum_pct):.1f}٪ در جهت مخالف حرکت کرده — این می‌تونه نشونه‌ی "
+                    "شروع تغییر روند باشه، پس به‌جای سیگنال قطعی، صبر داده شد."
+                ],
+                "factors": scored,
+                "agreement_ratio": round(agreement_ratio, 2),
+                "trend_gate_triggered": False,
+                "momentum_gate_triggered": True,
+                "risk_profile": risk_profile,
+                "disclaimer": _disclaimer(),
+            }
+
     reasons = _build_reasons(indicators, scored, confidence, agreement_ratio, volume_confidence, btc_trend_diff_pct)
 
     return {
@@ -292,6 +338,7 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
         "factors": scored,
         "agreement_ratio": round(agreement_ratio, 2),
         "trend_gate_triggered": False,
+        "momentum_gate_triggered": False,
         "risk_profile": risk_profile,
         "disclaimer": _disclaimer(),
     }
