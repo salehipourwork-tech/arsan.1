@@ -22,6 +22,16 @@ accuracy_summary.json که فرستادی) total=0 است — یعنی هنوز 
 نکته: این اسکریپت فرض می‌کنه هر رکورد history.json شامل فیلد "factors" است
 (همون dict که decision.py برمی‌گردونه) — اگه history_logger.py فعلی این فیلد
 رو ذخیره نمی‌کنه، باید اضافه‌ش کنی (یه خط ساده: record["factors"] = decision_result["factors"]).
+
+--- نسخه ۵ (بازطراحی موتور تحلیل) ---
+history_logger.py حالا فیلد "market_regime" رو هم روی هر رکورد ذخیره می‌کنه
+(همون رژیمی که در لحظه‌ی صدور سیگنال با آن تصمیم گرفته شده). این اسکریپت
+همون تحلیل «agree/disagree accuracy» رو حالا به‌تفکیک هر رژیم هم انجام می‌ده
+(factor_stats_by_regime / suggestions_by_regime) — دقیقاً همون چیزی که در
+درخواست بازطراحی به اسم «وزن‌دهی پویا... بر اساس... عملکرد تاریخی آن فاکتور
+در شرایط مشابه» خواسته شده بود. چون هر رژیم به‌تنهایی سهم کوچیک‌تری از
+history.json داره، به داده‌ی بیشتری (نسبت به تحلیل کلی) نیاز داره تا از
+insufficient_data خارج بشه — این طبیعیه و عمدیه، نه باگ.
 """
 
 import json
@@ -99,6 +109,24 @@ def analyze_factor_performance(records):
     return result
 
 
+def analyze_factor_performance_by_regime(records):
+    """
+    نسخه ۵ — همون منطق analyze_factor_performance، ولی رکوردها اول بر اساس
+    record["market_regime"] گروه‌بندی می‌شن و بعد تحلیل agree/disagree برای
+    هر گروه جدا انجام می‌شه.
+    خروجی: {regime_name: {factor_name: {...}}}
+    رکوردهایی که market_regime ندارن (مثلاً از قبل از نسخه ۵ ثبت شدن) در
+    گروه "unknown" قرار می‌گیرن تا داده‌ای دور ریخته نشه ولی هم قاطی رژیم‌های
+    مشخص هم نشه.
+    """
+    by_regime = defaultdict(list)
+    for r in records:
+        regime = r.get("market_regime") or "unknown"
+        by_regime[regime].append(r)
+
+    return {regime: analyze_factor_performance(recs) for regime, recs in by_regime.items()}
+
+
 def suggest_weight_changes(factor_stats, current_weights):
     suggestions = {}
     for factor, stats in factor_stats.items():
@@ -134,6 +162,12 @@ def run():
     factor_stats = analyze_factor_performance(records)
     suggestions = suggest_weight_changes(factor_stats, current_weights)
 
+    factor_stats_by_regime = analyze_factor_performance_by_regime(records)
+    suggestions_by_regime = {
+        regime: suggest_weight_changes(stats, current_weights)
+        for regime, stats in factor_stats_by_regime.items()
+    }
+
     total_evaluated = len([r for r in records if r.get("outcome") in ("correct", "wrong")])
     output = {
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -148,6 +182,14 @@ def run():
         ),
         "factor_stats": factor_stats,
         "suggestions": suggestions,
+        "note_by_regime": (
+            "تحلیل به‌تفکیک رژیم بازار (نسخه ۵) — چون هر رژیم سهم کوچیک‌تری از "
+            "داده داره، معمولاً دیرتر از تحلیل کلی به insufficient_data خارج "
+            "می‌شه. این پیشنهادها هم مثل بالا فقط راهنمان، نه تغییر خودکار روی "
+            "regime_weights.py."
+        ),
+        "factor_stats_by_regime": factor_stats_by_regime,
+        "suggestions_by_regime": suggestions_by_regime,
     }
     with open(SUGGESTION_PATH, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
