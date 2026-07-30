@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from fetch_data import get_market_chart
 from indicators import calculate_all_indicators
 from decision import make_decision
+from market_regime import calculate_market_regime
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "backtest_horizon_summary.json")
 
@@ -95,11 +96,16 @@ def _simulate_coin(coin_id, prices, volumes, btc_prices, btc_volumes):
             else _daily_trend_diff(btc_prices, btc_volumes, t)
         )
 
+        # نسخه ۵: رژیم بازار هم فقط با داده‌ی تا همون روز t محاسبه می‌شه
+        # (chart بالا از قبل با _slice تا t بریده شده) تا نگاه‌به‌آینده رخ نده.
+        regime_info = calculate_market_regime(indicators, chart["prices"])
+
         decision_result = make_decision(
             indicators,
             news_sentiment=0.0,
             btc_trend_diff_pct=coin_btc_diff,
             risk_profile="balanced",
+            market_regime=regime_info["regime"],
             # این تست فقط اثر «افق ارزیابی» رو می‌سنجه، نه فیلتر momentum رو —
             # پس اون فیلتر رو موقتاً خاموش می‌کنیم تا نمونه کامل بمونه و دو
             # متغیر با هم قاطی نشن. سیستم زنده و backtest_lab.py هیچ‌کدوم از
