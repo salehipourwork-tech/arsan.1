@@ -82,14 +82,17 @@ def run_analysis():
             # می‌شه (فاکتور btc_alignment برای BTC خودش خنثی می‌مونه).
             coin_btc_diff = None if coin_id == BTC_COIN_ID else btc_trend_diff_pct
 
+            # نسخه ۵: رژیم بازار باید قبل از تصمیم‌گیری مشخص بشه، چون خود
+            # make_decision از regime برای وزن‌دهی پویای فاکتورها استفاده می‌کنه.
+            regime_info = calculate_market_regime(indicators, market_chart["prices"])
+
             decision_result = make_decision(
                 indicators,
                 news_sentiment=news_sentiment_score,
                 btc_trend_diff_pct=coin_btc_diff,
                 risk_profile="balanced",  # پیش‌فرض سراسری؛ سوییچ ریسک در frontend سمت کاربر انجام می‌شه
+                market_regime=regime_info["regime"],
             )
-
-            regime_info = calculate_market_regime(market_chart["prices"])
 
             coin_snapshot = snapshot.get(coin_id, {})
             current_price = coin_snapshot.get("usd", indicators["last_price"])
