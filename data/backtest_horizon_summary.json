@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-07-30T09:53:02.718535+00:00",
+  "type": "horizon_diagnostic",
+  "purpose": "این یه ابزار تشخیصیه، نه بخشی از سیستم زنده. سوالی که جواب می‌ده: آیا با چک‌کردن نتیجه‌ی سیگنال بعد از ۳ یا ۵ روز (به‌جای ۱ روز)، دقت بهتر می‌شه؟ اگه بله، یعنی تاخیر ذاتی EMA۲۰/۵۰ علت اصلی خطاهای فعلیه.",
+  "coins": [
+    "bitcoin",
+    "ethereum",
+    "binancecoin",
+    "ripple",
+    "solana",
+    "cardano"
+  ],
+  "window_days": 60,
+  "horizons": {
+    "1d": {
+      "label_fa": "۱ روزه (استاندارد)",
+      "days_ahead": 1,
+      "min_move_percent": 0.5,
+      "overall": {
+        "total": 27,
+        "correct": 11,
+        "accuracy_percent": 40.7
+      },
+      "by_decision": {
+        "buy": {
+          "total": 1,
+          "correct": 0,
+          "accuracy_percent": 0.0
+        },
+        "sell": {
+          "total": 26,
+          "correct": 11,
+          "accuracy_percent": 42.3
+        }
+      }
+    },
+    "3d": {
+      "label_fa": "۳ روزه (تشخیصی)",
+      "days_ahead": 3,
+      "min_move_percent": 1.5,
+      "overall": {
+        "total": 27,
+        "correct": 9,
+        "accuracy_percent": 33.3
+      },
+      "by_decision": {
+        "buy": {
+          "total": 1,
+          "correct": 1,
+          "accuracy_percent": 100.0
+        },
+        "sell": {
+          "total": 26,
+          "correct": 8,
+          "accuracy_percent": 30.8
+        }
+      }
+    },
+    "5d": {
+      "label_fa": "۵ روزه (تشخیصی)",
+      "days_ahead": 5,
+      "min_move_percent": 2.0,
+      "overall": {
+        "total": 27,
+        "correct": 13,
+        "accuracy_percent": 48.1
+      },
+      "by_decision": {
+        "buy": {
+          "total": 1,
+          "correct": 1,
+          "accuracy_percent": 100.0
+        },
+        "sell": {
+          "total": 26,
+          "correct": 12,
+          "accuracy_percent": 46.2
+        }
+      }
+    }
+  }
+}
