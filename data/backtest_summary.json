@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-30T10:08:09.856491+00:00",
+  "generated_at": "2026-07-30T12:07:12.096843+00:00",
   "type": "historical_simulation",
   "coins": [
     "bitcoin",
@@ -19,15 +19,15 @@
     "30": {
       "window_days": 30,
       "overall": {
-        "total": 10,
-        "correct": 4,
-        "accuracy_percent": 40.0
+        "total": 11,
+        "correct": 5,
+        "accuracy_percent": 45.5
       },
       "by_decision": {
         "buy": {
-          "total": 0,
-          "correct": 0,
-          "accuracy_percent": null
+          "total": 1,
+          "correct": 1,
+          "accuracy_percent": 100.0
         },
         "sell": {
           "total": 10,
@@ -43,10 +43,10 @@
           "hold_or_uncertain_days": 28
         },
         "ethereum": {
-          "total": 3,
-          "correct": 1,
-          "accuracy_percent": 33.3,
-          "hold_or_uncertain_days": 27
+          "total": 4,
+          "correct": 2,
+          "accuracy_percent": 50.0,
+          "hold_or_uncertain_days": 26
         },
         "binancecoin": {
           "total": 0,
@@ -100,8 +100,8 @@
           "date": "2026-07-10",
           "day_index": 129,
           "decision": "sell",
-          "entry_price": 1744.6953884606253,
-          "exit_price": 1795.2394655119474,
+          "entry_price": 1745.5383076856942,
+          "exit_price": 1795.6305220955405,
           "correct": false
         },
         {
@@ -127,8 +127,8 @@
           "date": "2026-07-09",
           "day_index": 128,
           "decision": "sell",
-          "entry_price": 1742.2494536901065,
-          "exit_price": 1744.6953884606253,
+          "entry_price": 1742.5277253393804,
+          "exit_price": 1745.5383076856942,
           "correct": false
         },
         {
@@ -145,8 +145,8 @@
           "date": "2026-07-08",
           "day_index": 127,
           "decision": "sell",
-          "entry_price": 1771.2223954004269,
-          "exit_price": 1742.2494536901065,
+          "entry_price": 1770.1426923819474,
+          "exit_price": 1742.5277253393804,
           "correct": true
         },
         {
@@ -157,21 +157,30 @@
           "entry_price": 1.1120051240230528,
           "exit_price": 1.0901740623941096,
           "correct": true
+        },
+        {
+          "coin": "ethereum",
+          "date": "2026-07-01",
+          "day_index": 120,
+          "decision": "buy",
+          "entry_price": 1569.9441685094844,
+          "exit_price": 1608.4281927120421,
+          "correct": true
         }
       ]
     },
     "60": {
       "window_days": 60,
       "overall": {
-        "total": 21,
-        "correct": 8,
-        "accuracy_percent": 38.1
+        "total": 22,
+        "correct": 9,
+        "accuracy_percent": 40.9
       },
       "by_decision": {
         "buy": {
-          "total": 1,
-          "correct": 0,
-          "accuracy_percent": 0.0
+          "total": 2,
+          "correct": 1,
+          "accuracy_percent": 50.0
         },
         "sell": {
           "total": 20,
@@ -187,10 +196,10 @@
           "hold_or_uncertain_days": 57
         },
         "ethereum": {
-          "total": 6,
-          "correct": 2,
-          "accuracy_percent": 33.3,
-          "hold_or_uncertain_days": 54
+          "total": 7,
+          "correct": 3,
+          "accuracy_percent": 42.9,
+          "hold_or_uncertain_days": 53
         },
         "binancecoin": {
           "total": 1,
@@ -244,8 +253,8 @@
           "date": "2026-07-10",
           "day_index": 129,
           "decision": "sell",
-          "entry_price": 1744.6953884606253,
-          "exit_price": 1795.2394655119474,
+          "entry_price": 1745.5383076856942,
+          "exit_price": 1795.6305220955405,
           "correct": false
         },
         {
@@ -271,8 +280,8 @@
           "date": "2026-07-09",
           "day_index": 128,
           "decision": "sell",
-          "entry_price": 1742.2494536901065,
-          "exit_price": 1744.6953884606253,
+          "entry_price": 1742.5277253393804,
+          "exit_price": 1745.5383076856942,
           "correct": false
         },
         {
@@ -289,8 +298,8 @@
           "date": "2026-07-08",
           "day_index": 127,
           "decision": "sell",
-          "entry_price": 1771.2223954004269,
-          "exit_price": 1742.2494536901065,
+          "entry_price": 1770.1426923819474,
+          "exit_price": 1742.5277253393804,
           "correct": true
         },
         {
@@ -300,6 +309,15 @@
           "decision": "sell",
           "entry_price": 1.1120051240230528,
           "exit_price": 1.0901740623941096,
+          "correct": true
+        },
+        {
+          "coin": "ethereum",
+          "date": "2026-07-01",
+          "day_index": 120,
+          "decision": "buy",
+          "entry_price": 1569.9441685094844,
+          "exit_price": 1608.4281927120421,
           "correct": true
         },
         {
@@ -325,8 +343,8 @@
           "date": "2026-06-21",
           "day_index": 110,
           "decision": "sell",
-          "entry_price": 1739.2769352743533,
-          "exit_price": 1704.9130137257484,
+          "entry_price": 1739.162846029854,
+          "exit_price": 1704.601590081602,
           "correct": true
         },
         {
@@ -352,8 +370,8 @@
           "date": "2026-06-20",
           "day_index": 109,
           "decision": "sell",
-          "entry_price": 1708.87855388619,
-          "exit_price": 1739.2769352743533,
+          "entry_price": 1706.2204637584878,
+          "exit_price": 1739.162846029854,
           "correct": false
         },
         {
@@ -379,17 +397,8 @@
           "date": "2026-06-19",
           "day_index": 108,
           "decision": "sell",
-          "entry_price": 1710.079110757131,
-          "exit_price": 1708.87855388619,
-          "correct": false
-        },
-        {
-          "coin": "solana",
-          "date": "2026-06-19",
-          "day_index": 108,
-          "decision": "sell",
-          "entry_price": 69.64875448394535,
-          "exit_price": 69.67510636134296,
+          "entry_price": 1709.5978673943596,
+          "exit_price": 1706.2204637584878,
           "correct": false
         }
       ]
