@@ -196,13 +196,17 @@ def _confidence_multiplier(trend_strength, min_trend_strength):
     return 0.3 + 0.7 * (trend_strength - min_trend_strength) / span
 
 
-def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_profile="balanced"):
+def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_profile="balanced",
+                   apply_momentum_gate=True):
     """
     indicators: خروجی indicators.calculate_all_indicators
     news_sentiment: -۱ تا +۱ (پیش‌فرض خنثی)
     btc_trend_diff_pct: diff_pct روند BTC، هم‌مقیاس با indicators["trend"]["diff_pct"]
         (اختیاری؛ اگه پاس داده نشه فاکتور btc_alignment خنثی می‌مونه)
     risk_profile: "conservative" | "balanced" (پیش‌فرض) | "aggressive"
+    apply_momentum_gate: پیش‌فرض True (رفتار زنده و آزمایشگاه اصلی). فقط توسط
+        backtest_horizon_lab.py با False صدا زده می‌شه تا اثر «افق ارزیابی» رو
+        بدون قاطی‌شدن با فیلتر momentum، با نمونه‌ی کامل بشه سنجید.
 
     خروجی مثل نسخه ۳ + یک فیلد جدید "risk_profile" برای شفافیت این‌که این
     تصمیم با کدوم پروفایل محاسبه شده.
@@ -302,7 +306,7 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
     # --- گیت برگشت روند اخیر ---
     # سیگنال قطعیه (buy/sell)، ولی قیمت در چند روز اخیر خلاف همون جهت حرکت کرده؟
     # این دقیقاً همون الگویی بود که در بک‌تست بیشترین خطا رو ایجاد می‌کرد.
-    if decision in ("buy", "sell"):
+    if apply_momentum_gate and decision in ("buy", "sell"):
         recent_momentum_pct = indicators.get("recent_momentum_pct", 0.0)
         signal_sign = 1 if decision == "buy" else -1
         momentum_opposes = (
