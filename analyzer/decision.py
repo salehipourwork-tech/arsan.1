@@ -39,10 +39,31 @@
 
 --- بدون تغییر نسبت به نسخه ۳ (خلاصه) ---
 گیت قدرت روند، معیار توافق وزن‌دار، منبع واحد حقیقت برای برچسب — همه دست‌نخورده.
+
+--- نسخه ۵ (بازطراحی موتور تحلیل: تشخیص رژیم بازار + وزن‌دهی پویا) ---
+تغییر اصلی: make_decision حالا یک آرگومان جدید می‌گیره: market_regime (رشته‌ای
+مثل "uptrend"/"range"/"volatile"/... — خروجی market_regime.calculate_market_regime).
+منطق جدید:
+
+    وزن پایه (weights.json) × ضریب رژیم (regime_weights.py) = وزن نهایی فاکتور
+
+یعنی به‌جای این‌که وزن هر فاکتور برای همه‌ی حالت‌های بازار ثابت باشه، اول
+مشخص می‌شه «الان چه نوع بازاری داریم» و بعد اهمیت هر فاکتور بر همون اساس
+تعدیل می‌شه (مثلاً در بازار رنج، RSI/بولینگر مهم‌ترن؛ در روند قوی، MACD/EMA
+Cross مهم‌ترن). جزئیات و منطق هر رژیم در regime_weights.py مستند شده.
+
+سازگاری با کدهای قدیمی (نسخه ۴ و قبل‌تر، مثل backtest_lab.py که همچنان
+market_regime رو پاس نمی‌ده): اگه market_regime پاس داده نشه (پیش‌فرض None)،
+regime_weights.apply_regime_multipliers ضریب خالی برمی‌گردونه یعنی همه‌ی
+ضرایب ۱.۰ می‌مونن — دقیقاً هم‌ارز رفتار نسخه‌های قبلی، بدون هیچ تغییری در
+نتیجه‌ی نهایی. خروجی make_decision هم یک فیلد جدید "market_regime" (همون
+رشته‌ی ورودی) داره تا در history.json/optimize_weights.py قابل ردیابی باشه.
 """
 
 import json
 import os
+
+from regime_weights import apply_regime_multipliers
 
 # ---------------- پروفایل‌های ریسک (دسته D) ----------------
 RISK_PROFILES = {
@@ -197,7 +218,7 @@ def _confidence_multiplier(trend_strength, min_trend_strength):
 
 
 def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_profile="balanced",
-                   apply_momentum_gate=True):
+                   apply_momentum_gate=True, market_regime=None):
     """
     indicators: خروجی indicators.calculate_all_indicators
     news_sentiment: -۱ تا +۱ (پیش‌فرض خنثی)
@@ -207,12 +228,19 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
     apply_momentum_gate: پیش‌فرض True (رفتار زنده و آزمایشگاه اصلی). فقط توسط
         backtest_horizon_lab.py با False صدا زده می‌شه تا اثر «افق ارزیابی» رو
         بدون قاطی‌شدن با فیلتر momentum، با نمونه‌ی کامل بشه سنجید.
+    market_regime: رشته‌ی رژیم فعلی بازار (خروجی
+        market_regime.calculate_market_regime(...)["regime"]، مثل "uptrend"،
+        "range"، "volatile"، ...). پیش‌فرض None یعنی وزن‌دهی پویا غیرفعاله و
+        فقط وزن پایه‌ی weights.json استفاده می‌شه (سازگار با نسخه‌های قبلی و
+        با کدهایی مثل backtest_lab.py که هنوز این آرگومان رو پاس نمی‌دن).
 
-    خروجی مثل نسخه ۳ + یک فیلد جدید "risk_profile" برای شفافیت این‌که این
-    تصمیم با کدوم پروفایل محاسبه شده.
+    خروجی مثل نسخه ۳ + فیلد "risk_profile" (نسخه ۴) + فیلد جدید "market_regime"
+    (نسخه ۵) برای شفافیت این‌که این تصمیم با کدوم پروفایل و کدوم رژیم بازار
+    محاسبه شده.
     """
     profile = RISK_PROFILES.get(risk_profile, RISK_PROFILES["balanced"])
-    weights = _load_weights()
+    base_weights = _load_weights()
+    weights = apply_regime_multipliers(base_weights, market_regime)
     trend_strength = indicators["trend_strength"]
 
     if trend_strength < profile["min_trend_strength"]:
@@ -229,6 +257,7 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
             "trend_gate_triggered": True,
             "momentum_gate_triggered": False,
             "risk_profile": risk_profile,
+            "market_regime": market_regime,
             "disclaimer": _disclaimer(),
         }
 
@@ -293,6 +322,7 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
             "trend_gate_triggered": False,
             "momentum_gate_triggered": False,
             "risk_profile": risk_profile,
+            "market_regime": market_regime,
             "disclaimer": _disclaimer(),
         }
 
@@ -329,10 +359,12 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
                 "trend_gate_triggered": False,
                 "momentum_gate_triggered": True,
                 "risk_profile": risk_profile,
+                "market_regime": market_regime,
                 "disclaimer": _disclaimer(),
             }
 
-    reasons = _build_reasons(indicators, scored, confidence, agreement_ratio, volume_confidence, btc_trend_diff_pct)
+    reasons = _build_reasons(indicators, scored, confidence, agreement_ratio, volume_confidence, btc_trend_diff_pct,
+                              market_regime)
 
     return {
         "decision": decision,
@@ -344,6 +376,7 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
         "trend_gate_triggered": False,
         "momentum_gate_triggered": False,
         "risk_profile": risk_profile,
+        "market_regime": market_regime,
         "disclaimer": _disclaimer(),
     }
 
@@ -355,8 +388,21 @@ def _disclaimer():
     )
 
 
-def _build_reasons(ind, scores, confidence, agreement_ratio, volume_confidence, btc_trend_diff_pct):
+REGIME_REASON_FA = {
+    "uptrend": "رژیم بازار «روند صعودی پایدار» تشخیص داده شد؛ وزن فاکتورهای دنباله‌روی روند (MACD، کراس EMA) افزایش یافت.",
+    "downtrend": "رژیم بازار «روند نزولی پایدار» تشخیص داده شد؛ وزن فاکتورهای دنباله‌روی روند (MACD، کراس EMA) افزایش یافت.",
+    "range": "رژیم بازار «رنج/خنثی» تشخیص داده شد؛ وزن فاکتورهای نوسان‌گیر (RSI، بولینگر) افزایش و فاکتورهای روندی کاهش یافت.",
+    "quiet": "رژیم بازار «رنج و آرام» تشخیص داده شد؛ نوسان کم است و سیگنال‌ها با اطمینان کمی بیشتر وزن‌دهی شدند.",
+    "volatile": "رژیم بازار «پرنوسان» تشخیص داده شد؛ وزن فاکتورهای باندمحور کاهش و وزن فاکتورهای تاییدی (حجم، هم‌سویی با BTC، اخبار) افزایش یافت.",
+    "trend_change": "رژیم بازار «تغییر روند» تشخیص داده شد؛ وزن فاکتورهای تاخیری روندی به‌شدت کاهش یافت (پرریسک‌ترین حالت).",
+}
+
+
+def _build_reasons(ind, scores, confidence, agreement_ratio, volume_confidence, btc_trend_diff_pct,
+                    market_regime=None):
     reasons = []
+    if market_regime in REGIME_REASON_FA:
+        reasons.append(REGIME_REASON_FA[market_regime])
     if scores["rsi"] > 0.3: reasons.append(f"RSI در محدوده اشباع فروش قرار دارد ({ind['rsi']:.1f}).")
     elif scores["rsi"] < -0.3: reasons.append(f"RSI در محدوده اشباع خرید قرار دارد ({ind['rsi']:.1f}).")
     if scores["macd"] > 0.3: reasons.append("MACD مثبت و در جهت تقویت است.")
