@@ -9,6 +9,11 @@
 شاخص‌های نسخه ۱ (بدون تغییر): RSI, MACD, SMA/EMA trend, Volume trend, Support/Resistance
 شاخص‌های جدید نسخه ۲: Bollinger Bands, Stochastic RSI, OBV trend, EMA Cross (Golden/Death),
 Trend Strength Index (جایگزین ساده‌ی ADX که به OHLC واقعی نیاز دارد و CoinGecko آن را نمی‌دهد)
+
+نسخه ۳: recent_momentum_pct اضافه شد — پیدا شد که در بک‌تست، سیگنال‌ها دقیقاً
+سر نقاط برگشت روند (وقتی قیمت تازه شروع به حرکت خلاف EMA۲۰/۵۰ کرده بود) بیشترین
+خطا رو داشتن، چون EMA۲۰/۵۰ ذاتاً تاخیری‌اند. این فاکتور جدید در decision.py برای
+گرفتن جلوی همین مشکل استفاده می‌شه (به decision.py نگاه کن).
 """
 
 import pandas as pd
@@ -201,6 +206,23 @@ def calculate_ema_cross(price_series, short=12, long=26, lookback=5):
     return "بدون کراس اخیر"
 
 
+def calculate_recent_momentum(price_series, days=3):
+    """
+    درصد تغییر قیمت در N روز اخیر — مستقل از EMA۲۰/۵۰ که در calculate_trend_direction
+    استفاده می‌شه. هدف: EMA۲۰/۵۰ ذاتاً تاخیری (lagging) است؛ درست همون لحظه‌ای که
+    یه روند داره برمی‌گرده، این دو میانگین هنوز چند روز طول می‌کشه تا واکنش نشون بدن.
+    این تابع یه سیگنال «تازه‌تر و سریع‌تر» می‌ده که در decision.py برای تشخیص
+    برگشت‌های احتمالی روند استفاده می‌شه (نه برای جایگزینی خود روند).
+    """
+    if len(price_series) < days + 1:
+        return 0.0
+    past = price_series.iloc[-(days + 1)]
+    recent = price_series.iloc[-1]
+    if past == 0:
+        return 0.0
+    return float((recent - past) / past * 100)
+
+
 def calculate_trend_strength(price_series, short=20, long=50):
     """
     جایگزین ساده‌ی ADX: چون CoinGecko داده OHLC واقعی نمی‌دهد، قدرت روند را از
@@ -248,4 +270,5 @@ def calculate_all_indicators(market_chart):
         "obv_trend": calculate_obv_trend(price_series, volume_series),
         "ema_cross": calculate_ema_cross(price_series),
         "trend_strength": calculate_trend_strength(price_series),
+        "recent_momentum_pct": calculate_recent_momentum(price_series),
     }
