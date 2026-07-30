@@ -49,6 +49,7 @@ def log_decision(coin_id, price, decision_result, timestamp=None):
         "agreement_ratio": decision_result.get("agreement_ratio"),
         "trend_gate_triggered": decision_result.get("trend_gate_triggered", False),
         "factors": decision_result.get("factors", {}),  # جدید در نسخه ۴ — برای optimize_weights.py
+        "market_regime": decision_result.get("market_regime"),  # جدید در نسخه ۵ — برای تحلیل به‌تفکیک رژیم
         "outcome": None,
         "outcome_price": None,
         "outcome_checked_at": None,
