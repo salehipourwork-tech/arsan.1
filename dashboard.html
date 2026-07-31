@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>آرسان | پنل ابزار دقیق تحلیل رمزارز</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Noto+Naskh+Arabic:wght@600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  /* =========================================================
+     هویت بصری: «پنل ابزار دقیق بازار»
+     ایده: آرسان مثل یک دستگاه اندازه‌گیری/اسیلوسکوپ به بازار گوش می‌ده —
+     شاخص‌هایی مثل RSI/MACD/بولینگر ذاتاً موج و نوسان‌ان، پس رابط کاربری
+     هم به‌جای «روزنامه/دفتر کاغذی»، شبیه یک پنل ابزار دقیق با صفحه‌ی
+     فرورفته‌ی فسفری، قاب برنجی، و چراغ‌های LED وضعیت طراحی شده.
+     برنجی («--brass») تنها لهجه‌ی پررنگ صفحه‌ست و فقط جاهای مشخصی
+     (پلاک برند، زیرخط تب فعال، فوکوس‌رینگ) به‌کار می‌ره.
+     ========================================================= */
+  :root{
+    --case: #0a0e13;          /* بدنه‌ی بیرونی دستگاه */
+    --panel: #121920;         /* سطح برآمده (کارت‌ها، هدر) */
+    --panel-2: #0e141a;       /* سطح کمی عمیق‌تر (ردیف‌ها) */
+    --screen: #0a131b;        /* صفحه‌ی فرورفته (تیکر، نمودار) */
+    --grid: #223040;          /* خط شبکه‌ی گراتیکول */
+    --grid-soft: #16202a;
+
+    --brass: #d1ac3c;         /* تنها لهجه‌ی پررنگ — قاب برنجی */
+    --brass-dim: #8a7220;
+    --brass-glow: rgba(209,172,60,0.35);
+
+    --ink: #e7edf3;
+    --ink-dim: #8b98a6;
+    --ink-faint: #526071;
+
+    --buy: #33d68d;   --buy-bg: rgba(51,214,141,0.12);
+    --sell: #ff6259;  --sell-bg: rgba(255,98,89,0.12);
+    --hold: #f0b429;  --hold-bg: rgba(240,180,41,0.12);
+    --unc:  #b28dff;  --unc-bg:  rgba(178,141,255,0.12);
+    --calm: #4fc3e0;  --calm-bg: rgba(79,195,224,0.12);
+
+    --radius: 6px;
+    --radius-lg: 12px;
+    --font-display: 'Noto Naskh Arabic', serif;
+    --font-body: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0; min-height:100vh; line-height:1.55;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(209,172,60,0.05), transparent 60%),
+      var(--case);
+    color:var(--ink); font-family:var(--font-body);
+    position:relative;
+  }
+  /* بافت گراتیکول ظریف در پس‌زمینه — امضای بصری صفحه */
+  body::before{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.5;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 64px),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 64px);
+  }
+  ::selection{ background:var(--brass); color:#1a1305; }
+  :focus-visible{ outline:2px solid var(--brass); outline-offset:2px; border-radius:2px; }
+  a{ color:inherit; }
+
+  /* ---------------- Masthead ---------------- */
+  header.masthead{
+    position:relative; z-index:1;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;
+    padding:16px 20px; max-width:1040px; margin:0 auto;
+    border-bottom:1px solid var(--grid);
+  }
+  .brand-plate{
+    display:inline-flex; align-items:center; gap:12px; padding:9px 18px;
+    background:linear-gradient(180deg, #182029, #0d1319);
+    border:1px solid var(--brass-dim); border-radius:5px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.45);
+  }
+  .brand-mark{
+    font-family:var(--font-display); font-weight:700; font-size:23px; letter-spacing:0.5px;
+    color:var(--brass); text-shadow:0 1px 0 rgba(0,0,0,0.7);
+  }
+  .brand-sub{
+    color:var(--ink-faint); font-size:11.5px; font-family:var(--font-mono);
+    border-right:1px solid var(--grid); padding-right:10px; margin-right:2px;
+  }
+  @media (max-width:640px){ .brand-sub{ display:none; } }
+
+  .status-chip{
+    display:inline-flex; align-items:center; gap:9px; padding:8px 14px;
+    font-family:var(--font-mono); font-size:11.5px; color:var(--ink-dim);
+    border:1px solid var(--grid); border-radius:5px; background:var(--panel);
+  }
+  .status-dot{
+    width:8px; height:8px; border-radius:50%; background:var(--ink-faint); flex:none;
+    box-shadow:0 0 0 3px transparent;
+  }
+  .status-chip.fresh .status-dot{ background:var(--buy); box-shadow:0 0 8px 1px var(--buy); animation:blip 2.4s ease-in-out infinite; }
+  .status-chip.stale .status-dot{ background:var(--hold); box-shadow:0 0 6px 1px var(--hold); }
+  .status-chip.old .status-dot{ background:var(--sell); box-shadow:0 0 6px 1px var(--sell); }
+  .status-chip.paused .status-dot{ background:var(--ink-faint); }
+  @keyframes blip{ 0%,100%{ opacity:1; } 50%{ opacity:0.45; } }
+  @media (prefers-reduced-motion: reduce){ .status-chip.fresh .status-dot{ animation:none; } }
+
+  /* ---------------- Ticker (صفحه‌ی فرورفته‌ی نمایش) ---------------- */
+  .ticker-wrap{
+    position:relative; z-index:1;
+    background:var(--screen); overflow:hidden;
+    border-top:1px solid rgba(209,172,60,0.25); border-bottom:1px solid rgba(209,172,60,0.25);
+    box-shadow: inset 0 3px 10px rgba(0,0,0,0.55), inset 0 -3px 10px rgba(0,0,0,0.4);
+  }
+  .ticker-wrap::before, .ticker-wrap::after{
+    content:''; position:absolute; top:0; bottom:0; width:44px; z-index:2; pointer-events:none;
+  }
+  .ticker-wrap::before{ right:0; background:linear-gradient(to left, var(--screen), transparent); }
+  .ticker-wrap::after{ left:0; background:linear-gradient(to right, var(--screen), transparent); }
+  .ticker-track{
+    display:flex; width:max-content; white-space:nowrap;
+    animation: ticker-scroll 48s linear infinite;
+    font-family:var(--font-mono); font-size:12.5px;
+  }
+  .ticker-wrap:hover .ticker-track{ animation-play-state:paused; }
+  @keyframes ticker-scroll{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+  .ticker-item{ display:inline-flex; gap:9px; align-items:center; padding:10px 20px; color:var(--ink-dim); border-left:1px solid var(--grid-soft); }
+  .ticker-item b{ color:var(--ink); font-weight:600; letter-spacing:0.3px; }
+  .ticker-item .tk-up{ color:var(--buy); } .ticker-item .tk-down{ color:var(--sell); }
+  .ticker-item .tk-code{ padding:2px 7px; border-radius:3px; font-size:10.5px; font-weight:600; }
+  .ticker-item .tk-code.buy{ background:var(--buy-bg); color:var(--buy); }
+  .ticker-item .tk-code.sell{ background:var(--sell-bg); color:var(--sell); }
+  .ticker-item .tk-code.hold{ background:var(--hold-bg); color:var(--hold); }
+  .ticker-item .tk-code.uncertain{ background:var(--unc-bg); color:var(--unc); }
+
+  @media (prefers-reduced-motion: reduce){
+    .ticker-track{ animation:none; overflow-x:auto; }
+  }
+
+  /* ---------------- Tabs (دکمه‌های فیزیکی پنل) ---------------- */
+  nav.tabs{
+    position:relative; z-index:1;
+    max-width:1040px; margin:18px auto 0; padding:0 20px; display:flex; gap:8px; flex-wrap:wrap;
+  }
+  .tab{
+    font-family:var(--font-body); font-size:13.5px; font-weight:600; color:var(--ink-dim);
+    background:var(--panel-2); border:1px solid var(--grid); border-radius:6px 6px 0 0;
+    padding:10px 18px; cursor:pointer; display:inline-flex; align-items:center; gap:7px;
+    border-bottom:none; position:relative; top:1px;
+  }
+  .tab .tab-led{ width:6px; height:6px; border-radius:50%; background:var(--ink-faint); }
+  .tab.active{
+    color:var(--ink); background:var(--panel);
+    border-color:var(--grid); box-shadow: 0 -2px 0 var(--brass) inset;
+  }
+  .tab.active .tab-led{ background:var(--brass); box-shadow:0 0 5px 1px var(--brass-glow); }
+  .tab:hover:not(.active){ color:var(--ink); }
+
+  main{
+    position:relative; z-index:1; max-width:1040px; margin:0 auto; padding:22px 20px 80px;
+    background:var(--panel); border:1px solid var(--grid); border-top:none; border-radius:0 0 var(--radius-lg) var(--radius-lg);
+  }
+  .panel{ display:none; } .panel.active{ display:block; }
+
+  /* ---------------- Toolbar / search ---------------- */
+  .toolbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .toolbar #search{ flex:1; min-width:180px; }
+  #search{
+    padding:11px 14px; border:1px solid var(--grid); border-radius:var(--radius);
+    background:var(--screen); color:var(--ink); font-family:var(--font-mono); font-size:13.5px;
+  }
+  #search::placeholder{ color:var(--ink-faint); }
+  #search:focus{ outline:none; border-color:var(--brass-dim); }
+  #riskProfile{
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink); background:var(--screen);
+    border:1px solid var(--grid); border-radius:var(--radius); padding:10px 10px;
+  }
+  .risk-note{ font-size:11.5px; color:var(--ink-faint); margin:8px 2px 16px; line-height:1.8; }
+
+  /* ---------------- Watchlist ---------------- */
+  .table-head{
+    display:none; font-size:10.5px; color:var(--ink-faint); font-family:var(--font-mono);
+    text-transform:uppercase; letter-spacing:0.5px;
+    padding:0 14px 8px; border-bottom:1px solid var(--grid);
+  }
+  @media (min-width:680px){
+    .table-head{ display:grid; grid-template-columns:1.5fr 0.9fr 0.9fr 0.7fr 0.9fr; }
+  }
+
+  .watchlist-row{
+    display:grid; grid-template-columns:1fr; gap:8px; padding:13px 14px;
+    cursor:pointer; background:var(--panel-2);
+    margin-bottom:8px; border-radius:var(--radius); border:1px solid var(--grid);
+    transition:border-color 0.15s ease, transform 0.1s ease;
+  }
+  .watchlist-row:hover{ border-color:var(--brass-dim); }
+  .watchlist-row:active{ transform:scale(0.997); }
+  @media (min-width:680px){
+    .watchlist-row{ grid-template-columns:1.5fr 0.9fr 0.9fr 0.7fr 0.9fr; align-items:center; gap:6px; margin-bottom:5px; }
+  }
+  .wl-name{ display:flex; align-items:center; gap:8px; font-weight:600; font-size:14.5px; min-width:0; }
+  .wl-fav{ background:none; border:none; cursor:pointer; color:var(--ink-faint); font-size:15px; padding:0; flex:none; }
+  .wl-fav.active{ color:var(--brass); }
+  .wl-regime-dot{ width:7px; height:7px; border-radius:50%; flex:none; }
+  .wl-id{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wl-spark{ width:64px; height:24px; flex:none; opacity:0.9; }
+  .wl-spark svg{ display:block; width:100%; height:100%; }
+  .wl-price{ font-family:var(--font-mono); font-size:14px; color:var(--ink); }
+  .wl-change{ font-family:var(--font-mono); font-size:12.5px; }
+  .wl-change.up{ color:var(--buy); } .wl-change.down{ color:var(--sell); }
+  .wl-mobile-label{ font-size:10px; color:var(--ink-faint); font-family:var(--font-mono); display:inline-block; width:56px; text-transform:uppercase; }
+  @media (min-width:680px){ .wl-mobile-label{ display:none; } }
+  .wl-row-bottom{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  @media (min-width:680px){ .wl-row-bottom{ display:contents; } }
+
+  .code{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono); font-weight:700;
+    font-size:11.5px; padding:4px 9px; border-radius:3px; width:fit-content; letter-spacing:0.2px;
+  }
+  .code::before{ content:''; width:5px; height:5px; border-radius:50%; background:currentColor; flex:none; }
+  .code.buy{ background:var(--buy-bg); color:var(--buy); }
+  .code.sell{ background:var(--sell-bg); color:var(--sell); }
+  .code.hold{ background:var(--hold-bg); color:var(--hold); }
+  .code.uncertain{ background:var(--unc-bg); color:var(--unc); }
+
+  .empty, .loading{ text-align:center; color:var(--ink-dim); padding:60px 20px; font-size:14px; font-family:var(--font-mono); }
+
+  /* ---------------- Modal ---------------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(6,9,12,0.72); display:none;
+    align-items:center; justify-content:center; z-index:50; padding:16px; backdrop-filter:blur(2px);
+  }
+  .overlay.open{ display:flex; }
+  .modal{
+    background:var(--panel); border:1px solid var(--grid); border-top:2px solid var(--brass);
+    border-radius:var(--radius-lg);
+    max-width:620px; width:100%; max-height:88vh; overflow-y:auto; padding:24px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.55);
+  }
+  .modal-header{ display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--grid); padding-bottom:14px; }
+  .modal-header h2{ margin:0; font-family:var(--font-display); font-size:22px; font-weight:700; color:var(--ink); }
+  .close-btn{ background:var(--panel-2); border:1px solid var(--grid); color:var(--ink-dim); width:28px; height:28px; border-radius:5px; font-size:15px; cursor:pointer; }
+  .close-btn:hover{ color:var(--ink); border-color:var(--brass-dim); }
+  .modal .score-line{ display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+  .score-num{ font-family:var(--font-mono); font-size:13.5px; color:var(--ink-dim); }
+  .chart-frame{
+    margin-top:16px; padding:14px 12px 8px; background:var(--screen); border:1px solid var(--grid);
+    border-radius:var(--radius); box-shadow:inset 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .modal canvas{ max-height:190px; }
+
+  .section-label{
+    font-family:var(--font-mono); font-size:10.5px; color:var(--brass); letter-spacing:0.8px;
+    margin:22px 0 9px; text-transform:uppercase; border-bottom:1px solid var(--grid); padding-bottom:5px;
+  }
+  .reasons{ margin:0; padding-right:18px; font-size:13.5px; line-height:1.9; color:var(--ink); }
+  .reasons li{ margin-bottom:4px; }
+
+  .agree-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .agree-table td{ padding:6px 4px; border-bottom:1px solid var(--grid-soft); vertical-align:middle; }
+  .agree-table td:first-child{ color:var(--ink-dim); }
+  .agree-table td:nth-child(2){ font-family:var(--font-mono); text-align:left; }
+  .agree-table td:last-child{ text-align:center; width:26px; }
+  .ind-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .ind-table td{ padding:6px 4px; border-bottom:1px solid var(--grid-soft); }
+  .ind-table td:first-child{ color:var(--ink-dim); }
+  .ind-table td:last-child{ text-align:left; font-family:var(--font-mono); color:var(--ink); }
+
+  .disclaimer{ margin-top:20px; font-size:11.5px; color:var(--ink-faint); border-top:1px solid var(--grid); padding-top:12px; line-height:1.85; }
+
+  /* ---------------- Regime chip (رنگ‌بندی بر اساس رژیم بازار) ---------------- */
+  .regime-chip{
+    display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-family:var(--font-mono);
+    border:1px solid var(--grid); border-radius:4px; padding:4px 9px 4px 9px;
+  }
+  .regime-chip .regime-led{ width:6px; height:6px; border-radius:50%; flex:none; }
+
+  /* ---------------- Transparency / stat cards ---------------- */
+  .transparency-intro{ font-size:13.5px; color:var(--ink-dim); max-width:62ch; margin-bottom:20px; line-height:1.8; }
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; margin-bottom:20px; }
+  .stat-card{
+    background:var(--panel-2); border:1px solid var(--grid); border-radius:var(--radius); padding:18px 16px;
+  }
+  .stat-label{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.5px; }
+  .stat-num{ font-family:var(--font-mono); font-size:30px; font-weight:700; margin-top:8px; color:var(--ink); }
+  .stat-sub{ font-size:12px; color:var(--ink-dim); margin-top:5px; }
+  .stat-num.buy{ color:var(--buy); } .stat-num.sell{ color:var(--sell); }
+
+  .method-note{ font-size:12.5px; color:var(--ink-faint); border-top:1px solid var(--grid); padding-top:12px; line-height:1.85; }
+  .empty-state{
+    border:1px dashed var(--grid); border-radius:var(--radius); padding:28px 20px; text-align:center;
+    color:var(--ink-dim); font-size:13.5px; margin-bottom:20px; background:var(--panel-2);
+  }
+
+  /* ---------------- Alert banner ---------------- */
+  .alert-banner{
+    position:relative; z-index:1;
+    display:none; max-width:1040px; margin:0 auto; padding:10px 20px; background:var(--hold-bg);
+    border-bottom:1px solid rgba(240,180,41,0.35); font-size:12.5px; color:var(--ink);
+  }
+  .alert-banner.show{ display:block; }
+  .alert-banner b{ font-family:var(--font-mono); color:var(--hold); }
+
+  /* ---------------- Portfolio panel ---------------- */
+  .trades-table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }
+  .trades-table td, .trades-table th{ padding:7px 4px; border-bottom:1px solid var(--grid-soft); text-align:right; }
+  .trades-table th{ color:var(--ink-faint); font-family:var(--font-mono); font-weight:500; font-size:10.5px; text-transform:uppercase; }
+  .trades-table td:last-child, .trades-table th:last-child{ text-align:left; font-family:var(--font-mono); }
+  .pnl-pos{ color:var(--buy); } .pnl-neg{ color:var(--sell); }
+
+  /* ---------------- Backtest Lab panel ---------------- */
+  .lab-disclaimer{
+    background:var(--unc-bg); border:1px dashed var(--unc); border-radius:var(--radius);
+    padding:14px 16px; margin-bottom:18px; font-size:13px; color:var(--ink); line-height:1.85;
+  }
+  .lab-disclaimer b{ font-family:var(--font-mono); color:var(--unc); }
+  .lab-disclaimer ul{ margin:8px 0 0; padding-right:18px; }
+  .window-toggle{ display:flex; gap:8px; align-items:center; margin-bottom:16px; }
+  .window-btn{
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-dim); background:var(--panel-2);
+    border:1px solid var(--grid); border-radius:var(--radius); padding:7px 14px; cursor:pointer;
+  }
+  .window-btn.active{ background:var(--brass); color:#1a1305; border-color:var(--brass); font-weight:700; }
+  .lab-coin-table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px; }
+  .lab-coin-table td, .lab-coin-table th{ padding:7px 4px; border-bottom:1px solid var(--grid-soft); text-align:right; }
+  .lab-coin-table th{ color:var(--ink-faint); font-family:var(--font-mono); font-weight:500; font-size:10.5px; text-transform:uppercase; }
+  .lab-coin-table td:last-child, .lab-coin-table th:last-child{ text-align:left; font-family:var(--font-mono); }
+
+  .horizon-section{ margin-top:28px; padding-top:20px; border-top:1px dashed var(--grid); }
+  .horizon-title{ font-size:14px; margin:0 0 8px; color:var(--ink); font-family:var(--font-body); }
+
+  /* ---------------- جلوه‌های سینمایی سبک (هماهنگ با صفحه‌ی ورودی) ---------------- */
+  .brand-mark .letter-wrapper{ display:inline-block; overflow:hidden; vertical-align:bottom; }
+  .brand-mark .letter-inner{
+    display:inline-block; opacity:0; transform:translateX(40%); filter:blur(10px);
+    animation:brand-letter-reveal 0.7s cubic-bezier(0.05,0.9,0.1,1) forwards;
+  }
+  @keyframes brand-letter-reveal{
+    0%{ opacity:0; transform:translateX(40%); filter:blur(10px); }
+    100%{ opacity:1; transform:translateX(0); filter:blur(0); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .brand-mark .letter-inner{ animation:none !important; opacity:1 !important; transform:none !important; filter:none !important; }
+  }
+
+  .cursor-ring-outline{
+    position:fixed; top:0; left:0; width:38px; height:38px;
+    border:1.5px solid rgba(231,237,243,0.35); border-radius:50%; z-index:99998; pointer-events:none;
+    transform:translate(-50%,-50%) scale(0); opacity:0;
+    transition:opacity 0.35s cubic-bezier(0.16,1,0.3,1), border-color 0.3s ease;
+  }
+  .cursor-ring-outline.active{ opacity:1; }
+  .cursor-ring-outline.expanded{ border-color:var(--brass-glow); }
+  @media (hover:none), (pointer:coarse){ .cursor-ring-outline{ display:none !important; } }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="brand-plate">
+    <span class="brand-mark">آرسان</span>
+    <span class="brand-sub">پنل ابزار دقیق تحلیل رمزارز</span>
+  </div>
+  <div id="status-chip" class="status-chip paused"><span class="status-dot"></span><span id="status-text">در حال بارگذاری…</span></div>
+</header>
+
+<div class="ticker-wrap">
+  <div class="ticker-track" id="tickerTrack"></div>
+</div>
+
+<div class="alert-banner" id="alertBanner"></div>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="live"><span class="tab-led"></span>تحلیل زنده</button>
+  <button class="tab" data-tab="transparency"><span class="tab-led"></span>شفافیت عملکرد</button>
+  <button class="tab" data-tab="portfolio"><span class="tab-led"></span>پرتفوی فرضی</button>
+  <button class="tab" data-tab="lab"><span class="tab-led"></span>آزمایشگاه</button>
+</nav>
+
+<main>
+  <section id="panel-live" class="panel active">
+    <div class="toolbar">
+      <input id="search" type="text" placeholder="جست‌وجوی رمزارز… (مثلا bitcoin)">
+      <select id="riskProfile">
+        <option value="conservative">پروفایل: محافظه‌کار</option>
+        <option value="balanced" selected>پروفایل: متعادل</option>
+        <option value="aggressive">پروفایل: تهاجمی</option>
+      </select>
+    </div>
+    <p class="risk-note">تغییر پروفایل، آستانه‌های خرید/فروش را روی همون امتیاز محاسبه‌شده دوباره اعمال می‌کند. برای کوین‌هایی که به‌دلیل بی‌روند بودن بازار اصلاً امتیازی محاسبه نشده («صبر»)، تغییر پروفایل اثری ندارد.</p>
+    <div class="table-head"><span>نام</span><span>روند اخیر</span><span>قیمت</span><span>۲۴ساعت</span><span>وضعیت</span></div>
+    <div id="watchlist"><div class="loading">در حال دریافت آخرین تحلیل…</div></div>
+  </section>
+
+  <section id="panel-transparency" class="panel">
+    <p class="transparency-intro">نرخ موفقیت واقعی سیگنال‌های «خرید» و «فروش» گذشته — هر سیگنال ۲۴ ساعت بعد از صدور، با قیمت واقعی بازار مقایسه و به‌صورت خودکار ارزیابی می‌شود. اینجا هیچ عددی دستکاری یا حذف نمی‌شود.</p>
+    <div id="transparencyBody"><div class="loading">در حال دریافت آمار…</div></div>
+  </section>
+
+  <section id="panel-portfolio" class="panel">
+    <p class="transparency-intro">شبیه‌سازی: اگر کسی از ابتدا با مبلغ ثابت، همه‌ی سیگنال‌های خرید/فروش سیستم را دنبال می‌کرد، نتیجه چه می‌شد؟ این یک پرتفوی فرضی <b>سراسری</b> است، نه حساب شخصی شما — هیچ معامله‌ی واقعی انجام نشده.</p>
+    <div id="portfolioBody"><div class="loading">در حال دریافت داده‌ی پرتفوی…</div></div>
+  </section>
+
+  <section id="panel-lab" class="panel">
+    <div class="lab-disclaimer">
+      <b>⚠ این یک شبیه‌سازی روی داده‌ی گذشته است، نه عملکرد زنده‌ی سیستم.</b>
+      آرسان فرض می‌کند در ۳۰ یا ۶۰ روز پیش قرار دارد و فقط با داده‌ی همان روز (بدون دیدن آینده) تصمیم می‌گیرد؛
+      یک روز بعد، نتیجه‌ی واقعی بازار را چک می‌کند. کاملاً جدا از تب «شفافیت عملکرد» و از هیچ داده‌ی زنده‌ای اثر نمی‌گیرد.
+      <ul id="labLimitations"></ul>
+    </div>
+    <div class="window-toggle">
+      <button class="window-btn active" data-window="30">بازه ۳۰ روزه</button>
+      <button class="window-btn" data-window="60">بازه ۶۰ روزه</button>
+    </div>
+    <div id="labBody"><div class="loading">در حال دریافت نتایج آزمایشگاه…</div></div>
+
+    <div class="horizon-section">
+      <h3 class="horizon-title">🔍 تست تشخیصی افق ارزیابی</h3>
+      <p class="method-note">همون سیگنال‌های بالا، فقط با فاصله‌ی زمانی متفاوت چک شدن: «۱ روزه» دقیقاً همون قانون استانداردِ سایته؛ «۳ روزه» و «۵ روزه» صرفاً برای بررسی این‌ان که آیا تاخیر شاخص‌های روندی (EMA) باعث خطای زودهنگام می‌شه یا نه. این بخش هیچ اثری روی سیگنال‌های واقعی سایت نداره و فقط دستی به‌روز می‌شه.</p>
+      <div id="horizonBody"><div class="loading">در حال دریافت نتایج تست افق…</div></div>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+
+<div id="cursor-ring" class="cursor-ring-outline"></div>
+
+<script>
+const ANALYSIS_URL = './data/analysis.json';
+const SUMMARY_URL = './data/accuracy_summary.json';
+const ALERTS_URL = './data/alerts.json';
+const PORTFOLIO_URL = './data/portfolio.json';
+const LAB_URL = './data/backtest_summary.json';
+const HORIZON_URL = './data/backtest_horizon_summary.json';
+const FAV_KEY = 'arsan_favorites';
+let labData = null;
+let currentLabWindow = '30';
+const LAB_COIN_LABELS = {
+  bitcoin:'بیت‌کوین', ethereum:'اتریوم', binancecoin:'بایننس‌کوین',
+  ripple:'ریپل', solana:'سولانا', cardano:'کاردانو',
+};
+const NEUTRAL_ZONE = 0.3; // همون آستانه‌ی decision.py — برای تشخیص خنثی بودن یک شاخص
+
+// همون سه پروفایل RISK_PROFILES در decision.py — باید همیشه هم‌گام نگه داشته بشن
+const RISK_PROFILES = {
+  conservative: { buy_threshold: 30, sell_threshold: -30, min_agreement_ratio: 0.65 },
+  balanced:     { buy_threshold: 20, sell_threshold: -20, min_agreement_ratio: 0.55 },
+  aggressive:   { buy_threshold: 12, sell_threshold: -12, min_agreement_ratio: 0.45 },
+};
+let currentRiskProfile = 'balanced';
+
+// رنگ هر رژیم بازار (هم‌راستا با market_regime.py) — برای نقطه‌ی رنگی در واچ‌لیست و مودال
+const REGIME_COLOR = {
+  uptrend: 'var(--buy)', downtrend: 'var(--sell)', volatile: 'var(--hold)',
+  trend_change: 'var(--unc)', quiet: 'var(--calm)', range: 'var(--ink-faint)', unknown: 'var(--ink-faint)',
+};
+
+let analysisData = null;
+let chartInstance = null;
+
+/* بازآرایی سبک تصمیم روی همون امتیاز/توافق ذخیره‌شده، بدون نیاز به اجرای دوباره‌ی main.py.
+   محدودیت صادقانه: اگه backend خودش با پروفایل balanced کوین رو trend-gate کرده (hold به
+   دلیل بی‌روند بودن)، factors و score اصلاً محاسبه نشدن؛ پس نمی‌تونیم برای پروفایل دیگه
+   حدس بزنیم — همون hold می‌مونه (به کاربر هم در risk-note گفته شده). */
+function effectiveDecision(coin){
+  if(coin.trend_gate_triggered || coin.score === null || coin.score === undefined){
+    return coin.decision;
+  }
+  const p = RISK_PROFILES[currentRiskProfile];
+  const crosses = coin.score >= p.buy_threshold || coin.score <= p.sell_threshold;
+  if(crosses && (coin.agreement_ratio ?? 0) < p.min_agreement_ratio) return 'uncertain';
+  if(coin.score >= p.buy_threshold) return 'buy';
+  if(coin.score <= p.sell_threshold) return 'sell';
+  return 'hold';
+}
+
+const DECISION_LABELS = { buy: 'خرید', sell: 'فروش', hold: 'صبر', uncertain: 'نامشخص' };
+const FACTOR_LABELS = {
+  rsi: 'RSI', macd: 'MACD', trend: 'روند قیمت', volume_trend: 'روند حجم',
+  bollinger: 'باند بولینگر', stochastic_rsi: 'استوکاستیک RSI', obv_trend: 'حجم تجمعی (OBV)',
+  ema_cross: 'کراس EMA', support_resistance: 'حمایت/مقاومت', news_sentiment: 'احساسات اخبار',
+  btc_alignment: 'همبستگی با روند بیت‌کوین',
+};
+
+/* ---------------- Sparkline (خوانش موج قیمت — امضای بصری واچ‌لیست) ---------------- */
+function sparklineSVG(priceHistory, up){
+  if(!priceHistory || priceHistory.length < 2) return '';
+  const vals = priceHistory.slice(-30).map(p => p[1]);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = (max - min) || 1;
+  const w = 64, h = 24, pad = 2;
+  const step = (w - pad*2) / (vals.length - 1);
+  const pts = vals.map((v,i) => {
+    const x = (pad + i*step).toFixed(1);
+    const y = (pad + (h - pad*2) * (1 - (v - min)/range)).toFixed(1);
+    return `${x},${y}`;
+  }).join(' ');
+  const color = up ? 'var(--buy)' : 'var(--sell)';
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function getFavorites(){
+  try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch(e){ return []; }
+}
+function toggleFavorite(id){
+  let favs = getFavorites();
+  favs = favs.includes(id) ? favs.filter(f=>f!==id) : [...favs, id];
+  localStorage.setItem(FAV_KEY, JSON.stringify(favs));
+  renderWatchlist();
+}
+
+/* ---------------- Tabs ---------------- */
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ---------------- Freshness / status chip ---------------- */
+function updateStatusChip(generatedAtISO){
+  const el = document.getElementById('status-chip');
+  const textEl = document.getElementById('status-text');
+  if(!generatedAtISO){ el.className='status-chip old'; textEl.textContent='داده‌ای در دسترس نیست'; return; }
+  const generated = new Date(generatedAtISO);
+  const now = new Date();
+  const diffMinutes = Math.round((now - generated) / 60000);
+  const iranOffsetMinutes = 3.5 * 60;
+  const iranNow = new Date(now.getTime() + iranOffsetMinutes*60000 - now.getTimezoneOffset()*60000);
+  const iranHour = iranNow.getUTCHours();
+  const inActiveWindow = iranHour >= 8 && iranHour < 24;
+  let cls, msg;
+  if(diffMinutes < 0){ cls='fresh'; msg='همین الان به‌روزرسانی شد'; }
+  else if(diffMinutes <= 40){ cls='fresh'; msg=`${diffMinutes} دقیقه پیش`; }
+  else if(!inActiveWindow){ cls='paused'; msg=`خارج از بازه فعال — ${diffMinutes} دقیقه پیش`; }
+  else if(diffMinutes <= 90){ cls='stale'; msg=`${diffMinutes} دقیقه پیش`; }
+  else{ cls='old'; msg=`به‌روزرسانی متوقف — ${diffMinutes} دقیقه پیش`; }
+  el.className = 'status-chip ' + cls;
+  textEl.textContent = msg;
+}
+
+/* ---------------- Ticker ---------------- */
+function renderTicker(coins){
+  const track = document.getElementById('tickerTrack');
+  if(!coins.length){ track.innerHTML=''; return; }
+  const items = coins.map(c=>{
+    const up = (c.change_24h ?? 0) >= 0;
+    const dec = effectiveDecision(c);
+    return `<span class="ticker-item"><b>${c.id.toUpperCase()}</b>
+      $${Number(c.current_price).toLocaleString('en-US',{maximumFractionDigits:6})}
+      <span class="${up?'tk-up':'tk-down'}">${up?'▲':'▼'}${Math.abs(c.change_24h ?? 0).toFixed(2)}٪</span>
+      <span class="tk-code ${dec}">${DECISION_LABELS[dec]||dec}</span></span>`;
+  }).join('');
+  track.innerHTML = items + items; // duplicated for seamless loop
+}
+
+/* ---------------- Watchlist ---------------- */
+function renderWatchlist(){
+  const list = document.getElementById('watchlist');
+  if(!analysisData || !analysisData.coins || !analysisData.coins.length){
+    list.innerHTML = '<div class="empty">داده‌ای موجود نیست.</div>'; return;
+  }
+  const query = document.getElementById('search').value.trim().toLowerCase();
+  const favs = getFavorites();
+  let coins = analysisData.coins.filter(c => c.id.toLowerCase().includes(query));
+  coins.sort((a,b)=>{
+    const af=favs.includes(a.id), bf=favs.includes(b.id);
+    return af!==bf ? (af?-1:1) : 0;
+  });
+  if(!coins.length){ list.innerHTML = '<div class="empty">رمزارزی با این نام پیدا نشد.</div>'; return; }
+
+  list.innerHTML = coins.map(c=>{
+    const up = (c.change_24h ?? 0) >= 0;
+    const isFav = favs.includes(c.id);
+    const dec = effectiveDecision(c);
+    const regime = c.market_regime;
+    const regimeColor = regime ? (REGIME_COLOR[regime.regime] || 'var(--ink-faint)') : 'var(--ink-faint)';
+    const regimeTitle = regime ? regime.label_fa : '';
+    const spark = sparklineSVG(c.price_history, up);
+    return `
+      <div class="watchlist-row" onclick="openModal('${c.id}')">
+        <div class="wl-name">
+          <button class="wl-fav ${isFav?'active':''}" onclick="event.stopPropagation(); toggleFavorite('${c.id}')">★</button>
+          ${regime ? `<span class="wl-regime-dot" style="background:${regimeColor}" title="${regimeTitle}"></span>` : ''}
+          <span class="wl-id">${c.id}</span>
+        </div>
+        <div class="wl-spark">${spark}</div>
+        <div class="wl-row-bottom">
+          <div><span class="wl-mobile-label">قیمت</span><span class="wl-price">$${Number(c.current_price).toLocaleString('en-US',{maximumFractionDigits:6})}</span></div>
+          <div><span class="wl-mobile-label">۲۴ساعت</span><span class="wl-change ${up?'up':'down'}">${up?'+':''}${(c.change_24h ?? 0).toFixed(2)}٪</span></div>
+          <div><span class="code ${dec}">${DECISION_LABELS[dec]||dec}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ---------------- Modal ---------------- */
+function buildAgreementRows(coin){
+  if(coin.trend_gate_triggered || !coin.factors || !Object.keys(coin.factors).length){
+    return '<tr><td colspan="3" style="color:var(--ink-faint); text-align:right;">بازار بدون روند مشخص بود؛ شاخص‌ها محاسبه نشدند.</td></tr>';
+  }
+  const overallSign = (coin.score ?? 0) >= 0 ? 1 : -1;
+  return Object.entries(coin.factors).map(([key, val])=>{
+    const label = FACTOR_LABELS[key] || key;
+    let mark = '<span style="color:var(--ink-faint)">–</span>';
+    if(Math.abs(val) >= NEUTRAL_ZONE){
+      const sign = val > 0 ? 1 : -1;
+      mark = sign === overallSign
+        ? '<span style="color:var(--buy)">✓</span>'
+        : '<span style="color:var(--sell)">⚠</span>';
+    }
+    return `<tr><td>${label}</td><td>${val.toFixed(2)}</td><td>${mark}</td></tr>`;
+  }).join('');
+}
+
+function openModal(id){
+  const coin = analysisData.coins.find(c => c.id === id);
+  if(!coin) return;
+  const ind = coin.indicators;
+  const ns = coin.news_sentiment;
+  let sentimentRow = '', sentimentHeadlinesHtml = '';
+  if(ns){
+    if(ns.articles_analyzed > 0){
+      const label = ns.score > 0.15 ? 'مثبت' : ns.score < -0.15 ? 'منفی' : 'خنثی';
+      sentimentRow = `<tr><td>احساسات اخبار (۲۴ ساعت)</td><td>${label} — ${ns.articles_analyzed} خبر</td></tr>`;
+      if(ns.sample_headlines && ns.sample_headlines.length){
+        sentimentHeadlinesHtml = `<div class="section-label">تیترهای اخیر</div>
+          <ul class="reasons">${ns.sample_headlines.map(h=>`<li>${h}</li>`).join('')}</ul>`;
+      }
+    } else {
+      sentimentRow = `<tr><td>احساسات اخبار (۲۴ ساعت)</td><td>خبری پیدا نشد</td></tr>`;
+    }
+  }
+
+  const dec = effectiveDecision(coin);
+  const regime = coin.market_regime;
+  const regimeColor = regime ? (REGIME_COLOR[regime.regime] || 'var(--ink-faint)') : 'var(--ink-faint)';
+  document.getElementById('modal').innerHTML = `
+    <div class="modal-header">
+      <h2>${coin.id}</h2>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="score-line">
+      <span class="code ${dec}">${DECISION_LABELS[dec]}</span>
+      <span class="score-num">امتیاز: ${coin.score_percent !== null && coin.score_percent !== undefined ? coin.score_percent+'٪' : '—'}</span>
+      ${dec !== coin.decision ? `<span class="score-num" style="color:var(--ink-faint)">(با پروفایل اصلی: ${DECISION_LABELS[coin.decision]})</span>` : ''}
+      ${regime ? `<span class="regime-chip"><span class="regime-led" style="background:${regimeColor}"></span>${regime.label_fa}${regime.volatility_pct!==null && regime.volatility_pct!==undefined?` — نوسان ${regime.volatility_pct}٪`:''}</span>` : ''}
+    </div>
+    <div class="chart-frame"><canvas id="priceChart"></canvas></div>
+
+    <div class="section-label">دلایل</div>
+    <ul class="reasons">${coin.reasons.map(r=>`<li>${r}</li>`).join('')}</ul>
+
+    <div class="section-label">توافق شاخص‌ها با تصمیم نهایی</div>
+    <table class="agree-table">${buildAgreementRows(coin)}</table>
+
+    <div class="section-label">جزئیات شاخص‌ها</div>
+    <table class="ind-table">
+      <tr><td>RSI</td><td>${ind.rsi}</td></tr>
+      <tr><td>MACD Histogram</td><td>${ind.macd.histogram.toFixed(4)}</td></tr>
+      <tr><td>روند</td><td>${ind.trend.label}</td></tr>
+      <tr><td>قدرت روند</td><td>${ind.trend_strength} / ۱۰۰</td></tr>
+      <tr><td>حجم معاملات</td><td>${ind.volume_trend.label}</td></tr>
+      <tr><td>استوکاستیک RSI</td><td>${ind.stochastic_rsi}</td></tr>
+      <tr><td>OBV</td><td>${ind.obv_trend}</td></tr>
+      <tr><td>کراس EMA</td><td>${ind.ema_cross}</td></tr>
+      <tr><td>حمایت / مقاومت</td><td>$${ind.support.toFixed(4)} — $${ind.resistance.toFixed(4)}</td></tr>
+      ${sentimentRow}
+      ${(!coin.trend_gate_triggered && coin.agreement_ratio !== null && coin.agreement_ratio !== undefined) ? `<tr><td>نسبت توافق</td><td>${Math.round(coin.agreement_ratio*100)}٪</td></tr>` : ''}
+    </table>
+    ${sentimentHeadlinesHtml}
+    <div class="disclaimer">${coin.disclaimer}</div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+
+  const labels = coin.price_history.map(p => new Date(p[0]).toLocaleDateString('fa-IR'));
+  const prices = coin.price_history.map(p => p[1]);
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  if(chartInstance) chartInstance.destroy();
+  const lineColor = regime ? (regime.regime === 'downtrend' ? '#ff6259' : '#d1ac3c') : '#d1ac3c';
+  const gradient = ctx.createLinearGradient(0, 0, 0, 190);
+  gradient.addColorStop(0, 'rgba(209,172,60,0.25)');
+  gradient.addColorStop(1, 'rgba(209,172,60,0)');
+  chartInstance = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[{ data:prices, borderColor:lineColor, backgroundColor:gradient, fill:true, borderWidth:2, pointRadius:0, tension:0.25 }] },
+    options:{
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ display:false },
+        y:{ ticks:{ color:'#8b98a6', font:{ family:'JetBrains Mono', size:10 } }, grid:{ color:'#223040' } }
+      }
+    }
+  });
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+document.getElementById('search').addEventListener('input', renderWatchlist);
+document.getElementById('riskProfile').addEventListener('change', e=>{
+  currentRiskProfile = e.target.value;
+  renderWatchlist();
+  if(analysisData) renderTicker(analysisData.coins || []);
+});
+
+/* ---------------- Alert banner ---------------- */
+function renderAlerts(data){
+  const el = document.getElementById('alertBanner');
+  const now = new Date();
+  const active = (data && data.alerts || []).filter(a => new Date(a.expires_at) > now);
+  if(!active.length){ el.classList.remove('show'); el.innerHTML=''; return; }
+  el.innerHTML = '⚡ ' + active.map(a => `<b>${a.coin}</b>: ${a.message}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+  el.classList.add('show');
+}
+
+/* ---------------- Portfolio panel ---------------- */
+function renderPortfolio(p){
+  const body = document.getElementById('portfolioBody');
+  if(!p || !p.total_trades){
+    body.innerHTML = `<div class="empty-state">${p ? p.note : 'داده‌ی پرتفوی در دسترس نیست.'}</div>`;
+    return;
+  }
+  const pnlClass = p.total_pnl_usd >= 0 ? 'pnl-pos' : 'pnl-neg';
+  const rows = (p.recent_trades || []).slice().reverse().map(t => `
+    <tr>
+      <td>${t.coin}</td>
+      <td><span class="code ${t.decision}">${DECISION_LABELS[t.decision]||t.decision}</span></td>
+      <td>$${Number(t.entry_price).toLocaleString('en-US',{maximumFractionDigits:6})}</td>
+      <td>$${Number(t.exit_price).toLocaleString('en-US',{maximumFractionDigits:6})}</td>
+      <td class="${t.pnl_usd>=0?'pnl-pos':'pnl-neg'}">${t.pnl_usd>=0?'+':''}$${t.pnl_usd}</td>
+    </tr>`).join('');
+  body.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">سود/زیان کل (فرضی)</div>
+        <div class="stat-num ${pnlClass}">${p.total_pnl_usd>=0?'+':''}$${p.total_pnl_usd}</div>
+        <div class="stat-sub">بازده: ${p.return_percent !== null ? p.return_percent+'٪' : '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">تعداد معاملات فرضی</div>
+        <div class="stat-num">${p.total_trades}</div>
+        <div class="stat-sub">هر کدام ${p.position_size_usd}$ — نگه‌داری ${p.hold_hours} ساعته</div>
+      </div>
+    </div>
+    <p class="method-note">${p.note}</p>
+    ${rows ? `<table class="trades-table"><tr><th>کوین</th><th>سیگنال</th><th>ورود</th><th>خروج</th><th>سود/زیان</th></tr>${rows}</table>` : ''}
+  `;
+}
+
+/* ---------------- Transparency panel ---------------- */
+function renderTransparency(summary){
+  const body = document.getElementById('transparencyBody');
+  if(!summary || summary.overall.total === 0){
+    body.innerHTML = `
+      <div class="empty-state">هنوز هیچ سیگنال «خرید» یا «فروشی» به موعد ارزیابی (۲۴ ساعت پس از صدور) نرسیده.
+      به‌محض جمع‌شدن اولین نتایج، نرخ موفقیت واقعی سیستم اینجا نمایش داده می‌شود — هیچ عدد فرضی جایگزین آن نمی‌شود.</div>
+      <p class="method-note">${methodNote()}</p>`;
+    return;
+  }
+  const o = summary.overall, b = summary.by_decision.buy, s = summary.by_decision.sell;
+  const fmt = p => p === null || p === undefined ? '—' : p+'٪';
+  body.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">دقت کلی سیستم</div>
+        <div class="stat-num">${fmt(o.accuracy_percent)}</div>
+        <div class="stat-sub">${o.correct} درست از ${o.total} سیگنال ارزیابی‌شده</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">دقت سیگنال‌های خرید</div>
+        <div class="stat-num buy">${fmt(b.accuracy_percent)}</div>
+        <div class="stat-sub">${b.correct} درست از ${b.total}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">دقت سیگنال‌های فروش</div>
+        <div class="stat-num sell">${fmt(s.accuracy_percent)}</div>
+        <div class="stat-sub">${s.correct} درست از ${s.total}</div>
+      </div>
+    </div>
+    <p class="method-note">${methodNote()} آخرین به‌روزرسانی آمار: ${new Date(summary.generated_at).toLocaleString('fa-IR')}.</p>`;
+}
+function methodNote(){
+  return 'روش ارزیابی: هر سیگنال خرید یا فروش، ۲۴ ساعت پس از صدور با قیمت واقعی بازار مقایسه می‌شود؛ اگر قیمت حداقل ۰.۵٪ در جهت پیش‌بینی‌شده حرکت کرده باشد، سیگنال «درست» ثبت می‌شود.';
+}
+
+/* ---------------- Backtest Lab panel (کاملاً مستقل از تحلیل زنده) ---------------- */
+document.querySelectorAll('.window-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.window-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLabWindow = btn.dataset.window;
+    renderLab();
+  });
+});
+
+function renderLab(){
+  const body = document.getElementById('labBody');
+  const limitationsEl = document.getElementById('labLimitations');
+  if(!labData || !labData.windows){
+    body.innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از آزمایشگاه بک‌تست در دسترس نیست — این بخش هفته‌ای یک‌بار به‌روز می‌شود.</div>';
+    if(limitationsEl) limitationsEl.innerHTML = '';
+    return;
+  }
+  if(limitationsEl){
+    limitationsEl.innerHTML = (labData.limitations || []).map(l=>`<li>${l}</li>`).join('');
+  }
+  const w = labData.windows[currentLabWindow];
+  if(!w || !w.overall || w.overall.total === 0){
+    body.innerHTML = `<div class="empty-state">برای بازه‌ی ${currentLabWindow} روزه، سیگنال «خرید» یا «فروش» قابل‌ارزیابی‌ای شبیه‌سازی نشد (اکثر روزها «صبر» تشخیص داده شده).</div>`;
+    return;
+  }
+  const o = w.overall, b = w.by_decision.buy, s = w.by_decision.sell;
+  const fmt = p => p === null || p === undefined ? '—' : p+'٪';
+  const coinRows = Object.entries(w.by_coin || {}).map(([coin, c]) => `
+    <tr>
+      <td>${LAB_COIN_LABELS[coin] || coin}</td>
+      <td>${fmt(c.accuracy_percent)}</td>
+      <td>${c.correct} از ${c.total}</td>
+      <td>${c.hold_or_uncertain_days}</td>
+    </tr>`).join('');
+
+  body.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">دقت کلی شبیه‌سازی (${currentLabWindow} روزه)</div>
+        <div class="stat-num">${fmt(o.accuracy_percent)}</div>
+        <div class="stat-sub">${o.correct} درست از ${o.total} سیگنال قابل‌ارزیابی</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">دقت سیگنال‌های خرید</div>
+        <div class="stat-num buy">${fmt(b.accuracy_percent)}</div>
+        <div class="stat-sub">${b.correct} درست از ${b.total}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">دقت سیگنال‌های فروش</div>
+        <div class="stat-num sell">${fmt(s.accuracy_percent)}</div>
+        <div class="stat-sub">${s.correct} درست از ${s.total}</div>
+      </div>
+    </div>
+    ${coinRows ? `<table class="lab-coin-table">
+      <tr><th>کوین</th><th>دقت</th><th>درست/کل</th><th>روزهای صبر/نامشخص</th></tr>
+      ${coinRows}
+    </table>` : ''}
+    <p class="method-note">کوین‌های این آزمایشگاه: ${(labData.coins||[]).map(c=>LAB_COIN_LABELS[c]||c).join('، ')}. آخرین اجرا: ${new Date(labData.generated_at).toLocaleString('fa-IR')}.</p>
+  `;
+}
+
+/* ---------------- Horizon diagnostic (کاملاً مستقل، فقط دستی) ---------------- */
+function renderHorizon(data){
+  const body = document.getElementById('horizonBody');
+  if(!data || !data.horizons){
+    body.innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از تست تشخیصی افق در دسترس نیست — این بخش فقط دستی اجرا می‌شود.</div>';
+    return;
+  }
+  const fmt = p => p === null || p === undefined ? '—' : p+'٪';
+  const order = ['1d', '3d', '5d'];
+  const cards = order.filter(k => data.horizons[k]).map(k => {
+    const h = data.horizons[k];
+    const o = h.overall;
+    return `
+      <div class="stat-card">
+        <div class="stat-label">${h.label_fa}</div>
+        <div class="stat-num">${fmt(o.accuracy_percent)}</div>
+        <div class="stat-sub">${o.correct} درست از ${o.total} (حداقل ${h.min_move_percent}٪ حرکت)</div>
+      </div>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="stat-grid">${cards}</div>
+    <p class="method-note">${data.purpose || ''} آخرین اجرا: ${new Date(data.generated_at).toLocaleString('fa-IR')}.</p>
+  `;
+}
+
+/* ---------------- Load data ---------------- */
+async function loadAnalysis(){
+  try{
+    const res = await fetch(ANALYSIS_URL + '?t=' + Date.now());
+    analysisData = await res.json();
+    updateStatusChip(analysisData.generated_at);
+    renderTicker(analysisData.coins || []);
+    renderWatchlist();
+  }catch(e){
+    document.getElementById('watchlist').innerHTML = '<div class="empty">خطا در بارگذاری داده. لطفا بعدا دوباره تلاش کنید.</div>';
+    updateStatusChip(null);
+  }
+}
+async function loadSummary(){
+  try{
+    const res = await fetch(SUMMARY_URL + '?t=' + Date.now());
+    renderTransparency(await res.json());
+  }catch(e){
+    document.getElementById('transparencyBody').innerHTML = '<div class="empty">آمار عملکرد در دسترس نیست.</div>';
+  }
+}
+async function loadAlerts(){
+  try{
+    const res = await fetch(ALERTS_URL + '?t=' + Date.now());
+    renderAlerts(await res.json());
+  }catch(e){ /* alerts.json ممکنه هنوز وجود نداشته باشه — بی‌سروصدا نادیده گرفته می‌شه */ }
+}
+async function loadPortfolio(){
+  try{
+    const res = await fetch(PORTFOLIO_URL + '?t=' + Date.now());
+    renderPortfolio(await res.json());
+  }catch(e){
+    document.getElementById('portfolioBody').innerHTML = '<div class="empty">داده‌ی پرتفوی در دسترس نیست.</div>';
+  }
+}
+async function loadLab(){
+  try{
+    const res = await fetch(LAB_URL + '?t=' + Date.now());
+    labData = await res.json();
+    renderLab();
+  }catch(e){
+    labData = null;
+    document.getElementById('labBody').innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از آزمایشگاه بک‌تست در دسترس نیست — این بخش هفته‌ای یک‌بار به‌روز می‌شود.</div>';
+  }
+}
+async function loadHorizon(){
+  try{
+    const res = await fetch(HORIZON_URL + '?t=' + Date.now());
+    renderHorizon(await res.json());
+  }catch(e){
+    document.getElementById('horizonBody').innerHTML = '<div class="empty-state">هنوز نتیجه‌ای از تست تشخیصی افق در دسترس نیست — این بخش فقط دستی اجرا می‌شود.</div>';
+  }
+}
+
+loadAnalysis();
+loadSummary();
+loadAlerts();
+loadPortfolio();
+loadLab();
+loadHorizon();
+setInterval(loadAnalysis, 5 * 60 * 1000);
+setInterval(loadSummary, 15 * 60 * 1000);
+setInterval(loadAlerts, 5 * 60 * 1000);
+setInterval(loadPortfolio, 15 * 60 * 1000);
+setInterval(loadLab, 60 * 60 * 1000);
+
+/* ---------------- جلوه‌های سینمایی سبک (اضافه، بدون تغییر منطق بالا) ---------------- */
+(function(){
+  // ورود حرف‌به‌حرف پلاک برند "آرسان" در هدر
+  const brand = document.querySelector('.brand-mark');
+  if(brand){
+    const text = brand.textContent.trim();
+    brand.innerHTML = '';
+    [...text].forEach((char, i) => {
+      const wrapper = document.createElement('span');
+      wrapper.className = 'letter-wrapper';
+      const inner = document.createElement('span');
+      inner.textContent = char === ' ' ? '\u00A0' : char;
+      inner.className = 'letter-inner';
+      inner.style.animationDelay = `${i * 0.06}s`;
+      wrapper.appendChild(inner);
+      brand.appendChild(wrapper);
+    });
+  }
+
+  // کرسر سفارشی — فقط روی دستگاه با ماوس واقعی، کاملاً pointer-events:none
+  // پس هیچ کلیکی روی جدول/تب/مودال رو نمی‌گیره یا مختل نمی‌کنه.
+  const hasFinePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const cursorRing = document.getElementById('cursor-ring');
+  if(hasFinePointer && cursorRing){
+    let mouseX = window.innerWidth/2, mouseY = window.innerHeight/2;
+    let isFirstMove = true, scale = 0, targetScale = 1;
+
+    document.addEventListener('mousemove', e => {
+      mouseX = e.clientX; mouseY = e.clientY;
+      if(isFirstMove){ isFirstMove = false; cursorRing.classList.add('active'); }
+    });
+    document.addEventListener('mouseleave', () => { targetScale = 0; });
+    document.addEventListener('mouseenter', () => { targetScale = 1; });
+
+    document.addEventListener('mouseover', e => {
+      const interactive = e.target.closest('button, a, input, select, .watchlist-row, .tab, .window-btn');
+      cursorRing.classList.toggle('expanded', !!interactive);
+    });
+
+    const tick = () => {
+      scale += (targetScale - scale) * 0.18;
+      const ringScale = cursorRing.classList.contains('expanded') ? 1.5 * scale : scale;
+      cursorRing.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0) translate(-50%,-50%) scale(${ringScale})`;
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
+})();
+</script>
+</body>
+</html>
