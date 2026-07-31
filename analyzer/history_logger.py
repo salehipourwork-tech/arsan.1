@@ -25,7 +25,7 @@ import json
 import os
 from datetime import datetime, timedelta
 
-HISTORY_PATH = os.path.join(os.path.dirname(file), "..", "data", "history.json")
+HISTORY_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "history.json")
 MAX_HISTORY_DAYS = 120  # چند روز تاریخچه نگه داشته بشه قبل از پاک‌سازی خودکار
 
 
