@@ -58,6 +58,43 @@ regime_weights.apply_regime_multipliers ضریب خالی برمی‌گردون�
 ضرایب ۱.۰ می‌مونن — دقیقاً هم‌ارز رفتار نسخه‌های قبلی، بدون هیچ تغییری در
 نتیجه‌ی نهایی. خروجی make_decision هم یک فیلد جدید "market_regime" (همون
 رشته‌ی ورودی) داره تا در history.json/optimize_weights.py قابل ردیابی باشه.
+
+--- نسخه ۶ (موتور رد صلاحیت سیگنال) ---
+یافته‌ی بک‌تست: دقت زیر ۴۰٪ (بدتر از تصادفی) بود و بیشترین سیگنال‌های غلط
+دقیقاً وقتی صادر می‌شدن که شاخص‌های بازگشتی (RSI/بولینگر/استوکاستیک RSI)
+خلاف جهت روند غالب سیگنال می‌دادن — یعنی امتیاز وزن‌دار به‌تنهایی کافی نبود؛
+باید بعد از تعیین تصمیم اولیه (buy/sell)، یه لایه‌ی جداگانه چک کنه که آیا
+دلایل مشخصی برای «بی‌اعتبار» دونستن همین سیگنال وجود داره یا نه.
+
+_disqualification_checks سه دلیل مستقل رو می‌سنجه و امتیاز جمع می‌زنه:
+    ۱) وتوی روند غالب (۲ امتیاز) — قوی‌ترین دلیل، به‌تنهایی کافیه
+    ۲) شتاب اخیر مخالف (۱ امتیاز) — از indicators["recent_momentum_pct"]
+       (تغییر خام قیمت ۳ روز اخیر، مستقل از EMA، دقیقاً همون فیلدی که گیت
+       برگشت روند بالا هم استفاده می‌کنه)
+    ۳) نزدیکی به سطح حمایت/مقاومت مخالف (۱ امتیاز)
+
+فقط وقتی مجموع به DISQUALIFICATION_THRESHOLD=2 برسه، سیگنال قطعی (buy/sell)
+به "uncertain" تبدیل می‌شه. عمداً یه فاکتور تنها (۱ امتیاز) هرگز کافی نیست —
+نسخه‌ی تک‌فاکتوره قبلی خیلی سخت‌گیر بود و بخش زیادی از سیگنال‌ها رو بی‌دلیل
+فیلتر می‌کرد؛ این نسخه فقط وقتی رد می‌کنه که حداقل دو دلیل مستقل هم‌زمان
+علیه سیگنال باشن (یا یه دلیل خیلی قوی مثل وتوی روند).
+
+جایگاه در جریان تصمیم: این چک درست بعد از تعیین decision="buy"/"sell" و
+قبل از گیت برگشت روند اخیر (momentum_reversal_gate) موجود اجرا می‌شه — نه
+جایگزینش، بلکه یه لایه‌ی اضافه‌ی زودتر. اگه رد صلاحیت نشه، گیت قدیمی همچنان
+سر جای خودش به‌عنوان یه خط دفاعی مستقل باقی می‌مونه (بدون هیچ تغییری).
+
+سوییچ روشن/خاموش: پارامتر جدید apply_disqualification_engine (پیش‌فرض True).
+دقیقاً هم‌الگوی apply_momentum_gate — سیستم زنده و backtest_lab.py هیچ‌کدوم
+این آرگومان رو صدا نمی‌زنن، پس پیش‌فرض True براشون اعمال می‌شه و رفتار زنده
+بدون تغییر می‌مونه؛ فقط ابزارهای تشخیصی/بک‌تست می‌تونن دستی False بدن.
+weights.json، رژیم بازار، و وزن‌دهی پویا کاملاً دست‌نخورده می‌مونن — این فقط
+یه لایه‌ی رد صلاحیت بعد از تصمیم اولیه‌ست، نه تغییری در امتیازدهی.
+
+خروجی make_decision دو فیلد جدید داره: "disqualification_triggered" (bool)
+و "disqualification_score" (عدد؛ همیشه گزارش می‌شه، حتی وقتی رد نشده، برای
+شفافیت کامل — مگر در مسیرهایی که اصلاً به این چک نمی‌رسن، مثل gate روند یا
+عدم توافق شاخص‌ها، که در اون‌ها 0.0/False ثابت می‌مونه چون چک اجرا نشده).
 """
 
 import json
@@ -97,6 +134,13 @@ DEFAULT_BTC_ALIGNMENT_WEIGHT = 0.8
 # که به‌جای خرید/فروش قطعی، «صبر» بدیم. عدد اولیه‌ی معقول است، نه علمی‌کالیبره‌شده؛
 # بعد از جمع‌شدن داده‌ی زنده‌ی بیشتر قابل تنظیم دقیق‌تره.
 MOMENTUM_REVERSAL_THRESHOLD = 1.0
+
+# ---------------- موتور رد صلاحیت سیگنال (نسخه ۶) ----------------
+# جزئیات کامل منطق در docstring بالای فایل توضیح داده شده.
+DISQUALIFICATION_THRESHOLD = 2
+TREND_VETO_MIN_ABS_SCORE = 1.0
+RECENT_MOMENTUM_VETO_THRESHOLD_PCT = 1.0
+SUPPORT_RESISTANCE_VETO_MIN_ABS_SCORE = 1.6
 
 _WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), "weights.json")
 
@@ -217,8 +261,60 @@ def _confidence_multiplier(trend_strength, min_trend_strength):
     return 0.3 + 0.7 * (trend_strength - min_trend_strength) / span
 
 
+def _disqualification_checks(decision, indicators, scored):
+    """
+    موتور رد صلاحیت سیگنال (نسخه ۶). فقط برای decision در ("buy","sell") معنا
+    داره؛ فراخوان باید خودش این شرط رو قبل از صدا زدن چک کرده باشه.
+
+    خروجی: (dq_score: float, dq_reasons: list[str])
+    هر دلیل مستقل امتیاز خودش رو اضافه می‌کنه؛ تصمیم نهایی (رد صلاحیت یا نه)
+    توسط خود make_decision و مقایسه‌ی dq_score با DISQUALIFICATION_THRESHOLD
+    گرفته می‌شه، نه اینجا — این تابع فقط شواهد رو جمع‌آوری می‌کنه.
+    """
+    signal_sign = 1 if decision == "buy" else -1
+    dq_score = 0.0
+    dq_reasons = []
+
+    # ۱) وتوی روند غالب — قوی‌ترین دلیل، به‌تنهایی کافیه (۲ امتیاز)
+    trend_score = scored.get("trend", 0.0)
+    if trend_score != 0 and (1 if trend_score > 0 else -1) != signal_sign \
+            and abs(trend_score) >= TREND_VETO_MIN_ABS_SCORE:
+        dq_score += 2
+        direction_fa = "صعودی" if decision == "buy" else "نزولی"
+        dq_reasons.append(
+            f"روند غالب (EMA۲۰/۵۰) خلاف جهت سیگنال {direction_fa} است — امتیاز فاکتور روند "
+            f"{trend_score:+.1f} (وتوی قوی، به‌تنهایی کافی برای رد سیگنال)."
+        )
+
+    # ۲) شتاب اخیر مخالف — مستقل از EMA، پس تاخیر نداره (۱ امتیاز)
+    recent_momentum_pct = indicators.get("recent_momentum_pct", 0.0)
+    momentum_opposes = (
+        (signal_sign > 0 and recent_momentum_pct <= -RECENT_MOMENTUM_VETO_THRESHOLD_PCT) or
+        (signal_sign < 0 and recent_momentum_pct >= RECENT_MOMENTUM_VETO_THRESHOLD_PCT)
+    )
+    if momentum_opposes:
+        dq_score += 1
+        dq_reasons.append(
+            f"قیمت در ۳ روز اخیر {abs(recent_momentum_pct):.1f}٪ خلاف جهت سیگنال حرکت کرده "
+            "(این عدد مستقیم از قیمت خام محاسبه شده، نه از EMA، پس تاخیر ندارد)."
+        )
+
+    # ۳) نزدیکی به سطح حمایت/مقاومت مخالف (۱ امتیاز)
+    sr_score = scored.get("support_resistance", 0.0)
+    if sr_score != 0 and (1 if sr_score > 0 else -1) != signal_sign \
+            and abs(sr_score) >= SUPPORT_RESISTANCE_VETO_MIN_ABS_SCORE:
+        dq_score += 1
+        level_fa = "مقاومت" if decision == "buy" else "حمایت"
+        dq_reasons.append(
+            f"قیمت به سطح {level_fa} ۳۰ روز اخیر خیلی نزدیک است — امتیاز فاکتور حمایت/مقاومت "
+            f"{sr_score:+.1f}."
+        )
+
+    return dq_score, dq_reasons
+
+
 def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_profile="balanced",
-                   apply_momentum_gate=True, market_regime=None):
+                   apply_momentum_gate=True, market_regime=None, apply_disqualification_engine=True):
     """
     indicators: خروجی indicators.calculate_all_indicators
     news_sentiment: -۱ تا +۱ (پیش‌فرض خنثی)
@@ -233,10 +329,14 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
         "range"، "volatile"، ...). پیش‌فرض None یعنی وزن‌دهی پویا غیرفعاله و
         فقط وزن پایه‌ی weights.json استفاده می‌شه (سازگار با نسخه‌های قبلی و
         با کدهایی مثل backtest_lab.py که هنوز این آرگومان رو پاس نمی‌دن).
+    apply_disqualification_engine: پیش‌فرض True (رفتار زنده). فقط ابزارهای
+        بک‌تست/تشخیصی که می‌خوان اثر خالص این لایه رو جدا بسنجن می‌تونن False
+        بدن؛ سیستم زنده و backtest_lab.py این آرگومان رو صدا نمی‌زنن، پس
+        پیش‌فرض True براشون اعمال می‌شه.
 
-    خروجی مثل نسخه ۳ + فیلد "risk_profile" (نسخه ۴) + فیلد جدید "market_regime"
-    (نسخه ۵) برای شفافیت این‌که این تصمیم با کدوم پروفایل و کدوم رژیم بازار
-    محاسبه شده.
+    خروجی مثل نسخه ۳ + فیلد "risk_profile" (نسخه ۴) + فیلد "market_regime"
+    (نسخه ۵) + دو فیلد جدید "disqualification_triggered" و
+    "disqualification_score" (نسخه ۶، جزئیات در docstring بالای فایل).
     """
     profile = RISK_PROFILES.get(risk_profile, RISK_PROFILES["balanced"])
     base_weights = _load_weights()
@@ -258,6 +358,8 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
             "momentum_gate_triggered": False,
             "risk_profile": risk_profile,
             "market_regime": market_regime,
+            "disqualification_triggered": False,
+            "disqualification_score": 0.0,
             "disclaimer": _disclaimer(),
         }
 
@@ -323,6 +425,8 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
             "momentum_gate_triggered": False,
             "risk_profile": risk_profile,
             "market_regime": market_regime,
+            "disqualification_triggered": False,
+            "disqualification_score": 0.0,
             "disclaimer": _disclaimer(),
         }
 
@@ -332,6 +436,31 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
         decision = "sell"
     else:
         decision = "hold"
+
+    # --- موتور رد صلاحیت سیگنال (نسخه ۶) ---
+    # فقط برای سیگنال قطعی (buy/sell) معنا داره؛ عمداً قبل از گیت برگشت روند
+    # اخیر (پایین‌تر) اجرا می‌شه تا بتونه ترکیب چند دلیل ضعیف‌تر رو هم ببینه —
+    # چون اون گیت به‌محض برخورد با شتاب مخالف ≥۱٪ فوراً "uncertain" برمی‌گردونه
+    # و دیگه اجازه نمی‌ده این لایه به دلایل ترکیبی‌اش برسه.
+    dq_score, dq_reasons = (0.0, [])
+    if decision in ("buy", "sell"):
+        dq_score, dq_reasons = _disqualification_checks(decision, indicators, scored)
+        if apply_disqualification_engine and dq_score >= DISQUALIFICATION_THRESHOLD:
+            return {
+                "decision": "uncertain",
+                "score": final_score_pct,
+                "score_percent": _to_percent(final_score_pct),
+                "reasons": dq_reasons,
+                "factors": scored,
+                "agreement_ratio": round(agreement_ratio, 2),
+                "trend_gate_triggered": False,
+                "momentum_gate_triggered": False,
+                "risk_profile": risk_profile,
+                "market_regime": market_regime,
+                "disqualification_triggered": True,
+                "disqualification_score": dq_score,
+                "disclaimer": _disclaimer(),
+            }
 
     # --- گیت برگشت روند اخیر ---
     # سیگنال قطعیه (buy/sell)، ولی قیمت در چند روز اخیر خلاف همون جهت حرکت کرده؟
@@ -360,6 +489,8 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
                 "momentum_gate_triggered": True,
                 "risk_profile": risk_profile,
                 "market_regime": market_regime,
+                "disqualification_triggered": False,
+                "disqualification_score": dq_score,
                 "disclaimer": _disclaimer(),
             }
 
@@ -377,6 +508,8 @@ def make_decision(indicators, news_sentiment=0.0, btc_trend_diff_pct=None, risk_
         "momentum_gate_triggered": False,
         "risk_profile": risk_profile,
         "market_regime": market_regime,
+        "disqualification_triggered": False,
+        "disqualification_score": dq_score,
         "disclaimer": _disclaimer(),
     }
 
