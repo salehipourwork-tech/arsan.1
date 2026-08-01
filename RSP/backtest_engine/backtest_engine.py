@@ -48,6 +48,7 @@ class BacktestTradeLog:
     pnl_pct: float
     bars_held: int
     exit_reason: str
+    evidence_snapshot: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -105,12 +106,28 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
                 trade_result = simulate_trade(decision.action, risk_plan.entry, risk_plan.stop_loss,
                                                risk_plan.take_profit, future_bars)
                 if trade_result.outcome in ("WIN", "LOSS"):
+                    evidence_snapshot = {
+                        "net_score": fusion.net_score,
+                        "bullish_evidence": fusion.bullish_evidence,
+                        "bearish_evidence": fusion.bearish_evidence,
+                        "conflicting_evidence": fusion.conflicting_evidence,
+                        "mtf_summary": mtf.summary,
+                        "mtf_aligned": mtf.aligned,
+                        "structure_pattern": regime.structure.pattern,
+                        "structure_event": regime.structure.last_structure_event,
+                        "divergences": confluence.divergences,
+                        "momentum_state": confluence.momentum_state,
+                        "atr_pct": regime.perception.atr_pct,
+                        "selected_strategy": selection.selected.name if selection.selected else None,
+                        "data_quality_score": quality.quality_score,
+                    }
                     summary.trades.append(BacktestTradeLog(
                         timestamp=str(current_ts), action=decision.action, regime=regime.regime,
                         confidence=confidence.confidence, trade_quality=tq.score,
                         risk_reward=risk_plan.risk_reward, outcome=trade_result.outcome,
                         pnl_pct=trade_result.pnl_pct, bars_held=trade_result.bars_held,
                         exit_reason=trade_result.exit_reason,
+                        evidence_snapshot=evidence_snapshot,
                     ))
                     equity_curve.append(equity_curve[-1] + trade_result.pnl_pct)
                     i += trade_result.bars_held if step_after_trade and trade_result.bars_held > 0 else 1
