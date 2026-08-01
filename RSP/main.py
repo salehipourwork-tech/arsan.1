@@ -38,8 +38,8 @@ from RSP.experiment_manager.experiment_manager import log_experiment
 from RSP.config import settings
 
 
-def analyze_coin(coin_id: str):
-    universe = build_data_universe(coin_id)
+def analyze_coin(coin_id: str, lookback_days: float = settings.DEFAULT_LOOKBACK_DAYS):
+    universe = build_data_universe(coin_id, lookback_days=lookback_days)
     quality_reports = check_all_timeframes(universe.bars)
 
     base_tf = "15M"
@@ -90,6 +90,9 @@ def analyze_coin(coin_id: str):
 def main():
     parser = argparse.ArgumentParser(description="RSP - Research & Strategy Playground")
     parser.add_argument("--coin", default="bitcoin")
+    parser.add_argument("--days", type=float, default=settings.DEFAULT_LOOKBACK_DAYS,
+                         help=f"تعداد روز تاریخچه‌ی درخواستی (پیش‌فرض {settings.DEFAULT_LOOKBACK_DAYS}). "
+                              f"مثال: --days 120")
     parser.add_argument("--backtest", action="store_true", help="اجرای بک‌تست به‌جای تحلیل لحظه‌ای")
     parser.add_argument("--walkforward", action="store_true", help="اجرای Walk Forward + Anti-Overfitting Check")
     parser.add_argument("--stress", action="store_true", help="اجرای Stress Test (رژیم واقعی + سناریوهای مصنوعی)")
@@ -111,7 +114,7 @@ def main():
     if args.walkforward:
         from RSP.walk_forward.walk_forward import run_walk_forward
         from RSP.anti_overfitting.overfitting_lab import run_overfitting_check
-        universe = build_data_universe(args.coin)
+        universe = build_data_universe(args.coin, lookback_days=args.days)
         wf = run_walk_forward(universe.bars, base_tf="15M")
         of = run_overfitting_check(wf)
         print(json.dumps({
@@ -123,7 +126,7 @@ def main():
 
     if args.stress:
         from RSP.robustness.stress_test import performance_by_market_type, run_synthetic_scenarios
-        universe = build_data_universe(args.coin)
+        universe = build_data_universe(args.coin, lookback_days=args.days)
         summary = run_backtest(universe.bars, base_tf="15M")
         st = performance_by_market_type(summary)
         print("--- عملکرد واقعی به‌تفکیک رژیم ---")
@@ -137,7 +140,7 @@ def main():
 
     if args.montecarlo:
         from RSP.robustness.monte_carlo import randomize_trade_sequence, run_perturbation_suite
-        universe = build_data_universe(args.coin)
+        universe = build_data_universe(args.coin, lookback_days=args.days)
         summary = run_backtest(universe.bars, base_tf="15M")
         seqr = randomize_trade_sequence(summary)
         print("Sequence Randomization:", seqr.notes)
@@ -149,7 +152,7 @@ def main():
 
     if args.versions:
         from RSP.strategy_lab.versioning import compare_versions, ENGINE_VERSIONS
-        universe = build_data_universe(args.coin)
+        universe = build_data_universe(args.coin, lookback_days=args.days)
         vcmp = compare_versions(list(ENGINE_VERSIONS.keys()), universe.bars, base_tf="15M")
         for vid, res in vcmp.items():
             print(f"{vid} ({res.description}): trades={res.summary.total_trades} "
@@ -158,16 +161,29 @@ def main():
 
     if args.challenge:
         from RSP.strategy_lab.challenger import run_challenge
-        universe = build_data_universe(args.coin)
+        universe = build_data_universe(args.coin, lookback_days=args.days)
         result = run_challenge(args.challenge[0], args.challenge[1], universe.bars)
         print(json.dumps(result.__dict__, ensure_ascii=False, indent=2))
         return
 
     if args.backtest:
-        universe = build_data_universe(args.coin)
+        universe = build_data_universe(args.coin, lookback_days=args.days)
+        print(f"[پوشش داده] بازه‌ی درخواستی: {args.days} روز")
+        for tf in ["15M", "1H", "4H", "1D"]:
+            req = universe.requested_candles.get(tf, "?")
+            got = universe.actual_candles.get(tf, 0)
+            src = universe.source_used.get(tf, "N/A")
+            recon = " (بازسازی‌شده)" if universe.is_reconstructed.get(tf) else ""
+            print(f"  {tf}: درخواست={req} کندل, دریافت={got} کندل, منبع={src}{recon}")
         summary = run_backtest(universe.bars, base_tf="15M")
         backtest_result = {
             "coin_id": args.coin,
+            "lookback_days": args.days,
+            "data_coverage": {tf: {"requested": universe.requested_candles.get(tf),
+                                    "actual": universe.actual_candles.get(tf),
+                                    "source": universe.source_used.get(tf),
+                                    "is_reconstructed": universe.is_reconstructed.get(tf)}
+                               for tf in ["15M", "1H", "4H", "1D"]},
             "total_trades": summary.total_trades,
             "win_rate": summary.win_rate,
             "net_return_pct": summary.net_return_pct,
@@ -177,12 +193,12 @@ def main():
         }
         print(json.dumps(backtest_result, ensure_ascii=False, indent=2))
         _maybe_save(backtest_result)
-        log_experiment(strategy="mixed_selector", parameters={"base_tf": "15M"},
+        log_experiment(strategy="mixed_selector", parameters={"base_tf": "15M", "lookback_days": args.days},
                         dataset=args.coin, timeframe="15M",
                         results=summary.__dict__, changes="اجرای اولیه از main.py --backtest")
         return
 
-    result = analyze_coin(args.coin)
+    result = analyze_coin(args.coin, lookback_days=args.days)
     print(result["explainability_text"])
     print("\n--- DATA UNIVERSE ---")
     print(json.dumps(result["data_universe"], ensure_ascii=False, indent=2))
