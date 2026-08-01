@@ -91,12 +91,82 @@ def main():
     parser = argparse.ArgumentParser(description="RSP - Research & Strategy Playground")
     parser.add_argument("--coin", default="bitcoin")
     parser.add_argument("--backtest", action="store_true", help="اجرای بک‌تست به‌جای تحلیل لحظه‌ای")
+    parser.add_argument("--walkforward", action="store_true", help="اجرای Walk Forward + Anti-Overfitting Check")
+    parser.add_argument("--stress", action="store_true", help="اجرای Stress Test (رژیم واقعی + سناریوهای مصنوعی)")
+    parser.add_argument("--montecarlo", action="store_true", help="اجرای Trade Sequence Randomization + Perturbation")
+    parser.add_argument("--versions", action="store_true", help="مقایسه‌ی نسخه‌های V1/V2/V3")
+    parser.add_argument("--challenge", nargs=2, metavar=("CHAMPION", "CHALLENGER"),
+                         help="مثال: --challenge V1 V2")
+    parser.add_argument("--save", metavar="PATH",
+                         help="ذخیره‌ی خروجی به‌صورت JSON روی دیسک (برای بارگذاری در RSP Dashboard). "
+                              "مثال: --save rsp_report.json")
     args = parser.parse_args()
+
+    def _maybe_save(data: dict):
+        if args.save:
+            with open(args.save, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"\n[ذخیره شد] {args.save} — این فایل را در RSP Dashboard بارگذاری کن.")
+
+    if args.walkforward:
+        from RSP.walk_forward.walk_forward import run_walk_forward
+        from RSP.anti_overfitting.overfitting_lab import run_overfitting_check
+        universe = build_data_universe(args.coin)
+        wf = run_walk_forward(universe.bars, base_tf="15M")
+        of = run_overfitting_check(wf)
+        print(json.dumps({
+            "windows": len(wf.windows), "aggregate_test_win_rate": wf.aggregate_test_win_rate,
+            "aggregate_test_net_return": wf.aggregate_test_net_return,
+            "overfitting_status": of.overall_status, "overfitting_notes": of.notes,
+        }, ensure_ascii=False, indent=2))
+        return
+
+    if args.stress:
+        from RSP.robustness.stress_test import performance_by_market_type, run_synthetic_scenarios
+        universe = build_data_universe(args.coin)
+        summary = run_backtest(universe.bars, base_tf="15M")
+        st = performance_by_market_type(summary)
+        print("--- عملکرد واقعی به‌تفکیک رژیم ---")
+        print(json.dumps([m.__dict__ for m in st.by_market_type], ensure_ascii=False, indent=2))
+        print(st.notes)
+        print("\n--- سناریوهای مصنوعی مهندسی (نه ارزیابی سود واقعی) ---")
+        synth = run_synthetic_scenarios()
+        for k, s in synth.items():
+            print(f"  {k}: trades={s.total_trades} win_rate={s.win_rate} net_return={s.net_return_pct}")
+        return
+
+    if args.montecarlo:
+        from RSP.robustness.monte_carlo import randomize_trade_sequence, run_perturbation_suite
+        universe = build_data_universe(args.coin)
+        summary = run_backtest(universe.bars, base_tf="15M")
+        seqr = randomize_trade_sequence(summary)
+        print("Sequence Randomization:", seqr.notes)
+        pert = run_perturbation_suite(universe.bars, base_tf="15M")
+        print("Perturbation fragile:", pert.fragile, pert.notes)
+        for r in pert.results:
+            print(f"  {r.label}: trades={r.summary.total_trades} net_return={r.summary.net_return_pct}")
+        return
+
+    if args.versions:
+        from RSP.strategy_lab.versioning import compare_versions, ENGINE_VERSIONS
+        universe = build_data_universe(args.coin)
+        vcmp = compare_versions(list(ENGINE_VERSIONS.keys()), universe.bars, base_tf="15M")
+        for vid, res in vcmp.items():
+            print(f"{vid} ({res.description}): trades={res.summary.total_trades} "
+                  f"win_rate={res.summary.win_rate} net_return={res.summary.net_return_pct}")
+        return
+
+    if args.challenge:
+        from RSP.strategy_lab.challenger import run_challenge
+        universe = build_data_universe(args.coin)
+        result = run_challenge(args.challenge[0], args.challenge[1], universe.bars)
+        print(json.dumps(result.__dict__, ensure_ascii=False, indent=2))
+        return
 
     if args.backtest:
         universe = build_data_universe(args.coin)
         summary = run_backtest(universe.bars, base_tf="15M")
-        print(json.dumps({
+        backtest_result = {
             "coin_id": args.coin,
             "total_trades": summary.total_trades,
             "win_rate": summary.win_rate,
@@ -104,7 +174,9 @@ def main():
             "profit_factor": summary.profit_factor,
             "max_drawdown_pct": summary.max_drawdown_pct,
             "average_trade_pct": summary.average_trade_pct,
-        }, ensure_ascii=False, indent=2))
+        }
+        print(json.dumps(backtest_result, ensure_ascii=False, indent=2))
+        _maybe_save(backtest_result)
         log_experiment(strategy="mixed_selector", parameters={"base_tf": "15M"},
                         dataset=args.coin, timeframe="15M",
                         results=summary.__dict__, changes="اجرای اولیه از main.py --backtest")
@@ -114,6 +186,7 @@ def main():
     print(result["explainability_text"])
     print("\n--- DATA UNIVERSE ---")
     print(json.dumps(result["data_universe"], ensure_ascii=False, indent=2))
+    _maybe_save(result)
 
 
 if __name__ == "__main__":
