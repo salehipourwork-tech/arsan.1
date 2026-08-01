@@ -176,3 +176,28 @@ CONSERVATIVE_SL_TP_SAME_CANDLE = "SL_FIRST"  # اگر SL و TP در یک کند�
 # ---------------------------------------------------------------------------
 LIVE_TRADING_ENABLED = False   # همیشه False. این موتور هرگز نباید سفارش واقعی بفرستد.
 REAL_TRADING_API_KEYS_ALLOWED = False
+
+
+# ---------------------------------------------------------------------------
+# ابزار کمکی برای Versioned Strategy Lab (Phase 27) و Robustness (Phase 23):
+# override موقت چند تنظیم، با بازگشت تضمینی به مقدار اصلی بعد از پایان بلوک.
+# هر تغییری که با این ابزار انجام شود، فقط در همان بلوک اثر دارد - هیچ‌وقت
+# تنظیمات پیش‌فرض پروژه را دائمی تغییر نمی‌دهد (طبق قانون Phase 13:
+# "هر تغییر وزن باید ثبت و قابل بازگشت باشد").
+# ---------------------------------------------------------------------------
+from contextlib import contextmanager as _contextmanager
+
+
+@_contextmanager
+def temporary_override(overrides: dict):
+    import sys
+    module = sys.modules[__name__]
+    original = {}
+    for key, value in overrides.items():
+        original[key] = getattr(module, key)
+        setattr(module, key, value)
+    try:
+        yield
+    finally:
+        for key, value in original.items():
+            setattr(module, key, value)
