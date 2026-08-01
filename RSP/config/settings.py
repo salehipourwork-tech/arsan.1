@@ -19,6 +19,16 @@ from typing import Dict
 # ---------------------------------------------------------------------------
 TIMEFRAMES = ["1D", "4H", "1H", "15M"]
 
+# چند کندل در روز برای هر تایم‌فریم - برای تبدیل «--days N» به تعداد کندل لازم
+BARS_PER_DAY = {"15M": 96, "1H": 24, "4H": 6, "1D": 1}
+DEFAULT_HISTORY_LIMIT = 300   # رفتار قبلی (~3.1 روز برای 15M) وقتی --days داده نشود
+MAX_HISTORY_DAYS = 120        # سقف امنیتی تا از تعداد بی‌رویه‌ی API call جلوگیری شود
+
+def bars_needed_for_days(days: int) -> dict:
+    """تبدیل تعداد روز درخواستی به تعداد کندل لازم برای هر تایم‌فریم."""
+    days = max(1, min(days, MAX_HISTORY_DAYS))
+    return {tf: days * BARS_PER_DAY[tf] for tf in TIMEFRAMES}
+
 TIMEFRAME_ROLE = {
     "1D": "context",   # تایم‌فریم بالا -> زمینه‌ی کلی بازار
     "4H": "trend",     # تایم‌فریم میانی -> جهت روند
@@ -33,6 +43,27 @@ TIMEFRAME_SOURCE = {
     "1H": "coingecko_market_chart_1d_resampled",
     "15M": "coingecko_market_chart_1d_resampled",
 }
+
+
+TIMEFRAME_MINUTES = {"15M": 15, "1H": 60, "4H": 240, "1D": 1440}
+
+DEFAULT_LOOKBACK_DAYS = 90   # پیش‌فرض بازه‌ی تاریخی درخواست داده (قابل تغییر با main.py --days)
+
+# سقف تعداد کندلی که در هر گام از backtest_engine برای محاسبه‌ی اندیکاتورها
+# به موتور داده می‌شود (Rolling Window به‌جای کل تاریخچه‌ی تا آن لحظه).
+# ۴۰۰ کندل برای EMA50/ADX14/ATR14/RSI14/Bollinger20/StochRSI(14,14) با
+# حاشیه‌ی اطمینان زیاد کافی است (این اندیکاتورها به‌صورت نمایی/غلتان‌اند و
+# بعد از چند برابر دوره‌شان اثر داده‌های خیلی قدیمی عملاً صفر می‌شود).
+# بدون این محدودیت، بک‌تست روی چند هزار کندل (مثلاً ۹۰ روز کندل ۱۵ دقیقه‌ای
+# = ۸۶۴۰ کندل) به‌خاطر O(n^2) بودن محاسبه‌ی هر گام، چند دقیقه طول می‌کشد؛
+# با این سقف، هزینه‌ی هر گام ثابت می‌شود و کل بک‌تست تقریباً خطی (O(n)) اجرا
+# می‌شود - بدون افت محسوس در دقت اندیکاتورها.
+MAX_WARMUP_BARS = 400
+
+
+def candles_needed(timeframe: str, days: float) -> int:
+    minutes = TIMEFRAME_MINUTES[timeframe]
+    return max(1, int((days * 24 * 60) / minutes))
 
 
 # ---------------------------------------------------------------------------
