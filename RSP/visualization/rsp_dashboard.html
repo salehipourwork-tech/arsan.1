@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSP — Research &amp; Strategy Playground</title>
+<style>
+  :root{
+    --bg:#0b0e0d; --panel:#121815; --panel2:#161d19; --line:#243128;
+    --ink:#d9e4dd; --ink-dim:#7d9186; --amber:#e8b34a; --green:#5fd394; --red:#e8656a;
+    --mono:'JetBrains Mono','Courier New',monospace;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);margin:0;padding:24px;line-height:1.5}
+  h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin:0 0 4px}
+  .sub{color:var(--ink-dim);font-size:12px;margin-bottom:22px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:2px;padding:16px}
+  .panel h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 12px;
+             border-bottom:1px solid var(--line);padding-bottom:8px}
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px dashed #1c2521}
+  .kv span:first-child{color:var(--ink-dim)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:11px;letter-spacing:.06em}
+  .b-buy{background:rgba(95,211,148,.15);color:var(--green);border:1px solid var(--green)}
+  .b-sell{background:rgba(232,101,106,.15);color:var(--red);border:1px solid var(--red)}
+  .b-wait{background:rgba(232,179,74,.15);color:var(--amber);border:1px solid var(--amber)}
+  .list{list-style:none;margin:0;padding:0;font-size:12.5px;color:var(--ink)}
+  .list li{padding:4px 0;border-bottom:1px dashed #1c2521}
+  .list li:before{content:"› ";color:var(--ink-dim)}
+  .missing{color:var(--ink-dim);font-style:italic}
+  .footer{margin-top:20px;font-size:11px;color:var(--ink-dim)}
+  #loadBtn{background:var(--panel2);color:var(--amber);border:1px solid var(--amber);padding:8px 14px;
+            font-family:var(--mono);cursor:pointer;font-size:12px;letter-spacing:.06em}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+
+<h1>RSP — Research &amp; Strategy Playground</h1>
+<div class="sub">آزمایشگاه مستقل تحقیق و بک‌تست موتور آرسان — این داشبورد کاملاً جدا از داشبورد اصلی آرسان است و روی آن اثری ندارد.</div>
+
+<label id="loadBtn" for="fileInput">↳ بارگذاری rsp_report.json</label>
+<input type="file" id="fileInput" accept="application/json">
+
+<div id="empty" style="margin-top:20px;color:var(--ink-dim);font-size:13px">
+  هنوز گزارشی بارگذاری نشده. خروجی <code>python -m RSP.main --coin bitcoin</code> را به فرمت JSON ذخیره کن و اینجا بارگذاری کن.
+</div>
+
+<div id="content" style="display:none">
+  <div class="grid" style="margin-top:18px">
+
+    <div class="panel" id="p-decision">
+      <h2>Decision</h2>
+      <div id="decisionBadge"></div>
+      <div id="decisionWhy" class="list" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Market Regime</h2>
+      <div class="kv"><span>Regime</span><span id="regimeVal">—</span></div>
+      <div class="kv"><span>Selected Strategy</span><span id="strategyVal">—</span></div>
+      <div class="kv"><span>Confidence</span><span id="confVal">—</span></div>
+      <div class="kv"><span>Trade Quality</span><span id="tqVal">—</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Risk / Entry</h2>
+      <div class="kv"><span>Entry</span><span id="entryVal">—</span></div>
+      <div class="kv"><span>Stop Loss</span><span id="slVal">—</span></div>
+      <div class="kv"><span>Take Profit</span><span id="tpVal">—</span></div>
+      <div class="kv"><span>Risk/Reward</span><span id="rrVal">—</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Data Universe</h2>
+      <div id="dataSources" class="list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Missing Confirmation / Invalidation</h2>
+      <div id="missingList" class="list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Backtest Performance</h2>
+      <div id="backtestBlock" class="list">
+        <div class="missing">فقط وقتی نمایش داده می‌شود که فایل JSON شامل خروجی --backtest باشد.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Engine Comparison (ARSAN vs RSP)</h2>
+      <div class="missing">Phase 29 — پیاده‌سازی پایه دارد اما اجرای خودکار backtest_lab آرسان به‌صورت دستی/adapter نیاز است (مستند در comparison/arsan_vs_rsp.py).</div>
+    </div>
+
+    <div class="panel">
+      <h2>Failure Analysis / Self-Evaluation</h2>
+      <div class="missing">NOT IMPLEMENTED در این نسخه — طبق گزارش صادقانه‌ی وضعیت پروژه (README.md).</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">RSP Dashboard v1 · مستقل از index.html و dashboard.html آرسان اصلی · هیچ معامله‌ی واقعی انجام نمی‌دهد</div>
+
+<script>
+document.getElementById('fileInput').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    try{
+      const data = JSON.parse(evt.target.result);
+      render(data);
+    }catch(err){
+      alert('JSON نامعتبر: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+
+function badgeClass(action){
+  if(action === 'BUY') return 'b-buy';
+  if(action === 'SELL') return 'b-sell';
+  return 'b-wait';
+}
+
+function render(data){
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+
+  const text = data.explainability_text || '';
+  const actionMatch = text.match(/DECISION:\s*(\w+)/);
+  const action = actionMatch ? actionMatch[1] : 'UNKNOWN';
+
+  document.getElementById('decisionBadge').innerHTML =
+    `<span class="badge ${badgeClass(action)}">${action}</span>`;
+
+  const reasonLines = (text.match(/REASON:\n([\s\S]*?)(\n\n|$)/) || [,''])[1]
+    .split('\n').filter(l => l.trim().startsWith('-'));
+  document.getElementById('decisionWhy').innerHTML =
+    reasonLines.map(l => `<li>${l.replace(/^-\s*/, '')}</li>`).join('') || '<li class="missing">—</li>';
+
+  const regime = (text.match(/MARKET REGIME:\s*(.+)/) || [,'—'])[1];
+  const strategy = (text.match(/SELECTED STRATEGY:\s*(.+)/) || [,'—'])[1];
+  const conf = (text.match(/CONFIDENCE:\s*(.+)/) || [,'—'])[1];
+  const tq = (text.match(/TRADE QUALITY:\s*(.+)/) || [,'—'])[1];
+  document.getElementById('regimeVal').textContent = regime;
+  document.getElementById('strategyVal').textContent = strategy;
+  document.getElementById('confVal').textContent = conf;
+  document.getElementById('tqVal').textContent = tq;
+
+  const entryLine = text.match(/ENTRY:\s*([\d.]+)\s+STOP LOSS:\s*([\d.]+)\s+TAKE PROFIT:\s*([\d.]+)\s+RISK\/REWARD:\s*([\d.]+)/);
+  if(entryLine){
+    document.getElementById('entryVal').textContent = entryLine[1];
+    document.getElementById('slVal').textContent = entryLine[2];
+    document.getElementById('tpVal').textContent = entryLine[3];
+    document.getElementById('rrVal').textContent = entryLine[4];
+  }
+
+  const du = data.data_universe || {};
+  const sources = du.source_used || {};
+  const recon = du.is_reconstructed || {};
+  document.getElementById('dataSources').innerHTML = Object.keys(sources).map(tf => {
+    const s = sources[tf] || 'N/A';
+    const r = recon[tf] ? ' (بازسازی‌شده)' : '';
+    return `<li>${tf}: ${s}${r}</li>`;
+  }).join('') || '<li class="missing">—</li>';
+
+  const missing = (text.match(/MISSING CONFIRMATION:\n([\s\S]*?)(\n\n|$)/) || [,''])[1];
+  const invalidation = (text.match(/INVALIDATION:\n([\s\S]*?)(\n\n|$)/) || [,''])[1];
+  const combined = (missing + '\n' + invalidation).split('\n').filter(l => l.trim().startsWith('-'));
+  document.getElementById('missingList').innerHTML =
+    combined.map(l => `<li>${l.replace(/^-\s*/, '')}</li>`).join('') || '<li class="missing">—</li>';
+
+  if(data.total_trades !== undefined){
+    document.getElementById('backtestBlock').innerHTML = `
+      <div class="kv"><span>Total Trades</span><span>${data.total_trades}</span></div>
+      <div class="kv"><span>Win Rate</span><span>${data.win_rate}%</span></div>
+      <div class="kv"><span>Net Return</span><span>${data.net_return_pct}%</span></div>
+      <div class="kv"><span>Profit Factor</span><span>${data.profit_factor}</span></div>
+      <div class="kv"><span>Max Drawdown</span><span>${data.max_drawdown_pct}%</span></div>
+      <div class="kv"><span>Avg Trade</span><span>${data.average_trade_pct}%</span></div>
+    `;
+  }
+}
+</script>
+</body>
+</html>
