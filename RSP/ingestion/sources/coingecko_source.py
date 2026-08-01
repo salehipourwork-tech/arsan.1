@@ -52,7 +52,12 @@ def fetch_ohlcv(coin_id: str, timeframe: str, limit: int = 300) -> SourceResult:
     if coin_id not in COINGECKO_SUPPORTED:
         return SourceResult(source_name="coingecko", ok=False, error="COIN_NOT_MAPPED")
 
-    raw = fetch_fine_and_coarse(coin_id)
+    # برای 4H/1D، تعداد روز لازم را از limit برآورد می‌کنیم (با کمی حاشیه‌ی اطمینان)
+    minutes_per_bar = {"15M": 15, "1H": 60, "4H": 240, "1D": 1440}.get(timeframe, 1440)
+    estimated_days = max(90, int((limit * minutes_per_bar / 1440) * 1.2) + 2)
+    estimated_days = min(estimated_days, 365)  # CoinGecko رایگان معمولاً بیش از این را محدود می‌کند
+
+    raw = fetch_fine_and_coarse(coin_id, coarse_days=estimated_days)
     if timeframe in ("15M", "1H"):
         source_df = _series_to_df(raw["fine"].get("prices", []), raw["fine"].get("volumes", []))
         err = raw["fine"].get("error")
