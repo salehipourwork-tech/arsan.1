@@ -3,6 +3,10 @@ RSP — ingestion/data_universe.py  (Phase 2: DATA UNIVERSE)
 
 هر تایم‌فریم از طریق multi_source_router با زنجیره‌ی fallback رایگان
 (Binance -> KuCoin -> Kraken -> Coinbase -> CoinGecko) گرفته می‌شود.
+تعداد کندل لازم برای هر تایم‌فریم از روی `lookback_days` محاسبه می‌شود
+(مثلاً ۹۰ روز از کندل ۱۵ دقیقه‌ای یعنی ۸۶۴۰ کندل) و هر منبع خودش این
+تعداد را با Pagination واقعی (چند درخواست پشت‌سرهم) تامین می‌کند.
+
 وضعیت در دسترس‌بودن هر نوع داده به‌صورت صریح گزارش می‌شود:
 DATA_AVAILABLE / DATA_MISSING / DATA_QUALITY_UNKNOWN، به‌همراه اینکه
 واقعاً از کدام منبع گرفته شده و آیا بازسازی‌شده بوده (source_used /
@@ -24,30 +28,42 @@ UNKNOWN = "DATA_QUALITY_UNKNOWN"
 @dataclass
 class DataUniverse:
     coin_id: str
+    lookback_days: float = settings.DEFAULT_LOOKBACK_DAYS
     bars: Dict[str, pd.DataFrame] = field(default_factory=dict)         # timeframe -> OHLCV DataFrame
     availability: Dict[str, str] = field(default_factory=dict)          # field_name -> status
     source_used: Dict[str, Optional[str]] = field(default_factory=dict) # timeframe -> نام منبع استفاده‌شده
     is_reconstructed: Dict[str, bool] = field(default_factory=dict)     # timeframe -> آیا بازسازی‌شده بود
     attempted_sources: Dict[str, list] = field(default_factory=dict)    # timeframe -> لاگ تلاش‌های fallback
+    requested_candles: Dict[str, int] = field(default_factory=dict)     # timeframe -> تعداد کندل درخواستی
+    actual_candles: Dict[str, int] = field(default_factory=dict)        # timeframe -> تعداد کندل واقعاً گرفته‌شده
 
 
-def build_data_universe(coin_id: str) -> DataUniverse:
-    universe = DataUniverse(coin_id=coin_id)
+def build_data_universe(coin_id: str, lookback_days: float = settings.DEFAULT_LOOKBACK_DAYS) -> DataUniverse:
+    universe = DataUniverse(coin_id=coin_id, lookback_days=lookback_days)
 
-    routed = fetch_all_timeframes(coin_id, settings.TIMEFRAMES, limit=300)
+    limits_per_tf = {tf: settings.candles_needed(tf, lookback_days) for tf in settings.TIMEFRAMES}
+    routed = fetch_all_timeframes(coin_id, settings.TIMEFRAMES, limits_per_tf=limits_per_tf)
 
     for tf, routed_result in routed.items():
         universe.bars[tf] = routed_result.df
         universe.source_used[tf] = routed_result.source_used
         universe.is_reconstructed[tf] = routed_result.is_reconstructed
         universe.attempted_sources[tf] = routed_result.attempted
+        universe.requested_candles[tf] = limits_per_tf[tf]
+        universe.actual_candles[tf] = len(routed_result.df)
 
         min_needed = settings.MIN_BARS_REQUIRED[tf]
+        coverage_ratio = (len(routed_result.df) / limits_per_tf[tf]) if limits_per_tf[tf] else 1.0
+
         if routed_result.df.empty:
             universe.availability[f"ohlcv_{tf}"] = MISSING
         elif len(routed_result.df) < min_needed:
             universe.availability[f"ohlcv_{tf}"] = UNKNOWN
         elif routed_result.is_reconstructed:
+            universe.availability[f"ohlcv_{tf}"] = UNKNOWN
+        elif coverage_ratio < 0.5:
+            # کمتر از نصف بازه‌ی درخواستی واقعاً گرفته شد (مثلاً صرافی تاریخچه‌ی
+            # کافی برای این نماد نداشت) - صادقانه به‌عنوان کیفیت نامطمئن علامت می‌زنیم
             universe.availability[f"ohlcv_{tf}"] = UNKNOWN
         else:
             universe.availability[f"ohlcv_{tf}"] = AVAILABLE
