@@ -64,10 +64,13 @@ class BacktestSummary:
     average_trade_pct: float = 0.0
 
 
-def _known_slice(df: pd.DataFrame, ts) -> pd.DataFrame:
+def _known_slice(df: pd.DataFrame, ts, max_bars: int = None) -> pd.DataFrame:
     if df is None or df.empty:
         return df
-    return df[df.index <= ts]
+    sliced = df[df.index <= ts]
+    if max_bars is not None and len(sliced) > max_bars:
+        sliced = sliced.iloc[-max_bars:]
+    return sliced
 
 
 def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
@@ -83,7 +86,7 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
 
     while i < n - 1:
         current_ts = base_df.index[i]
-        known = {tf: _known_slice(df, current_ts) for tf, df in bars_by_tf.items()}
+        known = {tf: _known_slice(df, current_ts, max_bars=settings.MAX_WARMUP_BARS) for tf, df in bars_by_tf.items()}
         known_base = known[base_tf]
 
         quality = check_quality(known_base, base_tf)
