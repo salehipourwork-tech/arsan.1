@@ -74,12 +74,17 @@ def fetch_raw_price_series(coin_id: str, days: int):
     }
 
 
-def fetch_fine_and_coarse(coin_id: str):
+def fetch_fine_and_coarse(coin_id: str, coarse_days: int = 90):
     """
     برای ساخت هر ۴ تایم‌فریم لازم است، دو تماس API انجام می‌شود:
-      fine   (days=1)  -> منبع برای 15M و 1H
-      coarse (days=90) -> منبع برای 4H و 1D
+      fine   (days=1)          -> منبع برای 15M و 1H (محدودیت CoinGecko رایگان:
+                                    فقط ۱ روز آخر با رزولوشن ۵ دقیقه‌ای در دسترس
+                                    است؛ این fallback نمی‌تواند لوک‌بک طولانی‌تر
+                                    برای این دو تایم‌فریم بدهد - چون آخرین خط دفاع
+                                    است و منابع صرافی واقعی همیشه اولویت دارند،
+                                    این محدودیت در عمل به‌ندرت به کاربر می‌رسد)
+      coarse (days=coarse_days) -> منبع برای 4H و 1D
     """
     fine = fetch_raw_price_series(coin_id, days=1)
-    coarse = fetch_raw_price_series(coin_id, days=90)
+    coarse = fetch_raw_price_series(coin_id, days=coarse_days)
     return {"fine": fine, "coarse": coarse}
