@@ -42,12 +42,12 @@ class ExplainabilityReport:
                 lines.append(f"  - {c}")
         if self.missing_confirmations:
             lines.append("")
-            lines.append("MISSING CONFIRMATION:")
+            lines.append("MISSING CONFIRMATIONS:")
             for m in self.missing_confirmations:
                 lines.append(f"  - {m}")
         if self.invalidation_conditions:
             lines.append("")
-            lines.append("INVALIDATION:")
+            lines.append("INVALIDATION CONDITIONS:")
             for inv in self.invalidation_conditions:
                 lines.append(f"  - {inv}")
         lines.append("")
