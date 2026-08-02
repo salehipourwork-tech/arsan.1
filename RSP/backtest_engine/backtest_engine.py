@@ -83,6 +83,7 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
     equity_curve = [0.0]
     i = min_history
     n = len(base_df)
+    cooldown_until = {"BUY": None, "SELL": None}  # جهت -> اندیس کندلی که تا آن مسدود است
 
     while i < n - 1:
         current_ts = base_df.index[i]
@@ -99,6 +100,12 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
         decision = decide(regime, fusion, mtf, contradiction, confidence, quality.quality_ok)
 
         if decision.action in ("BUY", "SELL"):
+            until = cooldown_until.get(decision.action)
+            if until is not None and i < until:
+                # هنوز توی دوره‌ی خنک‌سازیِ همین جهت هستیم (بعد از STOP_LOSS_HIT اخیر) -> رد شو
+                i += 1
+                continue
+
             selection = select_strategy(regime, fusion)
             risk_plan = plan_risk(decision.action, known_base, regime)
             tq = evaluate_trade_quality(confidence.confidence, quality.quality_score,
@@ -133,6 +140,9 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
                         evidence_snapshot=evidence_snapshot,
                     ))
                     equity_curve.append(equity_curve[-1] + trade_result.pnl_pct)
+                    closed_at = i + trade_result.bars_held
+                    if trade_result.outcome == "LOSS" and trade_result.exit_reason == "STOP_LOSS_HIT":
+                        cooldown_until[decision.action] = closed_at + settings.COOLDOWN_BARS_AFTER_STOP_LOSS
                     i += trade_result.bars_held if step_after_trade and trade_result.bars_held > 0 else 1
                     continue
 
