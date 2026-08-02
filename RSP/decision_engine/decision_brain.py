@@ -49,11 +49,21 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
 
     # --- گارد ۳: تضاد شواهد ---
     if contradiction.conflict_detected:
-        d.action = "WAIT"
-        d.why.append("CONFLICT DETECTED: " + "؛ ".join(contradiction.reasons[:3]))
-        d.why_not_opposite.append("جهت غالب به‌اندازه‌ی کافی واضح نیست تا نقطه‌ی مقابل رد شود")
-        d.missing_confirmation.append("هم‌جهت‌شدن تایم‌فریم‌ها یا کاهش شواهد متناقض")
-        d.invalidation.append("در صورت تشدید تضاد یا شکست سطح کلیدی، از بازار دور بمان")
+        if contradiction.severity == "SEVERE":
+            # تضاد شدید (چند نشانه‌ی مستقل هم‌زمان، یا نسبت تناقض خیلی بالا):
+            # NO_TRADE به‌جای WAIT — این ستاپ اصلاً معتبر نیست، نه اینکه فقط
+            # "فعلاً" منتظر بمانیم.
+            d.action = "NO_TRADE"
+            d.why.append("SEVERE CONFLICT: " + "؛ ".join(contradiction.reasons[:3]))
+            d.why_not_opposite.append("تضاد شواهد به‌قدری جدی است که نه جهت و نه نقطه‌ی مقابلش قابل اتکا نیست")
+            d.missing_confirmation.append("کاهش چشمگیر تضاد شواهد قبل از هر تصمیمی")
+            d.invalidation.append("تا رفع کامل تضاد شواهد، هیچ معامله‌ای در این نماد گرفته نشود")
+        else:
+            d.action = "WAIT"
+            d.why.append("CONFLICT DETECTED: " + "؛ ".join(contradiction.reasons[:3]))
+            d.why_not_opposite.append("جهت غالب به‌اندازه‌ی کافی واضح نیست تا نقطه‌ی مقابل رد شود")
+            d.missing_confirmation.append("هم‌جهت‌شدن تایم‌فریم‌ها یا کاهش شواهد متناقض")
+            d.invalidation.append("در صورت تشدید تضاد یا شکست سطح کلیدی، از بازار دور بمان")
         return d
 
     # --- گارد ۴: اطمینان پایین ---
