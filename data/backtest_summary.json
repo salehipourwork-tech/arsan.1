@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-01T08:34:14.389692+00:00",
+  "generated_at": "2026-08-02T10:13:05.635809+00:00",
   "type": "historical_simulation",
   "coins": [
     "bitcoin",
@@ -19,8 +19,8 @@
     "30": {
       "window_days": 30,
       "overall": {
-        "total": 20,
-        "correct": 8,
+        "total": 10,
+        "correct": 4,
         "accuracy_percent": 40.0
       },
       "by_decision": {
@@ -30,8 +30,8 @@
           "accuracy_percent": null
         },
         "sell": {
-          "total": 20,
-          "correct": 8,
+          "total": 10,
+          "correct": 4,
           "accuracy_percent": 40.0
         }
       },
@@ -65,109 +65,40 @@
           "correct": 0,
           "accuracy_percent": null,
           "hold_or_uncertain_days": 30
-        },
-        "cardano": {
-          "total": 10,
-          "correct": 4,
-          "accuracy_percent": 40.0,
-          "hold_or_uncertain_days": 20
         }
       },
       "sample_trades": [
         {
-          "coin": "cardano",
-          "date": "2026-07-30",
-          "day_index": 147,
-          "decision": "sell",
-          "entry_price": 0.16191384681582516,
-          "exit_price": 0.16997936893304585,
-          "correct": false
-        },
-        {
-          "coin": "cardano",
-          "date": "2026-07-29",
-          "day_index": 146,
-          "decision": "sell",
-          "entry_price": 0.1620831691120573,
-          "exit_price": 0.16191384681582516,
-          "correct": false
-        },
-        {
           "coin": "ripple",
           "date": "2026-07-28",
-          "day_index": 145,
+          "day_index": 144,
           "decision": "sell",
           "entry_price": 1.0646593216696538,
           "exit_price": 1.069405546793824,
           "correct": false
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-28",
-          "day_index": 145,
-          "decision": "sell",
-          "entry_price": 0.15577734360234022,
-          "exit_price": 0.1620831691120573,
-          "correct": false
-        },
-        {
-          "coin": "cardano",
-          "date": "2026-07-14",
-          "day_index": 131,
-          "decision": "sell",
-          "entry_price": 0.15737758682859052,
-          "exit_price": 0.16541385645430126,
-          "correct": false
-        },
-        {
-          "coin": "cardano",
-          "date": "2026-07-13",
-          "day_index": 130,
-          "decision": "sell",
-          "entry_price": 0.16198969653683382,
-          "exit_price": 0.15737758682859052,
-          "correct": true
-        },
-        {
           "coin": "ripple",
           "date": "2026-07-12",
-          "day_index": 129,
+          "day_index": 128,
           "decision": "sell",
           "entry_price": 1.096197339470673,
           "exit_price": 1.0854933916295033,
           "correct": true
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-12",
-          "day_index": 129,
-          "decision": "sell",
-          "entry_price": 0.16562641420985583,
-          "exit_price": 0.16198969653683382,
-          "correct": true
-        },
-        {
           "coin": "ripple",
           "date": "2026-07-11",
-          "day_index": 128,
+          "day_index": 127,
           "decision": "sell",
           "entry_price": 1.104005366846566,
           "exit_price": 1.096197339470673,
           "correct": true
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-11",
-          "day_index": 128,
-          "decision": "sell",
-          "entry_price": 0.16663024798781856,
-          "exit_price": 0.16562641420985583,
-          "correct": true
-        },
-        {
           "coin": "ethereum",
           "date": "2026-07-10",
-          "day_index": 127,
+          "day_index": 126,
           "decision": "sell",
           "entry_price": 1744.6953884606253,
           "exit_price": 1795.2394655119474,
@@ -176,25 +107,16 @@
         {
           "coin": "ripple",
           "date": "2026-07-10",
-          "day_index": 127,
+          "day_index": 126,
           "decision": "sell",
           "entry_price": 1.0927141951064325,
           "exit_price": 1.104005366846566,
           "correct": false
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-10",
-          "day_index": 127,
-          "decision": "sell",
-          "entry_price": 0.166466925337032,
-          "exit_price": 0.16663024798781856,
-          "correct": false
-        },
-        {
           "coin": "bitcoin",
           "date": "2026-07-09",
-          "day_index": 126,
+          "day_index": 125,
           "decision": "sell",
           "entry_price": 62247.1304822092,
           "exit_price": 63192.8789720319,
@@ -203,7 +125,7 @@
         {
           "coin": "ethereum",
           "date": "2026-07-09",
-          "day_index": 126,
+          "day_index": 125,
           "decision": "sell",
           "entry_price": 1742.2494536901065,
           "exit_price": 1744.6953884606253,
@@ -212,25 +134,16 @@
         {
           "coin": "ripple",
           "date": "2026-07-09",
-          "day_index": 126,
+          "day_index": 125,
           "decision": "sell",
           "entry_price": 1.0901740623941096,
           "exit_price": 1.0927141951064325,
           "correct": false
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-09",
-          "day_index": 126,
-          "decision": "sell",
-          "entry_price": 0.1669559578899136,
-          "exit_price": 0.166466925337032,
-          "correct": false
-        },
-        {
           "coin": "ethereum",
           "date": "2026-07-08",
-          "day_index": 125,
+          "day_index": 124,
           "decision": "sell",
           "entry_price": 1771.2223954004269,
           "exit_price": 1742.2494536901065,
@@ -239,19 +152,10 @@
         {
           "coin": "ripple",
           "date": "2026-07-08",
-          "day_index": 125,
+          "day_index": 124,
           "decision": "sell",
           "entry_price": 1.1120051240230528,
           "exit_price": 1.0901740623941096,
-          "correct": true
-        },
-        {
-          "coin": "cardano",
-          "date": "2026-07-08",
-          "day_index": 125,
-          "decision": "sell",
-          "entry_price": 0.1746031825074184,
-          "exit_price": 0.1669559578899136,
           "correct": true
         }
       ]
@@ -259,9 +163,9 @@
     "60": {
       "window_days": 60,
       "overall": {
-        "total": 43,
-        "correct": 15,
-        "accuracy_percent": 34.9
+        "total": 33,
+        "correct": 11,
+        "accuracy_percent": 33.3
       },
       "by_decision": {
         "buy": {
@@ -270,9 +174,9 @@
           "accuracy_percent": null
         },
         "sell": {
-          "total": 43,
-          "correct": 15,
-          "accuracy_percent": 34.9
+          "total": 33,
+          "correct": 11,
+          "accuracy_percent": 33.3
         }
       },
       "by_coin": {
@@ -305,109 +209,40 @@
           "correct": 1,
           "accuracy_percent": 16.7,
           "hold_or_uncertain_days": 54
-        },
-        "cardano": {
-          "total": 10,
-          "correct": 4,
-          "accuracy_percent": 40.0,
-          "hold_or_uncertain_days": 50
         }
       },
       "sample_trades": [
         {
-          "coin": "cardano",
-          "date": "2026-07-30",
-          "day_index": 147,
-          "decision": "sell",
-          "entry_price": 0.16191384681582516,
-          "exit_price": 0.16997936893304585,
-          "correct": false
-        },
-        {
-          "coin": "cardano",
-          "date": "2026-07-29",
-          "day_index": 146,
-          "decision": "sell",
-          "entry_price": 0.1620831691120573,
-          "exit_price": 0.16191384681582516,
-          "correct": false
-        },
-        {
           "coin": "ripple",
           "date": "2026-07-28",
-          "day_index": 145,
+          "day_index": 144,
           "decision": "sell",
           "entry_price": 1.0646593216696538,
           "exit_price": 1.069405546793824,
           "correct": false
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-28",
-          "day_index": 145,
-          "decision": "sell",
-          "entry_price": 0.15577734360234022,
-          "exit_price": 0.1620831691120573,
-          "correct": false
-        },
-        {
-          "coin": "cardano",
-          "date": "2026-07-14",
-          "day_index": 131,
-          "decision": "sell",
-          "entry_price": 0.15737758682859052,
-          "exit_price": 0.16541385645430126,
-          "correct": false
-        },
-        {
-          "coin": "cardano",
-          "date": "2026-07-13",
-          "day_index": 130,
-          "decision": "sell",
-          "entry_price": 0.16198969653683382,
-          "exit_price": 0.15737758682859052,
-          "correct": true
-        },
-        {
           "coin": "ripple",
           "date": "2026-07-12",
-          "day_index": 129,
+          "day_index": 128,
           "decision": "sell",
           "entry_price": 1.096197339470673,
           "exit_price": 1.0854933916295033,
           "correct": true
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-12",
-          "day_index": 129,
-          "decision": "sell",
-          "entry_price": 0.16562641420985583,
-          "exit_price": 0.16198969653683382,
-          "correct": true
-        },
-        {
           "coin": "ripple",
           "date": "2026-07-11",
-          "day_index": 128,
+          "day_index": 127,
           "decision": "sell",
           "entry_price": 1.104005366846566,
           "exit_price": 1.096197339470673,
           "correct": true
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-11",
-          "day_index": 128,
-          "decision": "sell",
-          "entry_price": 0.16663024798781856,
-          "exit_price": 0.16562641420985583,
-          "correct": true
-        },
-        {
           "coin": "ethereum",
           "date": "2026-07-10",
-          "day_index": 127,
+          "day_index": 126,
           "decision": "sell",
           "entry_price": 1744.6953884606253,
           "exit_price": 1795.2394655119474,
@@ -416,25 +251,16 @@
         {
           "coin": "ripple",
           "date": "2026-07-10",
-          "day_index": 127,
+          "day_index": 126,
           "decision": "sell",
           "entry_price": 1.0927141951064325,
           "exit_price": 1.104005366846566,
           "correct": false
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-10",
-          "day_index": 127,
-          "decision": "sell",
-          "entry_price": 0.166466925337032,
-          "exit_price": 0.16663024798781856,
-          "correct": false
-        },
-        {
           "coin": "bitcoin",
           "date": "2026-07-09",
-          "day_index": 126,
+          "day_index": 125,
           "decision": "sell",
           "entry_price": 62247.1304822092,
           "exit_price": 63192.8789720319,
@@ -443,7 +269,7 @@
         {
           "coin": "ethereum",
           "date": "2026-07-09",
-          "day_index": 126,
+          "day_index": 125,
           "decision": "sell",
           "entry_price": 1742.2494536901065,
           "exit_price": 1744.6953884606253,
@@ -452,25 +278,16 @@
         {
           "coin": "ripple",
           "date": "2026-07-09",
-          "day_index": 126,
+          "day_index": 125,
           "decision": "sell",
           "entry_price": 1.0901740623941096,
           "exit_price": 1.0927141951064325,
           "correct": false
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-09",
-          "day_index": 126,
-          "decision": "sell",
-          "entry_price": 0.1669559578899136,
-          "exit_price": 0.166466925337032,
-          "correct": false
-        },
-        {
           "coin": "ethereum",
           "date": "2026-07-08",
-          "day_index": 125,
+          "day_index": 124,
           "decision": "sell",
           "entry_price": 1771.2223954004269,
           "exit_price": 1742.2494536901065,
@@ -479,19 +296,100 @@
         {
           "coin": "ripple",
           "date": "2026-07-08",
-          "day_index": 125,
+          "day_index": 124,
           "decision": "sell",
           "entry_price": 1.1120051240230528,
           "exit_price": 1.0901740623941096,
           "correct": true
         },
         {
-          "coin": "cardano",
-          "date": "2026-07-08",
-          "day_index": 125,
+          "coin": "ethereum",
+          "date": "2026-06-28",
+          "day_index": 114,
           "decision": "sell",
-          "entry_price": 0.1746031825074184,
-          "exit_price": 0.1669559578899136,
+          "entry_price": 1571.9371269098212,
+          "exit_price": 1570.0805519413402,
+          "correct": false
+        },
+        {
+          "coin": "ripple",
+          "date": "2026-06-28",
+          "day_index": 114,
+          "decision": "sell",
+          "entry_price": 1.0451606232986514,
+          "exit_price": 1.0463154690273346,
+          "correct": false
+        },
+        {
+          "coin": "ripple",
+          "date": "2026-06-27",
+          "day_index": 113,
+          "decision": "sell",
+          "entry_price": 1.0466477618660692,
+          "exit_price": 1.0451606232986514,
+          "correct": false
+        },
+        {
+          "coin": "ripple",
+          "date": "2026-06-26",
+          "day_index": 112,
+          "decision": "sell",
+          "entry_price": 1.0424278885912308,
+          "exit_price": 1.0466477618660692,
+          "correct": false
+        },
+        {
+          "coin": "solana",
+          "date": "2026-06-26",
+          "day_index": 112,
+          "decision": "sell",
+          "entry_price": 67.63197484567073,
+          "exit_price": 71.81424446301368,
+          "correct": false
+        },
+        {
+          "coin": "ripple",
+          "date": "2026-06-25",
+          "day_index": 111,
+          "decision": "sell",
+          "entry_price": 1.072805994012306,
+          "exit_price": 1.0424278885912308,
+          "correct": true
+        },
+        {
+          "coin": "solana",
+          "date": "2026-06-25",
+          "day_index": 111,
+          "decision": "sell",
+          "entry_price": 67.94878023470052,
+          "exit_price": 67.63197484567073,
+          "correct": false
+        },
+        {
+          "coin": "solana",
+          "date": "2026-06-24",
+          "day_index": 110,
+          "decision": "sell",
+          "entry_price": 69.6086375465547,
+          "exit_price": 67.94878023470052,
+          "correct": true
+        },
+        {
+          "coin": "ethereum",
+          "date": "2026-06-22",
+          "day_index": 108,
+          "decision": "sell",
+          "entry_price": 1704.9130137257484,
+          "exit_price": 1725.1620208904676,
+          "correct": false
+        },
+        {
+          "coin": "ethereum",
+          "date": "2026-06-21",
+          "day_index": 107,
+          "decision": "sell",
+          "entry_price": 1739.2769352743533,
+          "exit_price": 1704.9130137257484,
           "correct": true
         }
       ]
