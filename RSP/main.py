@@ -103,6 +103,11 @@ def main():
     parser.add_argument("--save", metavar="PATH",
                          help="ذخیره‌ی خروجی به‌صورت JSON روی دیسک (برای بارگذاری در RSP Dashboard). "
                               "مثال: --save rsp_report.json")
+    parser.add_argument("--compare-arsan", action="store_true",
+                         help="بعد از --backtest، با data/backtest_summary.json آرسان مقایسه کن (Phase 29)")
+    parser.add_argument("--compare-arsan-live", action="store_true",
+                         help="مثل --compare-arsan ولی به‌جای فایل موجود، خودِ backtest_lab.py آرسان را "
+                              "زنده اجرا می‌کند (نیاز به شبکه دارد و چند دقیقه طول می‌کشد)")
     args = parser.parse_args()
 
     def _maybe_save(data: dict):
@@ -191,11 +196,52 @@ def main():
             "max_drawdown_pct": summary.max_drawdown_pct,
             "average_trade_pct": summary.average_trade_pct,
         }
-        print(json.dumps(backtest_result, ensure_ascii=False, indent=2))
+
+        # Phase 24/25 — Self Evaluation + Failure Analysis (خودکار، چون evidence_snapshot
+        # همین حالا در summary.trades موجود است - نیازی به اسکریپت جدا نیست)
+        if summary.trades:
+            from dataclasses import asdict
+            from RSP.self_evaluation.self_evaluation import evaluate_all, summarize
+            from RSP.self_evaluation.failure_analysis import analyze_failures
+            evals = evaluate_all(summary.trades)
+            failure_report = analyze_failures(summary.trades, evals)
+            backtest_result["self_evaluation_summary"] = summarize(evals)
+            backtest_result["failure_analysis"] = {
+                "total_losses": failure_report.total_losses,
+                "category_counts": failure_report.category_counts,
+                "category_avg_pnl": failure_report.category_avg_pnl,
+                "dominant_failure_mode": failure_report.dominant_failure_mode,
+                "worst_regime": failure_report.worst_regime,
+                "notes": failure_report.notes,
+            }
+            print("\n[Self Evaluation]", backtest_result["self_evaluation_summary"])
+            print("[Failure Analysis] dominant:", failure_report.dominant_failure_mode,
+                  "| worst regime:", failure_report.worst_regime)
+
+        # Phase 29 — مقایسه با آرسان اصلی
+        if args.compare_arsan or args.compare_arsan_live:
+            from dataclasses import asdict
+            from RSP.comparison.arsan_vs_rsp import compare
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            comparison_report = compare(summary, project_root=project_root,
+                                         regenerate=args.compare_arsan_live)
+            backtest_result["comparison"] = asdict(comparison_report)
+            print("\n[Arsan Comparison] source:", comparison_report.arsan.source,
+                  "| available:", comparison_report.arsan.available)
+            if comparison_report.arsan.available:
+                print(f"  ARSAN accuracy ({comparison_report.arsan.window_days}d): "
+                      f"{comparison_report.arsan.overall_accuracy_percent}% "
+                      f"(n={comparison_report.arsan.overall_total_evaluated})")
+                print(f"  RSP win_rate: {summary.win_rate}% (n={summary.total_trades})")
+            else:
+                print("  ", comparison_report.arsan.error, "-", " ".join(comparison_report.notes))
+
+        print("\n" + json.dumps(backtest_result, ensure_ascii=False, indent=2))
         _maybe_save(backtest_result)
         log_experiment(strategy="mixed_selector", parameters={"base_tf": "15M", "lookback_days": args.days},
                         dataset=args.coin, timeframe="15M",
-                        results=summary.__dict__, changes="اجرای اولیه از main.py --backtest")
+                        results={k: v for k, v in backtest_result.items() if k != "comparison"},
+                        changes="اجرای main.py --backtest")
         return
 
     result = analyze_coin(args.coin, lookback_days=args.days)
