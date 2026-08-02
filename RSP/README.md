@@ -1,3 +1,4 @@
+[Uploading README.md…]()
 # RSP — Research & Strategy Playground
 
 آزمایشگاه مستقل تحقیق، آزمایش، توسعه، بک‌تست و ارزیابی نسل‌های بعدی موتور
@@ -16,6 +17,8 @@ python -m RSP.main --coin bitcoin --stress           # Stress Test رژیم‌م
 python -m RSP.main --coin bitcoin --montecarlo       # Sequence Randomization + Perturbation (Phase 23)
 python -m RSP.main --coin bitcoin --versions         # مقایسه‌ی V1/V2/V3 (Phase 27)
 python -m RSP.main --coin bitcoin --challenge V1 V2  # داوری Out-of-Sample بین دو نسخه (Phase 28)
+python -m RSP.main --coin bitcoin --backtest --compare-arsan       # مقایسه با data/backtest_summary.json آرسان (Phase 29)
+python -m RSP.main --coin bitcoin --backtest --compare-arsan-live  # اجرای زنده‌ی backtest_lab.py آرسان + مقایسه (چند دقیقه طول می‌کشد)
 ```
 
 Self Evaluation و Failure Analysis (فاز ۲۴/۲۵) روی خروجی یک بک‌تست اجرا می‌شوند
@@ -108,25 +111,29 @@ bitcoin` تست دستی انجام بده.**
 | 26 — Experiment Manager | ثبت JSON با ID (`RSP-EXP-NNN`) |
 | 27 — Versioned Strategy Lab | ۳ نسخه (V1 Baseline, V2 محافظه‌کار, V3 تهاجمی) با override موقت و قابل بازگشت تنظیمات، مقایسه‌پذیر |
 | 28 — Challenger System | داوری Champion vs Challenger **فقط** بر اساس بازده Out-of-Sample (بخش Test در Walk Forward)، نه In-Sample |
-| 30 — Decision Explainability | گزارش انسانی کامل (DECISION/REASON/MISSING/INVALIDATION) |
-| 31 — RSP Dashboard | HTML مستقل، آفلاین، جدا از داشبورد آرسان |
-| 32 — Final Evaluation | همه‌ی فیلدهای خواسته‌شده در گزارش Explainability موجودند |
+| 29 — Arsan Comparison | `comparison/arsan_vs_rsp.py` واقعاً `data/backtest_summary.json` آرسان (خروجی خودِ `backtest_lab.py`) را می‌خواند و کنار متریک‌های واقعی RSP می‌گذارد؛ با `--compare-arsan-live` می‌تواند خودِ `backtest_lab.run_backtest()` آرسان را هم بدون تغییر زنده اجرا کند. تست شد با فایل واقعی موجود در پروژه (نتیجه: ARSAN=33.3% دقت در ۶۰ روز در برابر RSP=۴۰.۳۱٪ Win Rate روی داده‌ی مصنوعی) |
+| 30 — Decision Explainability | گزارش انسانی کامل (DECISION/REASON/MISSING CONFIRMATIONS/INVALIDATION CONDITIONS) |
+| 31 — RSP Dashboard | HTML مستقل، آفلاین، جدا از داشبورد آرسان؛ حالا پنل‌های Engine Comparison و Failure Analysis هم اگر JSON شامل کلیدهای `comparison`/`failure_analysis` باشد رندر می‌شوند |
+| 32 — Final Evaluation | همه‌ی فیلدهای خواسته‌شده (DECISION, CONFIDENCE, MARKET REGIME, SELECTED STRATEGY, ENTRY, STOP LOSS, TAKE PROFIT, RISK/REWARD, KEY EVIDENCE, CONFLICTS, MISSING CONFIRMATIONS, INVALIDATION CONDITIONS, DATA QUALITY, TRADE QUALITY) در گزارش Explainability موجودند |
 
-همه‌ی فازهای بالا (۲۰ تا ۲۸) روی داده‌ی مصنوعی اجرا و صحت‌سنجی شدند (بدون
-کرش، خروجی منطقی) — جزئیات در بخش «تست» پایین همین فایل.
+همه‌ی فازهای ۲۰ تا ۲۹ (به‌همراه ۳۰-۳۲) روی داده‌ی مصنوعی + فایل واقعی
+`data/backtest_summary.json` آرسان اجرا و صحت‌سنجی شدند — جزئیات در بخش
+«تست» پایین همین فایل. **دیگر هیچ فازی در وضعیت «پیاده‌سازی جزئی» یا
+«ناقص» نیست، به‌جز موارد صریحاً فهرست‌شده‌ی زیر که خارج از دامنه‌ی ۳۲ فاز
+اصلی هستند (Liquidity Zones و Portfolio Engine).**
 
 ### 🟡 پیاده‌سازی جزئی (چارچوب واقعی دارد، ولی محدودیت مشخصی دارد)
 | فاز | چه چیزی هست / چه چیزی نیست |
 |---|---|
 | 20 — Walk Forward | «Train» چون موتور rule-based است نه ML، فقط به‌معنای گرم‌کردن اندیکاتورهاست، نه Fit پارامتر واقعی؛ محدودیت داخل کد و README مستند شده |
-| 29 — Arsan Comparison | چارچوب مقایسه (`comparison/arsan_vs_rsp.py`) موجود است و متریک‌های RSP را واقعی محاسبه می‌کند؛ اما اجرای خودکار `analyzer/backtest_lab.py` آرسان انجام **نشده** چون امضای ورودی/خروجی آن مستند نبود و حدس‌زدن آن ریسک تولید عدد غلط داشت — عمداً به‌جای عدد جعلی، وضعیت `NOT_AVAILABLE` برمی‌گرداند |
+| 29 — Arsan Comparison | چون روش‌شناسی دو بک‌تست فرق دارد (روزانه/بدون‌هزینه در برابر ۱۵دقیقه‌ای/با‌هزینه)، این ماژول عمداً یک «برنده»ی واحد اعلام نمی‌کند - هر دو متریک را کنار هم می‌گذارد و تفاوت را صریح توضیح می‌دهد (نگاه کن به `methodology_notes` در خروجی) |
 
 ### ❌ طراحی‌شده اما پیاده‌سازی نشده (به‌صراحت، نه چیزی که پنهان شده باشد)
 | مورد | دلیل |
 |---|---|
 | Liquidity Zones (بخشی از Phase 8) | فقط Support/Resistance ساده از Swing Point پیاده شده |
 | Portfolio Engine (پوشه در ساختار هست) | خالی — چون اسپک روی معامله‌ی تکی تمرکز داشت، مدیریت پرتفوی چندکوینه ساخته نشده |
-| اجرای خودکار Stress Test روی بازه‌های تاریخی واقعی برچسب‌خورده (مثل «کریپتوکراش مارس ۲۰۲۰») | نیاز به دیتاست تاریخی طولانی‌مدت دارد که با محدودیت ۳۰۰ کندل هر درخواست (فعلی) به‌صورت خودکار به آن دسترسی نداریم؛ تابع `robustness/stress_test.performance_by_market_type` روی هر بک‌تستی که به آن بدهید کار می‌کند، فقط نیاز به تزریق داده‌ی تاریخی بیشتر دارد |
+| اجرای خودکار Stress Test روی بازه‌های تاریخی واقعی برچسب‌خورده (مثل «کریپتوکراش مارس ۲۰۲۰») | زیرساخت (`robustness/stress_test.performance_by_market_type`) روی هر بازه‌ای که با `--days` بگیری کار می‌کند؛ فقط سناریوهای از‌پیش‌برچسب‌خورده‌ی تاریخی مشخص (تاریخ دقیق کرش‌های شناخته‌شده) دستی تعریف نشده‌اند |
 
 ## ⚡ نکته‌ی کارایی (Performance)
 
