@@ -20,6 +20,7 @@ class ContradictionReport:
     conflict_ratio: float = 0.0
     reasons: List[str] = field(default_factory=list)
     mtf_disagreement: bool = False
+    severity: str = "NONE"   # NONE | MODERATE | SEVERE
 
 
 def detect_contradictions(fusion: FusionReport, mtf: MTFReport) -> ContradictionReport:
@@ -49,5 +50,17 @@ def detect_contradictions(fusion: FusionReport, mtf: MTFReport) -> Contradiction
         or report.mtf_disagreement
         or bool(report.reasons and abs(fusion.net_score) < 0.15)
     )
+
+    # --- Severity (قدم اول درخواستی: فقط این بخش، بدون دست‌زدن به رژیم RANGE) ---
+    # "شدید" یعنی یا نسبت تناقض خیلی بالاست، یا چند نشانه‌ی مستقل تناقض هم‌زمان
+    # رخ داده‌اند (مثلاً هم عدم‌اجماع تایم‌فریمی و هم شواهد متعارض) — نه صرفاً
+    # یک نشانه‌ی مرزی. این تمایز باعث می‌شود NO_TRADE فقط برای تضاد واقعاً
+    # جدی صادر شود، نه هر بار که آستانه‌ی WAIT رد شود.
+    if not report.conflict_detected:
+        report.severity = "NONE"
+    else:
+        severe_by_ratio = report.conflict_ratio >= settings.CONTRADICTION_SEVERE_THRESHOLD
+        severe_by_multiple_signals = report.mtf_disagreement and len(report.reasons) >= 2
+        report.severity = "SEVERE" if (severe_by_ratio or severe_by_multiple_signals) else "MODERATE"
 
     return report
