@@ -55,12 +55,17 @@ def plan_risk(action: str, df_15m: pd.DataFrame, regime: RegimeReport) -> RiskPl
 
     if action == "BUY":
         atr_stop = entry_price - atr_stop_distance
+        # هر دو (atr_stop و structural_stop) زیر entry_price هستند، پس نزدیک‌ترین
+        # به entry_price = بزرگ‌ترین عدد. قبلاً اینجا min() بود که همیشه
+        # دورترین/گشادترین حد ضرر را انتخاب می‌کرد (باگ) — با max() اصلاح شد.
         stop_loss = max(atr_stop, structural_stop) if structural_stop else atr_stop
         stop_loss = min(stop_loss, entry_price * 0.999)  # اطمینان از پایین‌تر بودن
         risk_per_unit = entry_price - stop_loss
         take_profit = entry_price + risk_per_unit * settings.TAKE_PROFIT_RR_TARGET
     else:  # SELL
         atr_stop = entry_price + atr_stop_distance
+        # هر دو بالای entry_price هستند، پس نزدیک‌ترین = کوچک‌ترین عدد.
+        # قبلاً max() بود (همیشه دورترین را انتخاب می‌کرد) — با min() اصلاح شد.
         stop_loss = min(atr_stop, structural_stop) if structural_stop else atr_stop
         stop_loss = max(stop_loss, entry_price * 1.001)
         risk_per_unit = stop_loss - entry_price
