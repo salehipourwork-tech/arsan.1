@@ -1,97 +1,55 @@
 """
-RSP — risk_engine/risk_engine.py  (Phase 16: RISK ENGINE)
+RSP — regime_engine/regime_engine.py  (Phase 5: MARKET REGIME ENGINE)
 
-هدف: نه فقط پیدا کردن معامله، بلکه پیدا کردن معامله با ریسک کنترل‌شده.
-Entry, Stop Loss, Take Profit, Risk/Reward, Position Size, Risk%, Max
-Exposure. حد ضرر با ATR و ساختار بازار (نزدیک‌ترین Support/Resistance)
-تطبیق دارد.
+رژیم بازار را از perception.py می‌گیرد و به لیست استراتژی‌های سازگار
+(REGIME-AWARE STRATEGY SELECTION) نگاشت می‌دهد. تشخیص Breakout/Fake
+Breakout/Breakdown/Recovery نیازمند ساختار بازار است، پس با
+market_structure ترکیب می‌شود.
 """
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import List
+import pandas as pd
 
 from RSP.config import settings
-from RSP.regime_engine.regime_engine import RegimeReport
-from RSP.indicators import technical as ta
-import pandas as pd
+from RSP.regime_engine.perception import perceive_market, PerceptionReport
+from RSP.market_structure.structure_engine import analyze_structure, StructureReport
 
 
 @dataclass
-class RiskPlan:
-    action: str
-    entry: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
-    risk_reward: Optional[float] = None
-    position_size_pct: Optional[float] = None   # درصدی از سرمایه‌ی فرضی
-    risk_percent: float = settings.MAX_RISK_PERCENT_PER_TRADE
-    valid: bool = False
-    reason: str = ""
+class RegimeReport:
+    regime: str
+    perception: PerceptionReport
+    structure: StructureReport
+    compatible_strategies: List[str] = field(default_factory=list)
+    notes: List[str] = field(default_factory=list)
 
 
-def plan_risk(action: str, df_15m: pd.DataFrame, regime: RegimeReport) -> RiskPlan:
-    if action not in ("BUY", "SELL"):
-        return RiskPlan(action=action, valid=False, reason="ریسک فقط برای BUY/SELL محاسبه می‌شود")
+def determine_regime(df: pd.DataFrame) -> RegimeReport:
+    perception = perceive_market(df)
+    structure = analyze_structure(df)
 
-    if df_15m is None or df_15m.empty or len(df_15m) < settings.ATR_PERIOD + 5:
-        return RiskPlan(action=action, valid=False, reason="داده‌ی کافی برای محاسبه‌ی ATR/ریسک نیست")
+    regime = perception.state
 
-    close = df_15m["close"]
-    entry_price = float(close.iloc[-1])
-    atr_series = ta.atr(df_15m["high"], df_15m["low"], close, settings.ATR_PERIOD)
-    atr_val = ta.last(atr_series, None)
-    if atr_val is None or atr_val <= 0:
-        return RiskPlan(action=action, valid=False, reason="ATR قابل‌محاسبه نیست")
+    # اصلاح رژیم با استفاده از رویدادهای ساختاری (BOS/CHoCH)
+    if structure.last_structure_event == "BOS_BULLISH" and regime in ("RANGE", "TRANSITION"):
+        regime = "BREAKOUT"
+    elif structure.last_structure_event == "CHOCH_BEARISH" and regime in ("UPTREND", "WEAK_UPTREND"):
+        regime = "TRANSITION"
+    elif structure.last_structure_event == "CHOCH_BULLISH" and regime in ("DOWNTREND", "WEAK_DOWNTREND", "STRONG_DOWNTREND"):
+        regime = "RECOVERY"
+    elif structure.last_structure_event == "BOS_BEARISH" and regime == "STRONG_DOWNTREND" and perception.atr_pct > 5:
+        regime = "CRASH"
 
-    structural_stop = None
-    if action == "BUY" and regime.structure.support_levels:
-        structural_stop = max(s for s in regime.structure.support_levels if s < entry_price) \
-            if any(s < entry_price for s in regime.structure.support_levels) else None
-    elif action == "SELL" and regime.structure.resistance_levels:
-        structural_stop = min(r for r in regime.structure.resistance_levels if r > entry_price) \
-            if any(r > entry_price for r in regime.structure.resistance_levels) else None
+    if regime not in settings.REGIME_LABELS:
+        regime = "UNKNOWN"
 
-    atr_stop_distance = settings.STOP_LOSS_ATR_MULTIPLIER * atr_val
-
-    if action == "BUY":
-        atr_stop = entry_price - atr_stop_distance
-        # هر دو (atr_stop و structural_stop) زیر entry_price هستند، پس نزدیک‌ترین
-        # به entry_price = بزرگ‌ترین عدد. قبلاً اینجا min() بود که همیشه
-        # دورترین/گشادترین حد ضرر را انتخاب می‌کرد (باگ) — با max() اصلاح شد.
-        stop_loss = max(atr_stop, structural_stop) if structural_stop else atr_stop
-        stop_loss = min(stop_loss, entry_price * 0.999)  # اطمینان از پایین‌تر بودن
-        risk_per_unit = entry_price - stop_loss
-        take_profit = entry_price + risk_per_unit * settings.TAKE_PROFIT_RR_TARGET
-    else:  # SELL
-        atr_stop = entry_price + atr_stop_distance
-        # هر دو بالای entry_price هستند، پس نزدیک‌ترین = کوچک‌ترین عدد.
-        # قبلاً max() بود (همیشه دورترین را انتخاب می‌کرد) — با min() اصلاح شد.
-        stop_loss = min(atr_stop, structural_stop) if structural_stop else atr_stop
-        stop_loss = max(stop_loss, entry_price * 1.001)
-        risk_per_unit = stop_loss - entry_price
-        take_profit = entry_price - risk_per_unit * settings.TAKE_PROFIT_RR_TARGET
-
-    if risk_per_unit <= 0:
-        return RiskPlan(action=action, valid=False, reason="فاصله‌ی Stop Loss نامعتبر است")
-
-    reward_per_unit = abs(take_profit - entry_price)
-    rr = round(reward_per_unit / risk_per_unit, 2)
-
-    # Position sizing ساده: risk_percent از سرمایه‌ی فرضی تقسیم بر فاصله‌ی ریسک (٪ نسبت به قیمت)
-    risk_distance_pct = risk_per_unit / entry_price
-    position_size_pct = round(min(100.0, settings.MAX_RISK_PERCENT_PER_TRADE / risk_distance_pct), 2) \
-        if risk_distance_pct > 0 else 0.0
-
-    plan = RiskPlan(
-        action=action,
-        entry=round(entry_price, 6),
-        stop_loss=round(stop_loss, 6),
-        take_profit=round(take_profit, 6),
-        risk_reward=rr,
-        position_size_pct=position_size_pct,
-        risk_percent=settings.MAX_RISK_PERCENT_PER_TRADE,
-        valid=rr >= settings.MIN_ACCEPTABLE_RISK_REWARD,
-        reason="OK" if rr >= settings.MIN_ACCEPTABLE_RISK_REWARD else
-               f"Risk/Reward={rr} کمتر از حداقل قابل‌قبول {settings.MIN_ACCEPTABLE_RISK_REWARD}",
+    report = RegimeReport(
+        regime=regime,
+        perception=perception,
+        structure=structure,
+        compatible_strategies=settings.REGIME_STRATEGY_COMPATIBILITY.get(regime, []),
     )
-    return plan
+    if not report.compatible_strategies:
+        report.notes.append("هیچ استراتژی سازگاری برای این رژیم تعریف نشده -> احتیاط/WAIT")
+    return report
