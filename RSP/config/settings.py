@@ -60,6 +60,11 @@ DEFAULT_LOOKBACK_DAYS = 90   # پیش‌فرض بازه‌ی تاریخی درخ
 # می‌شود - بدون افت محسوس در دقت اندیکاتورها.
 MAX_WARMUP_BARS = 400
 
+# بعد از STOP_LOSS_HIT در یک جهت (BUY یا SELL)، تا این تعداد کندل پایه (15M)
+# ورود دوباره در همون جهت مسدود می‌شود؛ جهت مقابل آزاد است. هدف: جلوگیری از
+# «اصرار روی یه اشتباه» وقتی شواهد بین چند کندل تقریباً بدون تغییر می‌ماند.
+COOLDOWN_BARS_AFTER_STOP_LOSS = 6  # روی 15M یعنی ۱.۵ ساعت
+
 
 def candles_needed(timeframe: str, days: float) -> int:
     minutes = TIMEFRAME_MINUTES[timeframe]
