@@ -88,14 +88,21 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="p-comparison">
       <h2>Engine Comparison (ARSAN vs RSP)</h2>
-      <div class="missing">Phase 29 — پیاده‌سازی پایه دارد اما اجرای خودکار backtest_lab آرسان به‌صورت دستی/adapter نیاز است (مستند در comparison/arsan_vs_rsp.py).</div>
+      <div id="comparisonBlock" class="list">
+        <div class="missing">فقط وقتی نمایش داده می‌شود که JSON شامل کلید <code>comparison</code> باشد
+        (از <code>RSP.comparison.arsan_vs_rsp.compare()</code>). راهنمای تولید در README.</div>
+      </div>
     </div>
 
     <div class="panel">
       <h2>Failure Analysis / Self-Evaluation</h2>
-      <div class="missing">NOT IMPLEMENTED در این نسخه — طبق گزارش صادقانه‌ی وضعیت پروژه (README.md).</div>
+      <div id="failureBlock" class="list">
+        <div class="missing">این دو (Phase 24/25) از خط فرمان مستقیم در دسترس نیستند؛ باید با
+        اسکریپت پایتون روی خروجی یک بک‌تست اجرا شوند (نمونه در README) و نتیجه در
+        کلید <code>failure_analysis</code> این JSON قرار بگیرد تا اینجا نمایش داده شود.</div>
+      </div>
     </div>
 
   </div>
@@ -167,8 +174,8 @@ function render(data){
     return `<li>${tf}: ${s}${r}</li>`;
   }).join('') || '<li class="missing">—</li>';
 
-  const missing = (text.match(/MISSING CONFIRMATION:\n([\s\S]*?)(\n\n|$)/) || [,''])[1];
-  const invalidation = (text.match(/INVALIDATION:\n([\s\S]*?)(\n\n|$)/) || [,''])[1];
+  const missing = (text.match(/MISSING CONFIRMATIONS?:\n([\s\S]*?)(\n\n|$)/) || [,''])[1];
+  const invalidation = (text.match(/INVALIDATION(?: CONDITIONS)?:\n([\s\S]*?)(\n\n|$)/) || [,''])[1];
   const combined = (missing + '\n' + invalidation).split('\n').filter(l => l.trim().startsWith('-'));
   document.getElementById('missingList').innerHTML =
     combined.map(l => `<li>${l.replace(/^-\s*/, '')}</li>`).join('') || '<li class="missing">—</li>';
@@ -181,6 +188,36 @@ function render(data){
       <div class="kv"><span>Profit Factor</span><span>${data.profit_factor}</span></div>
       <div class="kv"><span>Max Drawdown</span><span>${data.max_drawdown_pct}%</span></div>
       <div class="kv"><span>Avg Trade</span><span>${data.average_trade_pct}%</span></div>
+    `;
+  }
+
+  if(data.comparison){
+    const c = data.comparison;
+    const arsan = c.arsan || {};
+    const rsp = c.rsp || {};
+    if(arsan.available){
+      document.getElementById('comparisonBlock').innerHTML = `
+        <div class="kv"><span>ARSAN Accuracy (${arsan.window_days}d, n=${arsan.overall_total_evaluated})</span><span>${arsan.overall_accuracy_percent}%</span></div>
+        <div class="kv"><span>RSP Win Rate (n=${rsp.number_of_trades})</span><span>${rsp.win_rate}%</span></div>
+        <div class="kv"><span>RSP Net Return</span><span>${rsp.net_return_pct}%</span></div>
+        <div class="kv"><span>RSP Profit Factor</span><span>${rsp.profit_factor}</span></div>
+        <div class="missing" style="margin-top:8px">${(c.methodology_notes||[]).join(' ')}</div>
+      `;
+    } else {
+      document.getElementById('comparisonBlock').innerHTML =
+        `<div class="missing">داده‌ی آرسان در دسترس نبود: ${arsan.error || 'نامشخص'}</div>`;
+    }
+  }
+
+  if(data.failure_analysis){
+    const fa = data.failure_analysis;
+    const rows = Object.entries(fa.category_counts || {})
+      .map(([cat, n]) => `<li>${cat}: ${n}</li>`).join('');
+    document.getElementById('failureBlock').innerHTML = `
+      <div class="kv"><span>Total Losses</span><span>${fa.total_losses}</span></div>
+      <div class="kv"><span>Dominant Pattern</span><span>${fa.dominant_failure_mode}</span></div>
+      <div class="kv"><span>Worst Regime</span><span>${fa.worst_regime}</span></div>
+      <div style="margin-top:8px">${rows || '<span class="missing">—</span>'}</div>
     `;
   }
 }
