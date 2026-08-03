@@ -55,13 +55,22 @@ def compute_confidence(fusion: FusionReport, mtf: MTFReport, contradiction: Cont
     else:
         rr_component = min(100.0, max(0.0, (risk_reward / 3.0) * 100))
 
+    # وزن‌ها: قبلاً stability/data_quality/volatility/risk_reward جمعاً 50% وزن داشتند
+    # در حالی‌که برای معاملاتی که واقعاً اجرا می‌شوند (رد شده از گاردهای قبلی) این
+    # چهار مقدار عملاً همیشه ثابت‌اند (stability=100 چون conflict_detected از قبل
+    # فیلتر شده، data_quality~100 چون داده‌ی KuCoin تمیز است، volatility=90 چون
+    # آستانه‌های 4%/6% برای ATR واقعی 15M که ~0.1-0.4% است هرگز رد نمی‌شوند،
+    # risk_reward~66.7 چون RR ساختاری همیشه نزدیک TAKE_PROFIT_RR_TARGET است).
+    # این باعث می‌شد confidence عملاً بدون توجه به کیفیت واقعی معامله همیشه حدود
+    # همون کف ثابت باشد. وزن اکنون روی دو مؤلفه‌ای متمرکز شده که واقعاً بین
+    # معاملات فرق می‌کنند: signal_agreement و mtf_agreement.
     weights = {
-        "signal_agreement": 0.30,
-        "mtf_agreement": 0.20,
-        "stability": 0.15,
-        "data_quality": 0.15,
-        "volatility": 0.10,
-        "risk_reward": 0.10,
+        "signal_agreement": 0.55,
+        "mtf_agreement": 0.30,
+        "stability": 0.03,
+        "data_quality": 0.05,
+        "volatility": 0.02,
+        "risk_reward": 0.05,
     }
     components = {
         "signal_agreement": agreement_component,
