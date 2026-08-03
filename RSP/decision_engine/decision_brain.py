@@ -56,6 +56,17 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
         d.missing_confirmation.append("تغییر رژیم به یکی از حالات ترند/شکست، یا بازطراحی استراتژی اختصاصی RANGE")
         return d
 
+    # --- گارد ۲.۶: STRONG_REGIME_ONLY_MODE (آزمایشی) — فقط دو رژیمی که در
+    # داده‌ی واقعی بهترین عملکرد رو داشتن (STRONG_UPTREND/STRONG_DOWNTREND)
+    # مجاز به معامله‌ان. اگه فعال باشه، خیلی سخت‌گیرانه‌تر از گارد RANGE عمل
+    # می‌کنه چون کل رژیم‌های میانه (UPTREND, WEAK_*, DOWNTREND, ...) رو هم می‌بنده.
+    if settings.STRONG_REGIME_ONLY_MODE and regime.regime not in ("STRONG_UPTREND", "STRONG_DOWNTREND"):
+        d.action = "NO_TRADE"
+        d.why.append(f"STRONG_REGIME_ONLY_MODE فعال است و رژیم فعلی ({regime.regime}) "
+                      f"جزو دو رژیم مجاز (STRONG_UPTREND/STRONG_DOWNTREND) نیست")
+        d.missing_confirmation.append("رسیدن رژیم به STRONG_UPTREND یا STRONG_DOWNTREND")
+        return d
+
     # --- گارد ۳: تضاد شواهد ---
     if contradiction.conflict_detected:
         if contradiction.severity == "SEVERE":
