@@ -108,7 +108,15 @@ def main():
     parser.add_argument("--compare-arsan-live", action="store_true",
                          help="مثل --compare-arsan ولی به‌جای فایل موجود، خودِ backtest_lab.py آرسان را "
                               "زنده اجرا می‌کند (نیاز به شبکه دارد و چند دقیقه طول می‌کشد)")
+    parser.add_argument("--sl-multiplier", type=float, default=None,
+                         help=f"override موقت settings.STOP_LOSS_ATR_MULTIPLIER (پیش‌فرض "
+                              f"{settings.STOP_LOSS_ATR_MULTIPLIER}) برای تست چند مقدار بدون ادیت فایل. "
+                              f"مثال: --sl-multiplier 3.0")
     args = parser.parse_args()
+
+    if args.sl_multiplier is not None:
+        settings.STOP_LOSS_ATR_MULTIPLIER = args.sl_multiplier
+        print(f"[Override] STOP_LOSS_ATR_MULTIPLIER = {args.sl_multiplier}")
 
     def _maybe_save(data: dict):
         if args.save:
