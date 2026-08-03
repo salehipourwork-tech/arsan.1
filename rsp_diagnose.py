@@ -91,6 +91,28 @@ def main():
         print(f"  {regime:15s}  trades={n:4d}  win_rate={wr:6.2f}%  "
               f"avg_pnl_per_trade={avg_pnl:7.3f}%  total_pnl={round(stats['pnl_sum'],2):8.2f}%")
 
+    # --- بخش ۳: رابطه‌ی Confidence با Win Rate واقعی ---
+    print("\n### رابطه‌ی Confidence با نتیجه‌ی واقعی معامله ###\n")
+    buckets = [(0, 50), (50, 65), (65, 80), (80, 101)]
+    for lo, hi in buckets:
+        sub = [t for t in summary.trades if lo <= t.confidence < hi]
+        if not sub:
+            print(f"  confidence [{lo:3d}-{hi:3d}): بدون نمونه")
+            continue
+        wins = sum(1 for t in sub if t.outcome == "WIN")
+        avg_pnl = sum(t.pnl_pct for t in sub) / len(sub)
+        print(f"  confidence [{lo:3d}-{hi:3d})  trades={len(sub):4d}  "
+              f"win_rate={round(100*wins/len(sub),2):6.2f}%  avg_pnl={round(avg_pnl,4):7.4f}%")
+
+    # --- بخش ۴: درصد SL_TP_SAME_CANDLE_CONSERVATIVE_SL_FIRST ---
+    print("\n### توزیع exit_reason ###\n")
+    reason_counts = defaultdict(int)
+    for t in summary.trades:
+        reason_counts[t.exit_reason] += 1
+    total = len(summary.trades) or 1
+    for reason, cnt in sorted(reason_counts.items(), key=lambda kv: -kv[1]):
+        print(f"  {reason:45s}  {cnt:4d}  ({round(100*cnt/total,2)}%)")
+
 
 if __name__ == "__main__":
     main()
