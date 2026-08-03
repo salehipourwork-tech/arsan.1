@@ -73,6 +73,7 @@ def run_walk_forward(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
 
     window_index = 0
     pos = 0
+    total_windows_estimate = max(1, (len(base_df) - total_needed) // step_bars + 1)
     while pos + total_needed <= len(base_df):
         train_start_idx = pos
         train_end_idx = pos + train_bars
@@ -81,16 +82,26 @@ def run_walk_forward(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
         test_start_idx = validate_end_idx
         test_end_idx = test_start_idx + test_bars
 
-        # Validate: از ابتدای Train تا انتهای Validate (تا اندیکاتورها گرم باشند)
+        # Validate: از ابتدای Train تا انتهای Validate. باید تصمیمات دقیقاً از مرز
+        # Train/Validate شروع شوند، نه زودتر - وگرنه معاملات Train هم اشتباهی
+        # جزو Validate شمرده می‌شوند. (فیکس: قبلاً min(min_history, train_bars-1)
+        # بود که چون min_history پیش‌فرض=60 < train_bars=300 است، همیشه 60 انتخاب
+        # می‌شد - یعنی تصمیمات از وسط Train شروع می‌شدند، نه از مرز Validate.
+        # با max() درست می‌شود: هم حداقل گرم‌شدن اندیکاتورها تضمین می‌شود، هم
+        # تصمیمات دقیقاً از مرز واقعی شروع می‌شوند.)
         validate_bars_by_tf = _slice_by_index(bars_by_tf, base_tf, train_start_idx, validate_end_idx)
-        validate_summary = run_backtest(validate_bars_by_tf, base_tf=base_tf, min_history=min(min_history, train_bars - 1))
+        validate_summary = run_backtest(validate_bars_by_tf, base_tf=base_tf, min_history=max(min_history, train_bars))
 
         # Test: از ابتدای Train تا انتهای Test (Out-of-Sample واقعی فقط بخش Test است،
         # ولی برای گرم‌شدن اندیکاتورها به تاریخچه‌ی قبلش نیاز داریم - همان تاریخچه
         # دیده‌شده در Train/Validate است، نه داده‌ی جدید از آینده -> نشتی رخ نمی‌دهد
-        # چون تصمیمات Test هنوز فقط به bar های <= لحظه‌ی خودشان دسترسی دارند)
+        # چون تصمیمات Test هنوز فقط به bar های <= لحظه‌ی خودشان دسترسی دارند).
+        # همون فیکس بالا این‌جا هم لازم است: تصمیمات باید دقیقاً از مرز Test شروع
+        # شوند (train_bars+validate_bars)، وگرنه معاملات Validate هم دوباره داخل
+        # آمار Test شمرده می‌شوند (باگ قبلی دقیقاً همین بود).
         test_bars_by_tf = _slice_by_index(bars_by_tf, base_tf, train_start_idx, test_end_idx)
-        full_test_summary = run_backtest(test_bars_by_tf, base_tf=base_tf, min_history=min(min_history, train_bars - 1))
+        full_test_summary = run_backtest(test_bars_by_tf, base_tf=base_tf,
+                                          min_history=max(min_history, train_bars + validate_bars))
 
         window = WalkForwardWindow(
             window_index=window_index,
