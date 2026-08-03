@@ -107,6 +107,22 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
         d.why.append(f"net_score={net:+.2f} جهت‌دار است اما تایم‌فریم ورود ({mtf.entry_bias}) هم‌جهت نیست")
         d.missing_confirmation.append("هم‌جهت‌شدن تایم‌فریم پایین (15M) با جهت غالب")
 
+    # --- فیلتر Exhaustion (آزمایشی) ---
+    # طبق داده‌ی واقعی، معاملاتی با net_score خیلی افراطی (اجماع خیلی قوی همه‌ی
+    # اندیکاتورها) دو بار پشت‌سرهم win_rate پایین‌تری داشتند - فرضیه: وقتی
+    # هماهنگی شواهد به این اندازه کامل است، حرکت احتمالاً به انتها نزدیک است،
+    # نه ابتدا. به‌جای اعتماد بیشتر، این‌جا محتاط‌تر می‌شویم.
+    if settings.EXHAUSTION_FILTER_ENABLED and d.action in ("BUY", "SELL") \
+            and abs(net) >= settings.EXHAUSTION_NET_SCORE_THRESHOLD:
+        original_action = d.action
+        d.action = "WAIT"
+        d.why.append(f"EXHAUSTION FILTER: net_score={net:+.2f} از آستانه‌ی "
+                      f"{settings.EXHAUSTION_NET_SCORE_THRESHOLD} فراتر رفته - اجماع بیش‌ازحد کامل "
+                      f"شواهد می‌تواند نشانه‌ی انتهای حرکت باشد، نه ابتدای آن "
+                      f"(در غیر این صورت تصمیم {original_action} بود)")
+        d.missing_confirmation.append("کمی خنک‌شدن net_score یا پولبک قبل از ورود")
+        return d
+
     # --- Invalidation عمومی ---
     if d.action == "BUY":
         d.invalidation.append("شکست پایین‌ترین سطح حمایت اخیر یا CHOCH نزولی")
