@@ -95,6 +95,14 @@ def main():
                               f"مثال: --days 120")
     parser.add_argument("--backtest", action="store_true", help="اجرای بک‌تست به‌جای تحلیل لحظه‌ای")
     parser.add_argument("--walkforward", action="store_true", help="اجرای Walk Forward + Anti-Overfitting Check")
+    parser.add_argument("--wf-train-bars", type=int, default=1200,
+                         help="تعداد کندل 15M برای Train در هر پنجره‌ی walk-forward (پیش‌فرض 1200 = 12.5 روز)")
+    parser.add_argument("--wf-validate-bars", type=int, default=400,
+                         help="تعداد کندل 15M برای Validate در هر پنجره (پیش‌فرض 400 = 4 روز)")
+    parser.add_argument("--wf-test-bars", type=int, default=400,
+                         help="تعداد کندل 15M برای Test در هر پنجره (پیش‌فرض 400 = 4 روز)")
+    parser.add_argument("--wf-step-bars", type=int, default=400,
+                         help="گام جلورفتن هر پنجره (پیش‌فرض 400 = 4 روز)")
     parser.add_argument("--stress", action="store_true", help="اجرای Stress Test (رژیم واقعی + سناریوهای مصنوعی)")
     parser.add_argument("--montecarlo", action="store_true", help="اجرای Trade Sequence Randomization + Perturbation")
     parser.add_argument("--versions", action="store_true", help="مقایسه‌ی نسخه‌های V1/V2/V3")
@@ -139,7 +147,9 @@ def main():
         from RSP.walk_forward.walk_forward import run_walk_forward
         from RSP.anti_overfitting.overfitting_lab import run_overfitting_check
         universe = build_data_universe(args.coin, lookback_days=args.days)
-        wf = run_walk_forward(universe.bars, base_tf="15M")
+        wf = run_walk_forward(universe.bars, base_tf="15M",
+                               train_bars=args.wf_train_bars, validate_bars=args.wf_validate_bars,
+                               test_bars=args.wf_test_bars, step_bars=args.wf_step_bars)
         of = run_overfitting_check(wf)
         print(json.dumps({
             "windows": len(wf.windows), "aggregate_test_win_rate": wf.aggregate_test_win_rate,
