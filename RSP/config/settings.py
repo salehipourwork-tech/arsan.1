@@ -190,7 +190,12 @@ def get_weights_for_regime(regime: str) -> EvidenceWeights:
 # Risk Engine (Phase 16)
 # ---------------------------------------------------------------------------
 ATR_PERIOD = 14
-STOP_LOSS_ATR_MULTIPLIER = 1.5
+STOP_LOSS_ATR_MULTIPLIER = 4.5  # قبلاً 1.5 بود؛ با ATR%~0.15 (میانگین واقعی 15M) و
+# افت fee+slippage ~0.20% روی هر معامله، فاصله‌ی SL خام قبلی (0.225%) تقریباً کل
+# فاصله رو صرف هزینه می‌کرد. با 4.5، فاصله‌ی SL خام ~0.675% می‌شود (هنوز کمتر از
+# نقطه‌ی سربه‌سر نظری‌ای که با win_rate فعلی محاسبه شد، ولی نسبت هزینه/فاصله را
+# قابل توجه بهتر می‌کند)؛ لازم است بعد از این تغییر win_rate واقعی دوباره سنجیده شود
+# چون فاصله‌ی TP هم (که RR=2× SL است) عوض می‌شود و می‌تواند win_rate را کم کند.
 TAKE_PROFIT_RR_TARGET = 2.0          # حداقل Risk/Reward قابل قبول
 MAX_RISK_PERCENT_PER_TRADE = 1.0     # % از سرمایه‌ی فرضی
 MIN_ACCEPTABLE_RISK_REWARD = 1.5
