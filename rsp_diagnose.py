@@ -20,6 +20,34 @@ from RSP.ingestion.data_universe import build_data_universe
 from RSP.backtest_engine.backtest_engine import run_backtest
 from RSP.self_evaluation.self_evaluation import evaluate_all
 from RSP.self_evaluation.failure_analysis import analyze_failures, _classify_trade
+from RSP.walk_forward.walk_forward import run_walk_forward
+
+
+def dump_walk_forward_windows(universe, base_tf="15M"):
+    """هر پنجره‌ی walk-forward رو با جزئیات Validate vs Test چاپ می‌کنه تا
+    ببینیم پنجره‌های SEVERE کجای بازه‌ی زمانی خوشه شدن (مثلاً یه دوره‌ی خاص
+    پرنوسان، یا پخش و یکنواخت در کل بازه)."""
+    wf = run_walk_forward(universe.bars, base_tf=base_tf)
+    print(f"windows={len(wf.windows)}  aggregate_test_win_rate={wf.aggregate_test_win_rate}  "
+          f"aggregate_test_net_return={wf.aggregate_test_net_return}")
+    print()
+    for w in wf.windows:
+        v, t = w.validate_summary, w.test_summary
+        drop_wr = (t.win_rate - v.win_rate)
+        drop_avg = (t.average_trade_pct - v.average_trade_pct)
+        flag = ""
+        if t.total_trades < 5 or v.total_trades < 5:
+            flag = "INSUFFICIENT_TRADES"
+        elif drop_wr < -15 and drop_avg < -0.1:
+            flag = "SEVERE"
+        elif drop_wr < -8 or drop_avg < -0.05:
+            flag = "WARNING"
+        else:
+            flag = "OK"
+        print(f"win#{w.window_index:3d}  test=[{w.test_start} .. {w.test_end}]  "
+              f"validate(wr={v.win_rate:5.1f}%,avg={v.average_trade_pct:+.3f}%,n={v.total_trades:3d})  "
+              f"test(wr={t.win_rate:5.1f}%,avg={t.average_trade_pct:+.3f}%,n={t.total_trades:3d})  "
+              f"[{flag}]")
 
 
 def main():
@@ -27,9 +55,15 @@ def main():
     ap.add_argument("--coin", default="bitcoin")
     ap.add_argument("--days", type=float, default=120)
     ap.add_argument("--samples", type=int, default=8, help="چند نمونه‌ی UNEXPLAINED نشان بدهد")
+    ap.add_argument("--walkforward-detail", action="store_true",
+                     help="به‌جای بک‌تست معمولی، جزئیات هر پنجره‌ی walk-forward رو چاپ کن")
     args = ap.parse_args()
 
     universe = build_data_universe(args.coin, lookback_days=args.days)
+
+    if args.walkforward_detail:
+        dump_walk_forward_windows(universe)
+        return
     summary = run_backtest(universe.bars, base_tf="15M")
     evals = evaluate_all(summary.trades)
     failure_report = analyze_failures(summary.trades, evals)
