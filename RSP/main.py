@@ -125,6 +125,8 @@ def main():
                               f"{settings.EXHAUSTION_NET_SCORE_THRESHOLD})")
     parser.add_argument("--no-exhaustion-filter", action="store_true",
                          help="غیرفعال‌کردن موقت فیلتر Exhaustion برای مقایسه‌ی با/بدون")
+    parser.add_argument("--strong-regime-only", action="store_true",
+                         help="فعال‌کردن STRONG_REGIME_ONLY_MODE (فقط STRONG_UPTREND/STRONG_DOWNTREND)")
     args = parser.parse_args()
 
     if args.sl_multiplier is not None:
@@ -136,6 +138,9 @@ def main():
     if args.no_exhaustion_filter:
         settings.EXHAUSTION_FILTER_ENABLED = False
         print("[Override] EXHAUSTION_FILTER_ENABLED = False")
+    if args.strong_regime_only:
+        settings.STRONG_REGIME_ONLY_MODE = True
+        print("[Override] STRONG_REGIME_ONLY_MODE = True")
 
     def _maybe_save(data: dict):
         if args.save:
