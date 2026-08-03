@@ -70,6 +70,14 @@ COOLDOWN_BARS_AFTER_STOP_LOSS = 6  # روی 15M یعنی ۱.۵ ساعت
 # بلکه واقعاً بدترین رژیم است. فعلاً معامله در این رژیم کامل غیرفعال می‌شود.
 RANGE_REGIME_NO_TRADE = True
 
+# آزمایشی: طبق داده‌ی واقعی، بازه‌های confidence بالا (که عمدتاً net_score خیلی
+# افراطی دارند) دو بار پشت‌سرهم win_rate پایین‌تری نشان دادند (فرضیه‌ی
+# "exhaustion" - وقتی همه‌ی اندیکاتورها هم‌جهت‌اند، شاید حرکت به انتها رسیده).
+# اگر |net_score| از این آستانه بیشتر شود، به‌جای BUY/SELL مستقیم، WAIT صادر
+# می‌شود (نیاز به تأیید بیشتر/کمی خنک‌شدن سیگنال قبل از ورود).
+EXHAUSTION_NET_SCORE_THRESHOLD = 0.70
+EXHAUSTION_FILTER_ENABLED = True
+
 
 def candles_needed(timeframe: str, days: float) -> int:
     minutes = TIMEFRAME_MINUTES[timeframe]
