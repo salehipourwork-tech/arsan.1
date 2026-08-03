@@ -24,15 +24,31 @@ INTERVAL_SECONDS = {"15M": 15 * 60, "1H": 60 * 60, "4H": 4 * 60 * 60, "1D": 24 *
 MAX_PER_CALL = 1500
 
 
-def _fetch_page(symbol, kline_type, start_at=None, end_at=None):
+def _fetch_page(symbol, kline_type, start_at=None, end_at=None, max_retries=3):
     params = {"symbol": symbol, "type": kline_type}
     if start_at is not None:
         params["startAt"] = start_at
     if end_at is not None:
         params["endAt"] = end_at
-    resp = requests.get(BASE_URL, params=params, timeout=15)
-    if resp.status_code != 200:
-        raise RuntimeError(f"HTTP_{resp.status_code}:{resp.text[:150]}")
+
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(BASE_URL, params=params, timeout=15)
+            if resp.status_code == 429 or resp.status_code >= 500:
+                # rate limit یا خطای موقت سرور -> ارزش retry دارد
+                last_exc = RuntimeError(f"HTTP_{resp.status_code}:{resp.text[:150]}")
+                time.sleep(0.5 * (2 ** attempt))  # backoff نمایی: 0.5s, 1s, 2s
+                continue
+            if resp.status_code != 200:
+                raise RuntimeError(f"HTTP_{resp.status_code}:{resp.text[:150]}")
+            break
+        except requests.RequestException as exc:
+            last_exc = exc
+            time.sleep(0.5 * (2 ** attempt))
+    else:
+        raise last_exc if last_exc else RuntimeError("KUCOIN_FETCH_FAILED_AFTER_RETRIES")
+
     payload = resp.json()
     raw = payload.get("data", [])
     if not raw:
