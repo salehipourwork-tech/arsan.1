@@ -65,6 +65,11 @@ MAX_WARMUP_BARS = 400
 # «اصرار روی یه اشتباه» وقتی شواهد بین چند کندل تقریباً بدون تغییر می‌ماند.
 COOLDOWN_BARS_AFTER_STOP_LOSS = 6  # روی 15M یعنی ۱.۵ ساعت
 
+# طبق داده‌ی واقعی بک‌تست (۷۴ معامله در رژیم RANGE: win_rate=28.38%، avg_pnl=-0.262%،
+# در حالی‌که نقطه‌ی سربه‌سر با RR ثابتِ 2.0 حدود 33.3% است) — RANGE نه فقط پرتعدادترین
+# بلکه واقعاً بدترین رژیم است. فعلاً معامله در این رژیم کامل غیرفعال می‌شود.
+RANGE_REGIME_NO_TRADE = True
+
 
 def candles_needed(timeframe: str, days: float) -> int:
     minutes = TIMEFRAME_MINUTES[timeframe]
