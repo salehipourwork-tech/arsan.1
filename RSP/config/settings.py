@@ -78,6 +78,12 @@ RANGE_REGIME_NO_TRADE = True
 EXHAUSTION_NET_SCORE_THRESHOLD = 0.70
 EXHAUSTION_FILTER_ENABLED = True
 
+# آزمایشی: طبق جدول عملکرد رژیم‌ها (داده‌ی واقعی ۱۲۰ روزه)، STRONG_UPTREND
+# (win_rate=41.67%, avg_pnl=-0.075%) و STRONG_DOWNTREND (win_rate=42.37%,
+# avg_pnl=-0.061%) به‌وضوح بهترین دو رژیم بودند - هم بالاترین win_rate، هم
+# کمترین avg_pnl منفی. اگر فعال شود، معامله فقط در این دو رژیم مجاز است.
+STRONG_REGIME_ONLY_MODE = False
+
 
 def candles_needed(timeframe: str, days: float) -> int:
     minutes = TIMEFRAME_MINUTES[timeframe]
