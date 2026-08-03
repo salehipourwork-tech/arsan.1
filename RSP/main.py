@@ -112,11 +112,22 @@ def main():
                          help=f"override موقت settings.STOP_LOSS_ATR_MULTIPLIER (پیش‌فرض "
                               f"{settings.STOP_LOSS_ATR_MULTIPLIER}) برای تست چند مقدار بدون ادیت فایل. "
                               f"مثال: --sl-multiplier 3.0")
+    parser.add_argument("--exhaustion-threshold", type=float, default=None,
+                         help=f"override موقت settings.EXHAUSTION_NET_SCORE_THRESHOLD (پیش‌فرض "
+                              f"{settings.EXHAUSTION_NET_SCORE_THRESHOLD})")
+    parser.add_argument("--no-exhaustion-filter", action="store_true",
+                         help="غیرفعال‌کردن موقت فیلتر Exhaustion برای مقایسه‌ی با/بدون")
     args = parser.parse_args()
 
     if args.sl_multiplier is not None:
         settings.STOP_LOSS_ATR_MULTIPLIER = args.sl_multiplier
         print(f"[Override] STOP_LOSS_ATR_MULTIPLIER = {args.sl_multiplier}")
+    if args.exhaustion_threshold is not None:
+        settings.EXHAUSTION_NET_SCORE_THRESHOLD = args.exhaustion_threshold
+        print(f"[Override] EXHAUSTION_NET_SCORE_THRESHOLD = {args.exhaustion_threshold}")
+    if args.no_exhaustion_filter:
+        settings.EXHAUSTION_FILTER_ENABLED = False
+        print("[Override] EXHAUSTION_FILTER_ENABLED = False")
 
     def _maybe_save(data: dict):
         if args.save:
