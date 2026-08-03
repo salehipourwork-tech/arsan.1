@@ -47,6 +47,15 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
         d.missing_confirmation.append("تغییر رژیم به یکی از حالات قابل‌معامله")
         return d
 
+    # --- گارد ۲.۵: رژیم RANGE — طبق شواهد بک‌تست واقعی، این رژیم به‌طور پایدار
+    # زیر نقطه‌ی سربه‌سر عمل می‌کند (نه فقط پرتعدادترین، واقعاً بدترین رژیم است).
+    if regime.regime == "RANGE" and settings.RANGE_REGIME_NO_TRADE:
+        d.action = "NO_TRADE"
+        d.why.append("رژیم RANGE طبق شواهد بک‌تست به‌طور پایدار زیر نقطه‌ی سربه‌سر عمل می‌کند؛ "
+                      "معامله در این رژیم فعلاً غیرفعال است (RANGE_REGIME_NO_TRADE)")
+        d.missing_confirmation.append("تغییر رژیم به یکی از حالات ترند/شکست، یا بازطراحی استراتژی اختصاصی RANGE")
+        return d
+
     # --- گارد ۳: تضاد شواهد ---
     if contradiction.conflict_detected:
         if contradiction.severity == "SEVERE":
