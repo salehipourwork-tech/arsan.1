@@ -44,10 +44,15 @@ def dump_walk_forward_windows(universe, base_tf="15M"):
             flag = "WARNING"
         else:
             flag = "OK"
+        regime_counts = defaultdict(int)
+        for tr in t.trades:
+            regime_counts[tr.regime] += 1
+        dominant_regime = max(regime_counts.items(), key=lambda kv: kv[1])[0] if regime_counts else "N/A"
+        regime_summary = ",".join(f"{k}:{v_}" for k, v_ in sorted(regime_counts.items(), key=lambda kv: -kv[1]))
         print(f"win#{w.window_index:3d}  test=[{w.test_start} .. {w.test_end}]  "
               f"validate(wr={v.win_rate:5.1f}%,avg={v.average_trade_pct:+.3f}%,n={v.total_trades:3d})  "
               f"test(wr={t.win_rate:5.1f}%,avg={t.average_trade_pct:+.3f}%,n={t.total_trades:3d})  "
-              f"[{flag}]")
+              f"[{flag}]  dominant_regime={dominant_regime}  ({regime_summary})")
 
 
 def main():
