@@ -43,34 +43,49 @@ def run_analysis(coin, timeframe="1h"):
     try:
         from RSP.ingestion.multi_source_router import fetch_with_fallback
         routed = fetch_with_fallback(coin, timeframe, limit=500)
-        source_used = routed.source if hasattr(routed, "source") else "multi_source"
+        print("[DEBUG] fetch_with_fallback returned type: " + str(type(routed)))
+        source_used = getattr(routed, "source", "multi_source")
     except Exception as e1:
         print("multi_source_router failed: " + str(e1))
         try:
             from RSP.analyzer.fetch_data import fetch_ohlcv
             routed = fetch_ohlcv(coin, timeframe)
+            print("[DEBUG] analyzer.fetch_data returned type: " + str(type(routed)))
             source_used = "analyzer"
         except Exception as e2:
             print("analyzer.fetch_data failed: " + str(e2))
             try:
                 from RSP.ingestion.sources.binance_source import fetch_ohlcv
                 routed = fetch_ohlcv(coin, timeframe, limit=500)
+                print("[DEBUG] binance.fetch_ohlcv returned type: " + str(type(routed)))
                 source_used = "binance"
             except Exception as e3:
                 print("ERROR: Could not fetch data — " + str(e3))
                 return
 
-    # Extract DataFrame from RoutedResult if needed
-    if hasattr(routed, "data"):
+    # Extract DataFrame — handle ANY return type
+    base_df = None
+    if routed is None:
+        print("ERROR: Fetcher returned None.")
+        return
+    elif hasattr(routed, "data"):
         base_df = routed.data
+        print("[DEBUG] Extracted .data attribute")
     elif hasattr(routed, "empty"):
         base_df = routed
+        print("[DEBUG] Using returned object directly (has .empty)")
+    elif isinstance(routed, dict) and "data" in routed:
+        base_df = routed["data"]
+        print("[DEBUG] Extracted ['data'] from dict")
     else:
-        print("ERROR: Unknown data format from fetcher.")
+        print("ERROR: Unknown data format from fetcher. Type: " + str(type(routed)))
         return
 
-    if base_df is None or base_df.empty:
-        print("ERROR: No data fetched. Check symbol or network.")
+    if base_df is None:
+        print("ERROR: Extracted data is None.")
+        return
+    elif hasattr(base_df, "empty") and base_df.empty:
+        print("ERROR: No data fetched (empty DataFrame). Check symbol or network.")
         return
 
     base_quality = check_all_timeframes(coin, base_df)
