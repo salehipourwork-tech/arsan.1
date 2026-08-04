@@ -38,27 +38,36 @@ def run_analysis(coin, timeframe="1h"):
     print("=" * 60 + "\n")
 
     # Fetch data directly from multi_source_router
-    base_df = None
+    routed = None
     source_used = "unknown"
     try:
         from RSP.ingestion.multi_source_router import fetch_with_fallback
-        base_df = fetch_with_fallback(coin, timeframe, limit=500)
-        source_used = "multi_source"
+        routed = fetch_with_fallback(coin, timeframe, limit=500)
+        source_used = routed.source if hasattr(routed, "source") else "multi_source"
     except Exception as e1:
         print("multi_source_router failed: " + str(e1))
         try:
             from RSP.analyzer.fetch_data import fetch_ohlcv
-            base_df = fetch_ohlcv(coin, timeframe)
+            routed = fetch_ohlcv(coin, timeframe)
             source_used = "analyzer"
         except Exception as e2:
             print("analyzer.fetch_data failed: " + str(e2))
             try:
                 from RSP.ingestion.sources.binance_source import fetch_ohlcv
-                base_df = fetch_ohlcv(coin, timeframe, limit=500)
+                routed = fetch_ohlcv(coin, timeframe, limit=500)
                 source_used = "binance"
             except Exception as e3:
                 print("ERROR: Could not fetch data — " + str(e3))
                 return
+
+    # Extract DataFrame from RoutedResult if needed
+    if hasattr(routed, "data"):
+        base_df = routed.data
+    elif hasattr(routed, "empty"):
+        base_df = routed
+    else:
+        print("ERROR: Unknown data format from fetcher.")
+        return
 
     if base_df is None or base_df.empty:
         print("ERROR: No data fetched. Check symbol or network.")
