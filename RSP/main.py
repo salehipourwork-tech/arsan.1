@@ -15,8 +15,6 @@ try:
 except Exception:
     FUZZY_AVAILABLE = False
 
-# Existing imports — adjust names if your files differ
-from RSP.ingestion.data_universe import build_data_universe
 from RSP.preprocessing.quality_engine import check_all_timeframes
 from RSP.regime_engine.regime_engine import determine_regime
 from RSP.signal_engine.confluence import analyze_confluence
@@ -39,23 +37,27 @@ def run_analysis(coin, timeframe="1h"):
     print("RSP Analysis: " + coin.upper() + " | " + timeframe)
     print("=" * 60 + "\n")
 
-    universe = build_data_universe([coin])
-
-    # Fetch data — try multiple possible function names
+    # Fetch data directly from multi_source_router
     base_df = None
+    source_used = "unknown"
     try:
-        from RSP.ingestion.multi_source_router import fetch_data
-        base_df = fetch_data(coin, timeframe)
-    except Exception:
+        from RSP.ingestion.multi_source_router import fetch_with_fallback
+        base_df = fetch_with_fallback(coin, timeframe, limit=500)
+        source_used = "multi_source"
+    except Exception as e1:
+        print("multi_source_router failed: " + str(e1))
         try:
-            from RSP.ingestion.multi_source_router import get_data
-            base_df = get_data(coin, timeframe)
-        except Exception:
+            from RSP.analyzer.fetch_data import fetch_ohlcv
+            base_df = fetch_ohlcv(coin, timeframe)
+            source_used = "analyzer"
+        except Exception as e2:
+            print("analyzer.fetch_data failed: " + str(e2))
             try:
-                from RSP.analyzer.fetch_data import fetch_ohlcv
-                base_df = fetch_ohlcv(coin, timeframe)
-            except Exception as e:
-                print("ERROR: Could not fetch data — " + str(e))
+                from RSP.ingestion.sources.binance_source import fetch_ohlcv
+                base_df = fetch_ohlcv(coin, timeframe, limit=500)
+                source_used = "binance"
+            except Exception as e3:
+                print("ERROR: Could not fetch data — " + str(e3))
                 return
 
     if base_df is None or base_df.empty:
@@ -121,7 +123,7 @@ def run_analysis(coin, timeframe="1h"):
 
     report = build_report(
         decision, confidence, regime, selection, risk_plan, trade_quality,
-        base_quality, universe.source_used
+        base_quality, source_used
     )
     print(report)
 
