@@ -1,6 +1,5 @@
 """
 RSP — main.py (with Fuzzy Engine Integration)
-Compatible with existing project structure.
 """
 import os
 import sys
@@ -8,7 +7,6 @@ import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Fuzzy integration (safe import)
 try:
     from RSP.fuzzy_integration_bridge import integrate_fuzzy_decision
     FUZZY_AVAILABLE = True
@@ -37,55 +35,50 @@ def run_analysis(coin, timeframe="1h"):
     print("RSP Analysis: " + coin.upper() + " | " + timeframe)
     print("=" * 60 + "\n")
 
-    # Fetch data directly from multi_source_router
     routed = None
     source_used = "unknown"
     try:
         from RSP.ingestion.multi_source_router import fetch_with_fallback
         routed = fetch_with_fallback(coin, timeframe, limit=500)
-        print("[DEBUG] fetch_with_fallback returned type: " + str(type(routed)))
         source_used = getattr(routed, "source", "multi_source")
     except Exception as e1:
         print("multi_source_router failed: " + str(e1))
         try:
             from RSP.analyzer.fetch_data import fetch_ohlcv
             routed = fetch_ohlcv(coin, timeframe)
-            print("[DEBUG] analyzer.fetch_data returned type: " + str(type(routed)))
             source_used = "analyzer"
         except Exception as e2:
             print("analyzer.fetch_data failed: " + str(e2))
             try:
                 from RSP.ingestion.sources.binance_source import fetch_ohlcv
                 routed = fetch_ohlcv(coin, timeframe, limit=500)
-                print("[DEBUG] binance.fetch_ohlcv returned type: " + str(type(routed)))
                 source_used = "binance"
             except Exception as e3:
                 print("ERROR: Could not fetch data — " + str(e3))
                 return
 
-    # Extract DataFrame — handle ANY return type
+    # Extract DataFrame — try .data first, then direct object
     base_df = None
-    if routed is None:
-        print("ERROR: Fetcher returned None.")
-        return
-    elif hasattr(routed, "data"):
+    try:
         base_df = routed.data
-        print("[DEBUG] Extracted .data attribute")
-    elif hasattr(routed, "empty"):
-        base_df = routed
-        print("[DEBUG] Using returned object directly (has .empty)")
-    elif isinstance(routed, dict) and "data" in routed:
-        base_df = routed["data"]
-        print("[DEBUG] Extracted ['data'] from dict")
-    else:
-        print("ERROR: Unknown data format from fetcher. Type: " + str(type(routed)))
-        return
+        print("[DEBUG] Used .data attribute")
+    except Exception:
+        try:
+            base_df = routed.df
+            print("[DEBUG] Used .df attribute")
+        except Exception:
+            try:
+                if hasattr(routed, "empty"):
+                    base_df = routed
+                    print("[DEBUG] Used object directly (DataFrame-like)")
+            except Exception:
+                pass
 
     if base_df is None:
-        print("ERROR: Extracted data is None.")
+        print("ERROR: Could not extract DataFrame from fetcher.")
         return
-    elif hasattr(base_df, "empty") and base_df.empty:
-        print("ERROR: No data fetched (empty DataFrame). Check symbol or network.")
+    if hasattr(base_df, "empty") and base_df.empty:
+        print("ERROR: Empty DataFrame returned.")
         return
 
     base_quality = check_all_timeframes(coin, base_df)
@@ -103,28 +96,20 @@ def run_analysis(coin, timeframe="1h"):
     decision = decide(regime, fusion, mtf, contradiction, confidence,
                        base_quality.quality_ok if base_quality else False)
 
-    # --- FUZZY ENGINE INTEGRATION (Phases 27-50) ---
+    # --- FUZZY ENGINE ---
     if FUZZY_AVAILABLE and getattr(settings, 'FUZZY_BACKTEST_ENABLED', False):
         try:
             integrated = integrate_fuzzy_decision(
-                coin=coin,
-                crisp_decision=decision,
-                regime=regime,
-                confluence=confluence,
-                mtf=mtf,
-                structure=None,
-                risk_plan=None,
-                atr_pct=2.0,
-                fusion=fusion,
-                contradiction=contradiction,
-                confidence=confidence,
+                coin=coin, crisp_decision=decision, regime=regime,
+                confluence=confluence, mtf=mtf, structure=None,
+                risk_plan=None, atr_pct=2.0, fusion=fusion,
+                contradiction=contradiction, confidence=confidence,
             )
             decision.direction = integrated.final_direction
             decision.confidence = int(integrated.final_confidence * 100)
-            print("[Fuzzy Engine] Decision integrated.")
+            print("[Fuzzy Engine] Active.")
         except Exception as e:
             print("[Fuzzy Engine] Skipped: " + str(e))
-    # --- END FUZZY ---
 
     risk_plan = None
     trade_quality = None
@@ -141,7 +126,7 @@ def run_analysis(coin, timeframe="1h"):
         if not (risk_plan.valid and trade_quality.passed):
             decision.action = "NO_TRADE"
             decision.why.append(
-                "Trade Quality/Risk Gate: risk_ok=" + str(risk_plan.valid) + 
+                "Trade Quality/Risk Gate: risk_ok=" + str(risk_plan.valid) +
                 ", quality_ok=" + str(trade_quality.passed)
             )
 
@@ -156,15 +141,15 @@ def run_analysis(coin, timeframe="1h"):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="RSP — Research & Strategy Platform")
-    parser.add_argument("--coin", default="bitcoin", help="Coin symbol")
-    parser.add_argument("--timeframe", default="1h", help="Timeframe")
-    parser.add_argument("--backtest", action="store_true", help="Run backtest")
+    parser = argparse.ArgumentParser(description="RSP")
+    parser.add_argument("--coin", default="bitcoin")
+    parser.add_argument("--timeframe", default="1h")
+    parser.add_argument("--backtest", action="store_true")
     parser.add_argument("--walkforward", action="store_true")
     parser.add_argument("--stress", action="store_true")
     parser.add_argument("--montecarlo", action="store_true")
     parser.add_argument("--versions", action="store_true")
-    parser.add_argument("--challenge", nargs=2, metavar=("V1", "V2"))
+    parser.add_argument("--challenge", nargs=2)
     parser.add_argument("--compare-arsan", action="store_true")
     args = parser.parse_args()
 
