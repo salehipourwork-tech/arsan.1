@@ -20,6 +20,7 @@ import sys
 # اجازه می‌دهد چه با `python -m RSP.main` و چه مستقیم اجرا شود
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from RSP.fuzzy_integration_bridge import integrate_fuzzy_decision
 from RSP.ingestion.data_universe import build_data_universe
 from RSP.preprocessing.quality_engine import check_all_timeframes
 from RSP.regime_engine.regime_engine import determine_regime
@@ -57,6 +58,25 @@ def analyze_coin(coin_id: str, lookback_days: float = settings.DEFAULT_LOOKBACK_
     decision = decide(regime, fusion, mtf, contradiction, confidence,
                        base_quality.quality_ok if base_quality else False)
 
+
+
+
+# --- کد فازی جدید (اضافه شده) ---
+integrated = integrate_fuzzy_decision(
+    coin=coin,
+    crisp_decision=decision,
+    regime=regime,
+    confluence=confluence,
+    mtf=mtf,
+    structure=structure if 'structure' in locals() else None,
+    risk_plan=risk_plan if 'risk_plan' in locals() else None,
+    atr_pct=atr_pct if 'atr_pct' in locals() else 2.0,
+    fusion=fusion,
+    contradiction=contradiction,
+    confidence=confidence,
+)
+decision.direction = integrated.final_direction
+decision.confidence = int(integrated.final_confidence * 100)
     risk_plan = None
     trade_quality = None
     selection = select_strategy(regime, fusion) if regime else None
