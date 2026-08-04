@@ -1,15 +1,6 @@
 """
 RSP — fuzzy_core/reporting.py (Explainable Fuzzy Decision Report)
-
-For every decision, a complete report must be generated:
-  - Decision
-  - Confidence
-  - All Quality Variables
-  - Active Rules
-  - Rejected Trade
-  - Primary Reason
-  - Firing Strengths
-  - Conflict Resolution Details
+No f-strings — only string concatenation to avoid syntax errors.
 """
 from typing import Dict, List, Optional
 
@@ -18,7 +9,6 @@ from RSP.fuzzy_core.rule_base import get_rule_by_id
 
 
 def generate_fuzzy_report(report: FuzzyDecisionReport, coin: str = "") -> str:
-    """Generate human-readable report from fuzzy decision."""
     lines = []
     sep = "=" * 60
     lines.append(sep)
@@ -26,7 +16,6 @@ def generate_fuzzy_report(report: FuzzyDecisionReport, coin: str = "") -> str:
     if coin:
         lines.append("Coin: " + coin.upper())
     lines.append(sep)
-
     lines.append("")
     lines.append("Decision:          " + str(report.decision))
     lines.append("Confidence:        " + str(round(report.confidence, 4)))
@@ -44,11 +33,11 @@ def generate_fuzzy_report(report: FuzzyDecisionReport, coin: str = "") -> str:
     lines.append("FUZZY QUALITY VARIABLES")
     lines.append("-" * 40)
 
-    def _fmt_fuzzy(d: Dict[str, float]) -> str:
+    def _fmt_fuzzy(d):
         if not d:
             return "N/A"
-        sorted_items = sorted(d.items(), key=lambda x: x[1], reverse=True)[:2]
-        return ", ".join(k + "=" + str(round(v, 3)) for k, v in sorted_items)
+        items = sorted(d.items(), key=lambda x: x[1], reverse=True)[:2]
+        return ", ".join(k + "=" + str(round(v, 3)) for k, v in items)
 
     lines.append("Trend Quality:       " + _fmt_fuzzy(report.trend_quality))
     lines.append("Momentum Quality:    " + _fmt_fuzzy(report.momentum_quality))
@@ -111,7 +100,6 @@ def generate_fuzzy_report(report: FuzzyDecisionReport, coin: str = "") -> str:
 
 
 def generate_fuzzy_json(report: FuzzyDecisionReport) -> Dict:
-    """JSON output for dashboard or experiment manager."""
     return {
         "decision": report.decision,
         "confidence": report.confidence,
