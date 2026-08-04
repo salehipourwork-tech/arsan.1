@@ -84,6 +84,18 @@ EXHAUSTION_FILTER_ENABLED = True
 # کمترین avg_pnl منفی. اگر فعال شود، معامله فقط در این دو رژیم مجاز است.
 STRONG_REGIME_ONLY_MODE = False
 
+# --- Fuzzy Core (Phase 27-44, نسخه‌ی حداقلی - فقط signal_strength) ---
+# پیش‌فرض خاموش تا رفتار فعلی (crisp thresholds) هیچ تغییری نکند مگر
+# صریحاً با --fuzzy-engine فعال شود. مرزهای زیر طوری انتخاب شدند که حول
+# همون آستانه‌های سخت قبلی (0.20 برای BUY/SELL و 0.70 برای Exhaustion)
+# مرکز داشته باشند، اما به‌جای یک لبه‌ی تیز، یک گذار نرم بسازند.
+FUZZY_ENGINE_ENABLED = False
+FUZZY_SIGNAL_WEAK_END = 0.20        # معادل آستانه‌ی قبلی BUY/SELL
+FUZZY_SIGNAL_MODERATE_CENTER = 0.375
+FUZZY_SIGNAL_STRONG_CENTER = 0.55
+FUZZY_SIGNAL_EXTREME_START = 0.70   # معادل آستانه‌ی قبلی EXHAUSTION_NET_SCORE_THRESHOLD
+FUZZY_TRADE_PERMISSION_MIN = 50.0   # حداقل trade_permission_score برای عبور از این گارد
+
 
 def candles_needed(timeframe: str, days: float) -> int:
     minutes = TIMEFRAME_MINUTES[timeframe]
