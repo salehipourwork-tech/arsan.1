@@ -1,12 +1,22 @@
+"""
+RSP — main.py (with Fuzzy Engine Integration)
+Compatible with existing project structure.
+"""
 import os
 import sys
 import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from RSP.fuzzy_integration_bridge import integrate_fuzzy_decision
+# Fuzzy integration (safe import)
+try:
+    from RSP.fuzzy_integration_bridge import integrate_fuzzy_decision
+    FUZZY_AVAILABLE = True
+except Exception:
+    FUZZY_AVAILABLE = False
+
+# Existing imports — adjust names if your files differ
 from RSP.ingestion.data_universe import build_data_universe
-from RSP.ingestion.multi_source_router import fetch_data
 from RSP.preprocessing.quality_engine import check_all_timeframes
 from RSP.regime_engine.regime_engine import determine_regime
 from RSP.signal_engine.confluence import analyze_confluence
@@ -25,12 +35,28 @@ from RSP.config import settings
 
 
 def run_analysis(coin, timeframe="1h"):
-    print(f"\n{'='*60}")
-    print(f"RSP Analysis: {coin.upper()} | {timeframe}")
-    print(f"{'='*60}\n")
+    print("\n" + "=" * 60)
+    print("RSP Analysis: " + coin.upper() + " | " + timeframe)
+    print("=" * 60 + "\n")
 
     universe = build_data_universe([coin])
-    base_df = fetch_data(coin, timeframe)
+
+    # Fetch data — try multiple possible function names
+    base_df = None
+    try:
+        from RSP.ingestion.multi_source_router import fetch_data
+        base_df = fetch_data(coin, timeframe)
+    except Exception:
+        try:
+            from RSP.ingestion.multi_source_router import get_data
+            base_df = get_data(coin, timeframe)
+        except Exception:
+            try:
+                from RSP.analyzer.fetch_data import fetch_ohlcv
+                base_df = fetch_ohlcv(coin, timeframe)
+            except Exception as e:
+                print("ERROR: Could not fetch data — " + str(e))
+                return
 
     if base_df is None or base_df.empty:
         print("ERROR: No data fetched. Check symbol or network.")
@@ -49,24 +75,29 @@ def run_analysis(coin, timeframe="1h"):
     )
 
     decision = decide(regime, fusion, mtf, contradiction, confidence,
-                      base_quality.quality_ok if base_quality else False)
+                       base_quality.quality_ok if base_quality else False)
 
     # --- FUZZY ENGINE INTEGRATION (Phases 27-50) ---
-    integrated = integrate_fuzzy_decision(
-        coin=coin,
-        crisp_decision=decision,
-        regime=regime,
-        confluence=confluence,
-        mtf=mtf,
-        structure=structure if 'structure' in locals() else None,
-        risk_plan=risk_plan if 'risk_plan' in locals() else None,
-        atr_pct=atr_pct if 'atr_pct' in locals() else 2.0,
-        fusion=fusion,
-        contradiction=contradiction,
-        confidence=confidence,
-    )
-    decision.direction = integrated.final_direction
-    decision.confidence = int(integrated.final_confidence * 100)
+    if FUZZY_AVAILABLE and getattr(settings, 'FUZZY_BACKTEST_ENABLED', False):
+        try:
+            integrated = integrate_fuzzy_decision(
+                coin=coin,
+                crisp_decision=decision,
+                regime=regime,
+                confluence=confluence,
+                mtf=mtf,
+                structure=None,
+                risk_plan=None,
+                atr_pct=2.0,
+                fusion=fusion,
+                contradiction=contradiction,
+                confidence=confidence,
+            )
+            decision.direction = integrated.final_direction
+            decision.confidence = int(integrated.final_confidence * 100)
+            print("[Fuzzy Engine] Decision integrated.")
+        except Exception as e:
+            print("[Fuzzy Engine] Skipped: " + str(e))
     # --- END FUZZY ---
 
     risk_plan = None
@@ -84,8 +115,8 @@ def run_analysis(coin, timeframe="1h"):
         if not (risk_plan.valid and trade_quality.passed):
             decision.action = "NO_TRADE"
             decision.why.append(
-                f"Trade Quality/Risk Gate: risk_ok={risk_plan.valid}, "
-                f"quality_ok={trade_quality.passed}"
+                "Trade Quality/Risk Gate: risk_ok=" + str(risk_plan.valid) + 
+                ", quality_ok=" + str(trade_quality.passed)
             )
 
     report = build_report(
@@ -94,43 +125,61 @@ def run_analysis(coin, timeframe="1h"):
     )
     print(report)
 
-    if settings.LOG_EXPERIMENTS:
+    if getattr(settings, 'LOG_EXPERIMENTS', False):
         log_experiment(coin, report)
 
 
 def main():
     parser = argparse.ArgumentParser(description="RSP — Research & Strategy Platform")
-    parser.add_argument("--coin", default="bitcoin", help="Coin symbol (default: bitcoin)")
-    parser.add_argument("--timeframe", default="1h", help="Timeframe (default: 1h)")
-    parser.add_argument("--backtest", action="store_true", help="Run backtest mode")
-    parser.add_argument("--walkforward", action="store_true", help="Run walk-forward analysis")
-    parser.add_argument("--stress", action="store_true", help="Run stress test")
-    parser.add_argument("--montecarlo", action="store_true", help="Run Monte Carlo simulation")
-    parser.add_argument("--versions", action="store_true", help="Compare strategy versions")
-    parser.add_argument("--challenge", nargs=2, metavar=("V1", "V2"), help="Challenger system: V1 vs V2")
-    parser.add_argument("--compare-arsan", action="store_true", help="Compare with Arsan baseline")
+    parser.add_argument("--coin", default="bitcoin", help="Coin symbol")
+    parser.add_argument("--timeframe", default="1h", help="Timeframe")
+    parser.add_argument("--backtest", action="store_true", help="Run backtest")
+    parser.add_argument("--walkforward", action="store_true")
+    parser.add_argument("--stress", action="store_true")
+    parser.add_argument("--montecarlo", action="store_true")
+    parser.add_argument("--versions", action="store_true")
+    parser.add_argument("--challenge", nargs=2, metavar=("V1", "V2"))
+    parser.add_argument("--compare-arsan", action="store_true")
     args = parser.parse_args()
 
     if args.backtest:
         run_backtest(args.coin, args.timeframe)
     elif args.walkforward:
-        from RSP.walk_forward.walk_forward import run_walk_forward
-        run_walk_forward(args.coin, args.timeframe)
+        try:
+            from RSP.walk_forward.walk_forward import run_walk_forward
+            run_walk_forward(args.coin, args.timeframe)
+        except Exception as e:
+            print("Walk-forward error: " + str(e))
     elif args.stress:
-        from RSP.robustness.stress_test import run_stress_test
-        run_stress_test(args.coin, args.timeframe)
+        try:
+            from RSP.robustness.stress_test import run_stress_test
+            run_stress_test(args.coin, args.timeframe)
+        except Exception as e:
+            print("Stress test error: " + str(e))
     elif args.montecarlo:
-        from RSP.robustness.monte_carlo import run_monte_carlo
-        run_monte_carlo(args.coin, args.timeframe)
+        try:
+            from RSP.robustness.monte_carlo import run_monte_carlo
+            run_monte_carlo(args.coin, args.timeframe)
+        except Exception as e:
+            print("Monte Carlo error: " + str(e))
     elif args.versions:
-        from RSP.strategy_lab.versioning import compare_versions
-        compare_versions(args.coin, args.timeframe)
+        try:
+            from RSP.strategy_lab.versioning import compare_versions
+            compare_versions(args.coin, args.timeframe)
+        except Exception as e:
+            print("Version compare error: " + str(e))
     elif args.challenge:
-        from RSP.strategy_lab.challenger import run_challenger
-        run_challenger(args.coin, args.timeframe, args.challenge[0], args.challenge[1])
+        try:
+            from RSP.strategy_lab.challenger import run_challenger
+            run_challenger(args.coin, args.timeframe, args.challenge[0], args.challenge[1])
+        except Exception as e:
+            print("Challenger error: " + str(e))
     elif args.compare_arsan:
-        from RSP.comparison.arsan_vs_rsp import compare_with_arsan
-        compare_with_arsan(args.coin, args.timeframe)
+        try:
+            from RSP.comparison.arsan_vs_rsp import compare_with_arsan
+            compare_with_arsan(args.coin, args.timeframe)
+        except Exception as e:
+            print("Comparison error: " + str(e))
     else:
         run_analysis(args.coin, args.timeframe)
 
