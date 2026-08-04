@@ -17,6 +17,7 @@ from RSP.signal_fusion.fusion_engine import FusionReport
 from RSP.multi_timeframe.mtf_brain import MTFReport
 from RSP.contradiction_engine.contradiction_engine import ContradictionReport
 from RSP.confidence_engine.confidence_engine import ConfidenceReport
+from RSP.fuzzy_core.inference import evaluate_signal_strength, FuzzySignalReport
 
 
 @dataclass
@@ -26,6 +27,7 @@ class Decision:
     why_not_opposite: List[str] = field(default_factory=list)
     invalidation: List[str] = field(default_factory=list)
     missing_confirmation: List[str] = field(default_factory=list)
+    fuzzy_report: Optional[FuzzySignalReport] = None
 
 
 def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
@@ -95,6 +97,50 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
 
     # --- تصمیم اصلی بر اساس net_score و اجماع MTF ---
     net = fusion.net_score
+
+    if settings.FUZZY_ENGINE_ENABLED:
+        # مسیر فازی (Phase 27-44، نسخه‌ی حداقلی): به‌جای دو آستانه‌ی سخت
+        # جداگانه (۰.۲۰ برای ورود و ۰.۷۰ برای Exhaustion)، یک پایپ‌لاین
+        # فازی واحد که هر دو اثر را با گذار نرم پوشش می‌دهد.
+        fuzzy = evaluate_signal_strength(net)
+        d.fuzzy_report = fuzzy
+
+        if net > 0 and mtf.entry_bias != "BEARISH":
+            candidate = "BUY"
+        elif net < 0 and mtf.entry_bias != "BULLISH":
+            candidate = "SELL"
+        elif abs(net) < 1e-9:
+            candidate = "HOLD"
+        else:
+            candidate = "WAIT"
+
+        if candidate in ("BUY", "SELL") and fuzzy.trade_permission_score >= settings.FUZZY_TRADE_PERMISSION_MIN:
+            d.action = candidate
+            evidence = fusion.bullish_evidence if candidate == "BUY" else fusion.bearish_evidence
+            opposite_evidence = fusion.bearish_evidence if candidate == "BUY" else fusion.bullish_evidence
+            d.why.append(f"[FUZZY] net_score={net:+.2f} (term غالب={fuzzy.dominant_term}, "
+                          f"trade_permission={fuzzy.trade_permission_score}/{settings.FUZZY_TRADE_PERMISSION_MIN}) "
+                          f"Rules فعال: {', '.join(fuzzy.active_rules)}")
+            d.why.extend(evidence[:3])
+            if opposite_evidence:
+                d.why_not_opposite.append("شواهد مخالف باقیمانده: " + "؛ ".join(opposite_evidence[:2]))
+        elif candidate in ("BUY", "SELL"):
+            d.action = "WAIT"
+            d.why.append(f"[FUZZY] net_score={net:+.2f} جهت‌دار است اما trade_permission="
+                          f"{fuzzy.trade_permission_score} کمتر از آستانه‌ی {settings.FUZZY_TRADE_PERMISSION_MIN} "
+                          f"(term غالب={fuzzy.dominant_term})")
+            d.missing_confirmation.append("افزایش trade_permission_score (سیگنال قوی‌تر یا خارج از ناحیه‌ی افراطی)")
+        elif candidate == "HOLD":
+            d.action = "HOLD"
+            d.why.append(f"[FUZZY] net_score={net:+.2f} صفر - نه شواهد صعودی نه نزولی")
+        else:
+            d.action = "WAIT"
+            d.why.append(f"[FUZZY] net_score={net:+.2f} جهت‌دار است اما تایم‌فریم ورود ({mtf.entry_bias}) هم‌جهت نیست")
+            d.missing_confirmation.append("هم‌جهت‌شدن تایم‌فریم پایین (15M) با جهت غالب")
+
+        return d
+
+    # --- مسیر Crisp (پیش‌فرض، رفتار قدیمی - وقتی FUZZY_ENGINE_ENABLED=False) ---
     if net > 0.2 and mtf.entry_bias != "BEARISH":
         d.action = "BUY"
         d.why.append(f"net_score={net:+.2f} صعودی، تایم‌فریم ورود ({mtf.entry_bias}) در تضاد نیست")
@@ -118,7 +164,7 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
         d.why.append(f"net_score={net:+.2f} جهت‌دار است اما تایم‌فریم ورود ({mtf.entry_bias}) هم‌جهت نیست")
         d.missing_confirmation.append("هم‌جهت‌شدن تایم‌فریم پایین (15M) با جهت غالب")
 
-    # --- فیلتر Exhaustion (آزمایشی) ---
+    # --- فیلتر Exhaustion (crisp، فقط وقتی FUZZY_ENGINE_ENABLED=False فعال است) ---
     # طبق داده‌ی واقعی، معاملاتی با net_score خیلی افراطی (اجماع خیلی قوی همه‌ی
     # اندیکاتورها) دو بار پشت‌سرهم win_rate پایین‌تری داشتند - فرضیه: وقتی
     # هماهنگی شواهد به این اندازه کامل است، حرکت احتمالاً به انتها نزدیک است،
