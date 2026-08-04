@@ -151,46 +151,128 @@ def main():
     parser.add_argument("--versions", action="store_true")
     parser.add_argument("--challenge", nargs=2)
     parser.add_argument("--compare-arsan", action="store_true")
+    parser.add_argument("--compare-arsan-live", action="store_true")
     args = parser.parse_args()
 
+    needs_universe = args.backtest or args.walkforward or args.stress or \
+        args.montecarlo or args.versions or args.challenge
+
+    universe = None
+    if needs_universe:
+        try:
+            from RSP.ingestion.data_universe import build_data_universe
+            universe = build_data_universe(args.coin)
+        except Exception as e:
+            print("ERROR: Could not build data universe — " + str(e))
+            return
+        base_tf = "15M"
+        base_bars = universe.bars.get(base_tf)
+        if base_bars is None or base_bars.empty:
+            print("ERROR: No data available for base timeframe " + base_tf +
+                  " (coin=" + args.coin + "). Cannot run this command.")
+            return
+
     if args.backtest:
-        run_backtest(args.coin, args.timeframe)
+        summary = run_backtest(universe.bars, base_tf="15M")
+        print(f"total_trades={summary.total_trades}  win_rate={summary.win_rate}  "
+              f"net_return_pct={summary.net_return_pct}  profit_factor={summary.profit_factor}  "
+              f"max_drawdown_pct={summary.max_drawdown_pct}")
+
+        if args.compare_arsan or args.compare_arsan_live:
+            try:
+                from RSP.comparison.arsan_vs_rsp import compare
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                comparison = compare(summary, project_root, regenerate=args.compare_arsan_live)
+                print("\n--- Arsan vs RSP Comparison ---")
+                print("RSP:", comparison.rsp)
+                print("Arsan:", comparison.arsan)
+                for note in comparison.methodology_notes + comparison.notes:
+                    print(" *", note)
+            except Exception as e:
+                print("Comparison error: " + str(e))
+
     elif args.walkforward:
         try:
             from RSP.walk_forward.walk_forward import run_walk_forward
-            run_walk_forward(args.coin, args.timeframe)
+            report = run_walk_forward(universe.bars, base_tf="15M")
+            print(f"windows={len(report.windows)}  "
+                  f"aggregate_test_win_rate={report.aggregate_test_win_rate}  "
+                  f"aggregate_test_net_return={report.aggregate_test_net_return}")
+            for note in report.notes:
+                print(" *", note)
         except Exception as e:
             print("Walk-forward error: " + str(e))
+
     elif args.stress:
         try:
-            from RSP.robustness.stress_test import run_stress_test
-            run_stress_test(args.coin, args.timeframe)
+            from RSP.robustness.stress_test import performance_by_market_type, run_synthetic_scenarios
+            summary = run_backtest(universe.bars, base_tf="15M")
+            regime_report = performance_by_market_type(summary)
+            print("--- Performance by market regime (real data) ---")
+            for row in regime_report.by_market_type:
+                print(f"  {row.market_type}: trades={row.trades} win_rate={row.win_rate} "
+                      f"net_return_pct={row.net_return_pct}")
+            for note in regime_report.notes:
+                print(" *", note)
+
+            print("\n--- Synthetic engineering scenarios (not a real profitability measure) ---")
+            synth = run_synthetic_scenarios()
+            for kind, s in synth.items():
+                print(f"  {kind}: trades={s.total_trades} win_rate={s.win_rate} "
+                      f"net_return_pct={s.net_return_pct}")
         except Exception as e:
             print("Stress test error: " + str(e))
+
     elif args.montecarlo:
         try:
-            from RSP.robustness.monte_carlo import run_monte_carlo
-            run_monte_carlo(args.coin, args.timeframe)
+            from RSP.robustness.monte_carlo import randomize_trade_sequence, run_perturbation_suite
+            summary = run_backtest(universe.bars, base_tf="15M")
+            seq_report = randomize_trade_sequence(summary)
+            print("--- Trade sequence randomization ---")
+            print(f"  original_max_drawdown={seq_report.original_max_drawdown} "
+                  f"worst_case={seq_report.worst_case_drawdown} p95={seq_report.p95_drawdown} "
+                  f"order_dependent={seq_report.order_dependent}")
+            for note in seq_report.notes:
+                print(" *", note)
+
+            pert_report = run_perturbation_suite(universe.bars, base_tf="15M")
+            print("\n--- Fee/slippage & risk parameter perturbation ---")
+            print(f"  baseline: trades={pert_report.baseline.total_trades} "
+                  f"net_return_pct={pert_report.baseline.net_return_pct}")
+            for r in pert_report.results:
+                print(f"  {r.label}: trades={r.summary.total_trades} "
+                      f"net_return_pct={r.summary.net_return_pct}")
+            print(f"  fragile={pert_report.fragile}")
+            for note in pert_report.notes:
+                print(" *", note)
         except Exception as e:
             print("Monte Carlo error: " + str(e))
+
     elif args.versions:
         try:
-            from RSP.strategy_lab.versioning import compare_versions
-            compare_versions(args.coin, args.timeframe)
+            from RSP.strategy_lab.versioning import compare_versions, ENGINE_VERSIONS
+            results = compare_versions(list(ENGINE_VERSIONS.keys()), universe.bars, base_tf="15M")
+            print("--- Version comparison ---")
+            for vid, res in results.items():
+                print(f"  {vid} ({res.description}): trades={res.summary.total_trades} "
+                      f"win_rate={res.summary.win_rate} net_return_pct={res.summary.net_return_pct}")
         except Exception as e:
             print("Version compare error: " + str(e))
+
     elif args.challenge:
         try:
-            from RSP.strategy_lab.challenger import run_challenger
-            run_challenger(args.coin, args.timeframe, args.challenge[0], args.challenge[1])
+            from RSP.strategy_lab.challenger import run_challenge
+            result = run_challenge(args.challenge[0], args.challenge[1], universe.bars, base_tf="15M")
+            print("--- Challenger (Out-of-Sample) ---")
+            print(f"  champion={result.champion_id} oos_win_rate={result.champion_oos_win_rate} "
+                  f"oos_net_return={result.champion_oos_net_return} windows={result.champion_windows}")
+            print(f"  challenger={result.challenger_id} oos_win_rate={result.challenger_oos_win_rate} "
+                  f"oos_net_return={result.challenger_oos_net_return} windows={result.challenger_windows}")
+            print(f"  winner={result.winner}")
+            print(f"  reason={result.reason}")
         except Exception as e:
             print("Challenger error: " + str(e))
-    elif args.compare_arsan:
-        try:
-            from RSP.comparison.arsan_vs_rsp import compare_with_arsan
-            compare_with_arsan(args.coin, args.timeframe)
-        except Exception as e:
-            print("Comparison error: " + str(e))
+
     else:
         run_analysis(args.coin, args.timeframe)
 
