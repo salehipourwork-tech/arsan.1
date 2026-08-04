@@ -1,52 +1,347 @@
 """
-RSP — fuzzy_core/rule_base.py  (Phase 39: Fuzzy Rule Base, Phase 40: Rule Weighting)
+RSP — fuzzy_core/rule_base.py (Phases 39-40: Fuzzy Rule Base + Rule Weighting)
 
-نسخه‌ی حداقلی: فقط قوانینی که روی signal_strength (خروجی fuzzify شده‌ی
-net_score) عمل می‌کنند و به یک خروجی تک‌متغیره‌ی «trade_permission» می‌رسند.
-هر Rule یک وزن قابل‌تنظیم دارد (Phase 40) و یک مقدار خروجی singleton
-(به‌سبک Sugeno - دلیل انتخاب در inference.py مستند شده).
+نسخه‌ی گسترش‌یافته: Ruleهای چندمتغیره (multi-antecedent) که
+ورودی‌های فازی از Quality Engines (Phase 29-38) را به Opportunity Quality
+نگاشت می‌کنند.
 
-قانون R4 دقیقاً همان یافته‌ی امروز را کدگذاری می‌کند: سیگنال «extreme»
-(اجماع خیلی کامل) به‌جای بالاترین اعتماد، به یک اعتماد میانه/محتاطانه
-می‌رسد - این جایگزین آستانه‌ی سخت Exhaustion (0.70) قدیمی است.
+هر Rule یک وزن دارد (Phase 40) و یک خروجی singleton (Sugeno-style).
 """
 from dataclasses import dataclass
-from typing import Dict, List
-
+from typing import Dict, List, Optional, Callable
 
 @dataclass
 class FuzzyRule:
     rule_id: str
-    antecedent_term: str      # اصطلاح ورودی از signal_strength (weak/moderate/strong/extreme)
-    weight: float              # وزن قابل‌تنظیم Rule (Phase 40)
-    output_singleton: float    # خروجی singleton این Rule برای trade_permission (0..100)
+    # antecedents: dict of {variable_name: term_name}
+    # e.g. {"trend_quality": "strong", "momentum_quality": "strong", ...}
+    antecedents: Dict[str, str]
+    weight: float
+    output_singleton: float  # 0..100 for Sugeno
     description: str
+    # Optional custom activation function override
+    t_norm: Optional[Callable[[List[float]], float]] = None
+
+    def evaluate(self, fuzzified_inputs: Dict[str, Dict[str, float]]) -> float:
+        """
+        محاسبه‌ی firing strength این Rule.
+        fuzzified_inputs: {variable_name: {term_name: degree}}
+
+        T-norm: min (standard fuzzy AND)
+        """
+        degrees = []
+        for var_name, term_name in self.antecedents.items():
+            var_dict = fuzzified_inputs.get(var_name, {})
+            degree = var_dict.get(term_name, 0.0)
+            degrees.append(degree)
+        if not degrees:
+            return 0.0
+        if self.t_norm:
+            return self.t_norm(degrees) * self.weight
+        # Standard min T-norm
+        return min(degrees) * self.weight
 
 
-# Phase 39: Rule Base
-SIGNAL_PERMISSION_RULES: List[FuzzyRule] = [
-    FuzzyRule("R01", "weak", weight=1.0, output_singleton=5.0,
-              description="سیگنال ضعیف -> اجازه‌ی معامله تقریباً صفر"),
-    FuzzyRule("R02", "moderate", weight=1.0, output_singleton=55.0,
-              description="سیگنال متوسط -> اجازه‌ی معامله در حد آستانه‌ی قبلی (MIN_CONFIDENCE_TO_TRADE)"),
-    FuzzyRule("R03", "strong", weight=1.0, output_singleton=90.0,
-              description="سیگنال قوی -> بالاترین اجازه‌ی معامله"),
-    FuzzyRule("R04", "extreme", weight=1.0, output_singleton=35.0,
-              description="سیگنال افراطی (اجماع خیلی کامل) -> اجازه‌ی معامله محتاطانه، "
-                          "طبق یافته‌ی تجربی 'exhaustion' (نه صفر، نه بالا - فازی، نه بلوکه‌ی کامل)"),
+# =============================================================================
+# Rule Base: Opportunity Quality Rules
+# =============================================================================
+
+OPPORTUNITY_RULES: List[FuzzyRule] = [
+    # R01: Excellent opportunity — all stars aligned
+    FuzzyRule(
+        "R01",
+        antecedents={
+            "trend_quality": "very_strong",
+            "momentum_quality": "very_strong",
+            "entry_quality": "very_strong",
+            "risk_quality": "very_strong",
+            "volatility_quality": "excellent",
+            "contradiction_severity": "none",
+        },
+        weight=1.0,
+        output_singleton=100.0,
+        description="همه‌ی شاخص‌ها عالی و بدون تضاد -> فرصت عالی",
+    ),
+
+    # R02: Strong opportunity — minor volatility issue
+    FuzzyRule(
+        "R02",
+        antecedents={
+            "trend_quality": "strong",
+            "momentum_quality": "strong",
+            "entry_quality": "strong",
+            "risk_quality": "strong",
+            "contradiction_severity": "low",
+        },
+        weight=1.0,
+        output_singleton=90.0,
+        description="روند و مومنتوم و ورود و ریسک قوی با تضاد کم -> فرصت قوی",
+    ),
+
+    # R03: Good opportunity — moderate everything
+    FuzzyRule(
+        "R03",
+        antecedents={
+            "trend_quality": "moderate",
+            "momentum_quality": "moderate",
+            "entry_quality": "moderate",
+            "risk_quality": "moderate",
+            "contradiction_severity": "low",
+        },
+        weight=1.0,
+        output_singleton=65.0,
+        description="همه چیز متوسط -> فرصت متوسط",
+    ),
+
+    # R04: Good momentum catch — strong momentum, moderate trend
+    FuzzyRule(
+        "R04",
+        antecedents={
+            "trend_quality": "moderate",
+            "momentum_quality": "very_strong",
+            "entry_quality": "strong",
+            "risk_quality": "moderate",
+            "contradiction_severity": "low",
+        },
+        weight=0.9,
+        output_singleton=72.0,
+        description="مومنتوم خیلی قوی ولی روند متوسط -> فرصت خوب (مومنتوم play)",
+    ),
+
+    # R05: Pullback entry — weak trend but good entry + strong risk
+    FuzzyRule(
+        "R05",
+        antecedents={
+            "trend_quality": "weak",
+            "momentum_quality": "moderate",
+            "entry_quality": "strong",
+            "risk_quality": "very_strong",
+            "contradiction_severity": "low",
+        },
+        weight=0.85,
+        output_singleton=60.0,
+        description="پولبک با ریسک کنترل‌شده -> فرصت محتاطانه",
+    ),
+
+    # R06: Breakout play — moderate trend, strong entry, volatility good
+    FuzzyRule(
+        "R06",
+        antecedents={
+            "trend_quality": "moderate",
+            "momentum_quality": "strong",
+            "entry_quality": "very_strong",
+            "volatility_quality": "good",
+            "contradiction_severity": "low",
+        },
+        weight=0.9,
+        output_singleton=78.0,
+        description="نقطه ورود عالی در شکست -> فرصت خوب",
+    ),
+
+    # R07: Exhaustion warning — extreme signal strength
+    FuzzyRule(
+        "R07",
+        antecedents={
+            "signal_strength": "extreme",
+            "momentum_quality": "very_strong",
+            "contradiction_severity": "low",
+        },
+        weight=1.0,
+        output_singleton=40.0,
+        description="سیگنال extreme (اشباع) -> اجازه‌ی معامله محتاطانه (نه صفر)",
+    ),
+
+    # R08: Contradiction block — moderate contradiction
+    FuzzyRule(
+        "R08",
+        antecedents={
+            "contradiction_severity": "moderate",
+            "trend_quality": "strong",
+            "momentum_quality": "strong",
+        },
+        weight=1.0,
+        output_singleton=35.0,
+        description="تضاد متوسط با شواهد قوی -> فرصت مرزی/محتاطانه",
+    ),
+
+    # R09: Severe contradiction — NO TRADE territory
+    FuzzyRule(
+        "R09",
+        antecedents={
+            "contradiction_severity": "severe",
+        },
+        weight=1.0,
+        output_singleton=5.0,
+        description="تضاد شدید -> تقریباً هیچ اجازه‌ی معامله",
+    ),
+
+    # R10: High volatility rejection
+    FuzzyRule(
+        "R10",
+        antecedents={
+            "volatility_quality": "very_poor",
+            "risk_quality": "weak",
+        },
+        weight=1.0,
+        output_singleton=10.0,
+        description="نوسان خیلی بالا + ریسک ضعیف -> فرصت بسیار بد",
+    ),
+
+    # R11: Weak trend + weak momentum — no edge
+    FuzzyRule(
+        "R11",
+        antecedents={
+            "trend_quality": "weak",
+            "momentum_quality": "weak",
+            "entry_quality": "weak",
+        },
+        weight=1.0,
+        output_singleton=8.0,
+        description="همه چیز ضعیف -> بدون edge",
+    ),
+
+    # R12: Unstable market — stability penalty
+    FuzzyRule(
+        "R12",
+        antecedents={
+            "market_stability": "weak",
+            "contradiction_severity": "high",
+        },
+        weight=1.0,
+        output_singleton=15.0,
+        description="بازار ناپایدار + تضاد -> فرصت بسیار محدود",
+    ),
+
+    # R13: Confidence-driven boost — high confidence overrides moderate weakness
+    FuzzyRule(
+        "R13",
+        antecedents={
+            "signal_confidence": "very_strong",
+            "trend_quality": "moderate",
+            "momentum_quality": "moderate",
+            "contradiction_severity": "none",
+        },
+        weight=0.8,
+        output_singleton=70.0,
+        description="اعتماد بالا + بدون تضاد -> تقویت فرصت",
+    ),
+
+    # R14: Risk-reward excellence — even with moderate signal
+    FuzzyRule(
+        "R14",
+        antecedents={
+            "risk_quality": "very_strong",
+            "entry_quality": "strong",
+            "trend_quality": "moderate",
+        },
+        weight=0.85,
+        output_singleton=68.0,
+        description="ریسک/ریوارد عالی -> فرصت خوب حتی با سیگنال متوسط",
+    ),
+
+    # R15: Low confidence filter
+    FuzzyRule(
+        "R15",
+        antecedents={
+            "signal_confidence": "very_weak",
+            "contradiction_severity": "moderate",
+        },
+        weight=1.0,
+        output_singleton=12.0,
+        description="اعتماد پایین + تضاد -> رد قاطع",
+    ),
+
+    # R16: Mean reversion setup — range + good entry + volatility excellent
+    FuzzyRule(
+        "R16",
+        antecedents={
+            "trend_quality": "weak",
+            "volatility_quality": "excellent",
+            "entry_quality": "strong",
+            "contradiction_severity": "low",
+        },
+        weight=0.8,
+        output_singleton=55.0,
+        description="بازار رنج + نوسان کم + ورود خوب -> mean reversion محتاطانه",
+    ),
+
+    # R17: Trend following — strong trend, acceleration
+    FuzzyRule(
+        "R17",
+        antecedents={
+            "trend_quality": "very_strong",
+            "momentum_quality": "strong",
+            "market_stability": "strong",
+            "contradiction_severity": "none",
+        },
+        weight=1.0,
+        output_singleton=92.0,
+        description="روند خیلی قوی + پایداری -> فرصت عالی trend-following",
+    ),
+
+    # R18: Fake breakout protection
+    FuzzyRule(
+        "R18",
+        antecedents={
+            "trend_quality": "moderate",
+            "entry_quality": "weak",
+            "volatility_quality": "poor",
+            "contradiction_severity": "high",
+        },
+        weight=1.0,
+        output_singleton=8.0,
+        description="ورود ضعیف + نوسان بد + تضاد -> احتمال fake breakout",
+    ),
+
+    # R19: Recovery play — weak trend but momentum turning
+    FuzzyRule(
+        "R19",
+        antecedents={
+            "trend_quality": "weak",
+            "momentum_quality": "strong",
+            "market_stability": "moderate",
+            "contradiction_severity": "low",
+        },
+        weight=0.85,
+        output_singleton=58.0,
+        description="مومنتوم در حال برگشت -> فرصت recovery محتاطانه",
+    ),
+
+    # R20: Default / fallback — when nothing strongly matches
+    FuzzyRule(
+        "R20",
+        antecedents={
+            "signal_strength": "moderate",
+            "contradiction_severity": "low",
+        },
+        weight=0.5,
+        output_singleton=45.0,
+        description="حالت پیش‌فرض -> فرصت مرزی",
+    ),
 ]
 
 
-def evaluate_rules(fuzzified_degrees: Dict[str, float],
-                    rules: List[FuzzyRule] = None) -> Dict[str, float]:
-    """هر Rule که antecedent_term اش در fuzzified_degrees درجه‌ی غیرصفر دارد،
-    "فعال" است. قدرت فعال‌شدن = درجه‌ی عضویت × وزن Rule (Phase 41: در این
-    نسخه‌ی حداقلی، تضاد بین Ruleها وجود ندارد چون هرکدوم فقط یک antecedent
-    term متفاوت دارند - Conflict Resolution واقعی وقتی لازم می‌شود که
-    Ruleهای چندمتغیره اضافه شوند، در فاز بعدی)."""
-    rules = rules or SIGNAL_PERMISSION_RULES
+def evaluate_rules(fuzzified_inputs: Dict[str, Dict[str, float]],
+                   rules: Optional[List[FuzzyRule]] = None) -> Dict[str, float]:
+    """
+    ارزیابی تمام Ruleها.
+    خروجی: {rule_id: firing_strength}
+    """
+    rules = rules or OPPORTUNITY_RULES
     firing_strengths = {}
     for rule in rules:
-        degree = fuzzified_degrees.get(rule.antecedent_term, 0.0)
-        firing_strengths[rule.rule_id] = round(degree * rule.weight, 4)
+        strength = rule.evaluate(fuzzified_inputs)
+        if strength > 0.0:
+            firing_strengths[rule.rule_id] = round(strength, 4)
     return firing_strengths
+
+
+def get_active_rules(firing_strengths: Dict[str, float], threshold: float = 0.01) -> List[str]:
+    return [rid for rid, strength in firing_strengths.items() if strength >= threshold]
+
+
+def get_rule_by_id(rule_id: str) -> Optional[FuzzyRule]:
+    for r in OPPORTUNITY_RULES:
+        if r.rule_id == rule_id:
+            return r
+    return None
