@@ -54,6 +54,17 @@ class IntegratedDecision:
     used_fuzzy: bool = False
 
 
+# Decision.action از واژگان BUY/SELL/WAIT/HOLD/NO_TRADE استفاده می‌کند (نه .direction که
+# اصلاً وجود ندارد). این نگاشت، action را به واژگان مورد نیاز موتور فازی تبدیل می‌کند.
+_ACTION_TO_FUZZY_DIRECTION = {"BUY": "BULLISH", "SELL": "BEARISH"}   # ورودی run_fuzzy_decision
+_ACTION_TO_FUZZY_VOCAB = {"BUY": "LONG", "SELL": "SHORT", "HOLD": "HOLD",
+                           "WAIT": "NO_TRADE", "NO_TRADE": "NO_TRADE"}
+
+
+def _crisp_action(crisp_decision) -> str:
+    return getattr(crisp_decision, "action", "NO_TRADE")
+
+
 def integrate_fuzzy_decision(
     coin: str,
     crisp_decision: DecisionReport,
@@ -96,7 +107,7 @@ def integrate_fuzzy_decision(
                 fusion=fusion,
                 contradiction=contradiction,
                 confidence=confidence,
-                direction=crisp_decision.direction if hasattr(crisp_decision, "direction") else "NO_TRADE",
+                direction=_ACTION_TO_FUZZY_DIRECTION.get(_crisp_action(crisp_decision), "NEUTRAL"),
             )
         except Exception as e:
             # If fuzzy fails, log and fall back to crisp
@@ -118,7 +129,7 @@ def integrate_fuzzy_decision(
         result.fuzzy_json_report = generate_fuzzy_json(fuzzy_report)
 
         # Comparison notes
-        crisp_dir = crisp_decision.direction if hasattr(crisp_decision, "direction") else "NO_TRADE"
+        crisp_dir = _ACTION_TO_FUZZY_VOCAB.get(_crisp_action(crisp_decision), "NO_TRADE")
         crisp_conf = (crisp_decision.confidence / 100.0) if hasattr(crisp_decision, "confidence") else 0.0
 
         if crisp_dir != fuzzy_report.decision:
@@ -140,7 +151,7 @@ def integrate_fuzzy_decision(
 
     else:
         # Fallback to crisp
-        result.final_direction = crisp_decision.direction if hasattr(crisp_decision, "direction") else "NO_TRADE"
+        result.final_direction = _ACTION_TO_FUZZY_VOCAB.get(_crisp_action(crisp_decision), "NO_TRADE")
         result.final_confidence = (crisp_decision.confidence / 100.0) if hasattr(crisp_decision, "confidence") else 0.0
         result.final_reason = crisp_decision.reason if hasattr(crisp_decision, "reason") else ""
         result.used_fuzzy = False
@@ -165,7 +176,7 @@ def create_comparison_record(
     return {
         "timestamp": timestamp,
         "price": price,
-        "crisp_direction": integrated.crisp_decision.direction if integrated.crisp_decision and hasattr(integrated.crisp_decision, "direction") else None,
+        "crisp_direction": _ACTION_TO_FUZZY_VOCAB.get(_crisp_action(integrated.crisp_decision), None) if integrated.crisp_decision else None,
         "crisp_confidence": (integrated.crisp_decision.confidence / 100.0) if integrated.crisp_decision and hasattr(integrated.crisp_decision, "confidence") else None,
         "fuzzy_direction": integrated.fuzzy_report.decision if integrated.fuzzy_report else None,
         "fuzzy_confidence": integrated.fuzzy_report.confidence if integrated.fuzzy_report else None,
