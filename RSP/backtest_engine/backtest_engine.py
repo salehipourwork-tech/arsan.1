@@ -35,6 +35,15 @@ from RSP.preprocessing.quality_engine import check_quality
 from RSP.execution_simulator.trade_simulator import simulate_trade
 from RSP.config import settings
 
+try:
+    from RSP.fuzzy_integration_bridge import integrate_fuzzy_decision
+    _FUZZY_AVAILABLE = True
+except Exception:
+    _FUZZY_AVAILABLE = False
+
+# fuzzy_report.decision uses LONG/SHORT/HOLD/NO_TRADE; Decision.action uses BUY/SELL/WAIT/NO_TRADE
+_FUZZY_DIRECTION_TO_ACTION = {"LONG": "BUY", "SHORT": "SELL", "HOLD": "WAIT", "NO_TRADE": "NO_TRADE"}
+
 
 @dataclass
 class BacktestTradeLog:
@@ -74,7 +83,8 @@ def _known_slice(df: pd.DataFrame, ts, max_bars: int = None) -> pd.DataFrame:
 
 
 def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
-                  min_history: int = 60, step_after_trade: bool = True) -> BacktestSummary:
+                  min_history: int = 60, step_after_trade: bool = True,
+                  use_fuzzy: bool = False) -> BacktestSummary:
     base_df = bars_by_tf.get(base_tf)
     summary = BacktestSummary()
     if base_df is None or base_df.empty or len(base_df) < min_history + 5:
@@ -98,6 +108,25 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
         contradiction = detect_contradictions(fusion, mtf)
         confidence = compute_confidence(fusion, mtf, contradiction, quality.quality_score, regime.perception.atr_pct)
         decision = decide(regime, fusion, mtf, contradiction, confidence, quality.quality_ok)
+
+        if use_fuzzy and _FUZZY_AVAILABLE:
+            try:
+                integrated = integrate_fuzzy_decision(
+                    coin="", crisp_decision=decision, regime=regime,
+                    confluence=confluence, mtf=mtf, structure=regime.structure if regime else None,
+                    risk_plan=None, atr_pct=regime.perception.atr_pct if regime else 2.0,
+                    fusion=fusion, contradiction=contradiction, confidence=confidence,
+                )
+                if integrated.used_fuzzy:
+                    new_action = _FUZZY_DIRECTION_TO_ACTION.get(integrated.final_direction, decision.action)
+                    if new_action != decision.action:
+                        decision.why.append(
+                            f"FUZZY_OVERRIDE: crisp={decision.action} -> fuzzy={new_action}"
+                        )
+                    decision.action = new_action
+                    confidence.confidence = int(integrated.final_confidence * 100)
+            except Exception:
+                pass  # honest fallback: keep the crisp decision if fuzzy fails on this bar
 
         if decision.action in ("BUY", "SELL"):
             until = cooldown_until.get(decision.action)
