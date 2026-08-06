@@ -70,10 +70,12 @@ def run_analysis(coin, timeframe="1h", lookback_days=None):
     # --- FUZZY ENGINE ---
     if FUZZY_AVAILABLE and getattr(settings, 'FUZZY_BACKTEST_ENABLED', False):
         try:
+            pre_risk_plan = plan_risk(decision.action, base_df, regime) \
+                if decision.action in ("BUY", "SELL") and regime else None
             integrated = integrate_fuzzy_decision(
                 coin=coin, crisp_decision=decision, regime=regime,
                 confluence=confluence, mtf=mtf, structure=regime.structure if regime else None,
-                risk_plan=None, atr_pct=regime.perception.atr_pct if regime else 2.0,
+                risk_plan=pre_risk_plan, atr_pct=regime.perception.atr_pct if regime else 2.0,
                 fusion=fusion, contradiction=contradiction, confidence=confidence,
             )
             if integrated.used_fuzzy:
@@ -166,6 +168,18 @@ def main():
         print(f"total_trades={summary.total_trades}  win_rate={summary.win_rate}  "
               f"net_return_pct={summary.net_return_pct}  profit_factor={summary.profit_factor}  "
               f"max_drawdown_pct={summary.max_drawdown_pct}")
+
+        if args.fuzzy_engine and summary.fuzzy_diagnostics:
+            d = summary.fuzzy_diagnostics
+            print("\n--- Fuzzy diagnostics ---")
+            print(f"  fuzzy_steps={d['fuzzy_steps']}  fuzzy_overrides={d['fuzzy_overrides']}")
+            print(f"  opportunity_score: min={d['opportunity_score_min']} "
+                  f"avg={d['opportunity_score_avg']} max={d['opportunity_score_max']}  "
+                  f"(gate threshold={d['current_threshold']})")
+            if d["rejection_reasons"]:
+                print("  rejection reasons:")
+                for reason, count in sorted(d["rejection_reasons"].items(), key=lambda x: -x[1]):
+                    print(f"    {count:>4}x  {reason}")
 
         if args.compare_arsan or args.compare_arsan_live:
             try:
