@@ -90,6 +90,13 @@ STRONG_REGIME_ONLY_MODE = False
 # همون آستانه‌های سخت قبلی (0.20 برای BUY/SELL و 0.70 برای Exhaustion)
 # مرکز داشته باشند، اما به‌جای یک لبه‌ی تیز، یک گذار نرم بسازند.
 FUZZY_ENGINE_ENABLED = False
+FUZZY_BACKTEST_ENABLED = False       # با main.py --fuzzy-engine در زمان اجرا True می‌شود
+FUZZY_INFERENCE_METHOD = "Sugeno"    # یا "Mamdani"
+FUZZY_CONFLICT_METHOD = "conservative_weighted"
+FUZZY_OPPORTUNITY_THRESHOLD = 50.0   # حداقل opportunity_score (0..100) برای عبور از Permission Gate
+FUZZY_DECISION_HISTORY_LEN = 5       # طول تاریخچه برای Stability Check
+FUZZY_STABILITY_MIN_CONSISTENT = 3   # چند تصمیم آخر باید یکسان باشند
+FUZZY_HYSTERESIS_DROP = 15.0         # افت لازم در score برای خروج از LONG/SHORT
 FUZZY_SIGNAL_WEAK_END = 0.20        # معادل آستانه‌ی قبلی BUY/SELL
 FUZZY_SIGNAL_MODERATE_CENTER = 0.375
 FUZZY_SIGNAL_STRONG_CENTER = 0.55
