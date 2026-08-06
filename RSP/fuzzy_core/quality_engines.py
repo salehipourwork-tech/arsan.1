@@ -254,7 +254,12 @@ def evaluate_volatility_quality(atr_pct: float, regime: RegimeReport) -> Dict[st
     elif regime.regime == "LOW_VOLATILITY":
         score = max(score, 0.70)
 
-    return var.fuzzify(_clamp01(score))
+    # NOTE: `score` above is on a "goodness" scale (1.0=excellent, low ATR%).
+    # The volatility_quality LinguisticVariable's terms are defined on the
+    # opposite polarity (excellent at low x, very_poor at high x) — so the
+    # score must be inverted before fuzzification, or "excellent" conditions
+    # always fuzzify into "very_poor".
+    return var.fuzzify(_clamp01(1.0 - score))
 
 
 # =============================================================================
