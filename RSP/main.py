@@ -144,6 +144,9 @@ def main():
     parser = argparse.ArgumentParser(description="RSP")
     parser.add_argument("--coin", default="bitcoin")
     parser.add_argument("--timeframe", default="1h")
+    parser.add_argument("--days", type=float, default=settings.DEFAULT_LOOKBACK_DAYS,
+                         help="Historical lookback window in days for backtest-family commands "
+                              "(build_data_universe). Ignored for plain live analysis.")
     parser.add_argument("--backtest", action="store_true")
     parser.add_argument("--walkforward", action="store_true")
     parser.add_argument("--stress", action="store_true")
@@ -161,7 +164,7 @@ def main():
     if needs_universe:
         try:
             from RSP.ingestion.data_universe import build_data_universe
-            universe = build_data_universe(args.coin)
+            universe = build_data_universe(args.coin, lookback_days=args.days)
         except Exception as e:
             print("ERROR: Could not build data universe — " + str(e))
             return
