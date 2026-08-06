@@ -71,6 +71,7 @@ class BacktestSummary:
     profit_factor: float = 0.0
     max_drawdown_pct: float = 0.0
     average_trade_pct: float = 0.0
+    fuzzy_diagnostics: dict = field(default_factory=dict)
 
 
 def _known_slice(df: pd.DataFrame, ts, max_bars: int = None) -> pd.DataFrame:
@@ -95,6 +96,11 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
     n = len(base_df)
     cooldown_until = {"BUY": None, "SELL": None}  # جهت -> اندیس کندلی که تا آن مسدود است
 
+    fuzzy_scores: List[float] = []
+    fuzzy_rejections: Dict[str, int] = {}
+    fuzzy_overrides = 0
+    fuzzy_steps = 0
+
     while i < n - 1:
         current_ts = base_df.index[i]
         known = {tf: _known_slice(df, current_ts, max_bars=settings.MAX_WARMUP_BARS) for tf, df in bars_by_tf.items()}
@@ -111,15 +117,24 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
 
         if use_fuzzy and _FUZZY_AVAILABLE:
             try:
+                pre_risk_plan = plan_risk(decision.action, known_base, regime) \
+                    if decision.action in ("BUY", "SELL") else None
                 integrated = integrate_fuzzy_decision(
                     coin="", crisp_decision=decision, regime=regime,
                     confluence=confluence, mtf=mtf, structure=regime.structure if regime else None,
-                    risk_plan=None, atr_pct=regime.perception.atr_pct if regime else 2.0,
+                    risk_plan=pre_risk_plan, atr_pct=regime.perception.atr_pct if regime else 2.0,
                     fusion=fusion, contradiction=contradiction, confidence=confidence,
                 )
                 if integrated.used_fuzzy:
+                    fuzzy_steps += 1
+                    if integrated.fuzzy_report is not None:
+                        fuzzy_scores.append(integrated.fuzzy_report.opportunity_score)
+                        if integrated.fuzzy_report.rejected_trade:
+                            reason = integrated.fuzzy_report.notes[-1] if integrated.fuzzy_report.notes else "UNKNOWN"
+                            fuzzy_rejections[reason] = fuzzy_rejections.get(reason, 0) + 1
                     new_action = _FUZZY_DIRECTION_TO_ACTION.get(integrated.final_direction, decision.action)
                     if new_action != decision.action:
+                        fuzzy_overrides += 1
                         decision.why.append(
                             f"FUZZY_OVERRIDE: crisp={decision.action} -> fuzzy={new_action}"
                         )
@@ -196,5 +211,16 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
             peak = max(peak, v)
             max_dd = max(max_dd, peak - v)
         summary.max_drawdown_pct = round(max_dd, 3)
+
+    if use_fuzzy:
+        summary.fuzzy_diagnostics = {
+            "fuzzy_steps": fuzzy_steps,
+            "fuzzy_overrides": fuzzy_overrides,
+            "opportunity_score_min": round(min(fuzzy_scores), 2) if fuzzy_scores else None,
+            "opportunity_score_max": round(max(fuzzy_scores), 2) if fuzzy_scores else None,
+            "opportunity_score_avg": round(sum(fuzzy_scores) / len(fuzzy_scores), 2) if fuzzy_scores else None,
+            "current_threshold": settings.FUZZY_OPPORTUNITY_THRESHOLD,
+            "rejection_reasons": fuzzy_rejections,
+        }
 
     return summary
