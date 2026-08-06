@@ -13,7 +13,9 @@ try:
 except Exception:
     FUZZY_AVAILABLE = False
 
-from RSP.preprocessing.quality_engine import check_all_timeframes
+_FUZZY_DIRECTION_TO_ACTION = {"LONG": "BUY", "SHORT": "SELL", "HOLD": "WAIT", "NO_TRADE": "NO_TRADE"}
+
+from RSP.preprocessing.quality_engine import check_quality
 from RSP.regime_engine.regime_engine import determine_regime
 from RSP.signal_engine.confluence import analyze_confluence
 from RSP.multi_timeframe.mtf_brain import analyze_mtf
@@ -30,61 +32,30 @@ from RSP.experiment_manager.experiment_manager import log_experiment
 from RSP.config import settings
 
 
-def run_analysis(coin, timeframe="1h"):
+def run_analysis(coin, timeframe="1h", lookback_days=None):
     print("\n" + "=" * 60)
-    print("RSP Analysis: " + coin.upper() + " | " + timeframe)
+    print("RSP Analysis: " + coin.upper() + " | base timeframe 15M")
     print("=" * 60 + "\n")
 
-    routed = None
-    source_used = "unknown"
     try:
-        from RSP.ingestion.multi_source_router import fetch_with_fallback
-        routed = fetch_with_fallback(coin, timeframe, limit=500)
-        source_used = getattr(routed, "source", "multi_source")
-    except Exception as e1:
-        print("multi_source_router failed: " + str(e1))
-        try:
-            from RSP.analyzer.fetch_data import fetch_ohlcv
-            routed = fetch_ohlcv(coin, timeframe)
-            source_used = "analyzer"
-        except Exception as e2:
-            print("analyzer.fetch_data failed: " + str(e2))
-            try:
-                from RSP.ingestion.sources.binance_source import fetch_ohlcv
-                routed = fetch_ohlcv(coin, timeframe, limit=500)
-                source_used = "binance"
-            except Exception as e3:
-                print("ERROR: Could not fetch data — " + str(e3))
-                return
-
-    # Extract DataFrame — try .data first, then direct object
-    base_df = None
-    try:
-        base_df = routed.data
-        print("[DEBUG] Used .data attribute")
-    except Exception:
-        try:
-            base_df = routed.df
-            print("[DEBUG] Used .df attribute")
-        except Exception:
-            try:
-                if hasattr(routed, "empty"):
-                    base_df = routed
-                    print("[DEBUG] Used object directly (DataFrame-like)")
-            except Exception:
-                pass
-
-    if base_df is None:
-        print("ERROR: Could not extract DataFrame from fetcher.")
-        return
-    if hasattr(base_df, "empty") and base_df.empty:
-        print("ERROR: Empty DataFrame returned.")
+        from RSP.ingestion.data_universe import build_data_universe
+        if lookback_days is None:
+            lookback_days = settings.DEFAULT_LOOKBACK_DAYS
+        universe = build_data_universe(coin, lookback_days=lookback_days)
+        source_used = universe.source_used.get("15M", "unknown")
+    except Exception as e:
+        print("ERROR: Could not fetch data — " + str(e))
         return
 
-    base_quality = check_all_timeframes(coin, base_df)
+    base_df = universe.bars.get("15M")
+    if base_df is None or base_df.empty:
+        print("ERROR: Empty DataFrame returned for base timeframe 15M.")
+        return
+
+    base_quality = check_quality(base_df, "15M")
     regime = determine_regime(base_df)
     confluence = analyze_confluence(base_df)
-    mtf = analyze_mtf(coin, base_df)
+    mtf = analyze_mtf(universe.bars)
     fusion = fuse_signals(regime, confluence, mtf)
     contradiction = detect_contradictions(fusion, mtf)
     confidence = compute_confidence(
@@ -101,13 +72,18 @@ def run_analysis(coin, timeframe="1h"):
         try:
             integrated = integrate_fuzzy_decision(
                 coin=coin, crisp_decision=decision, regime=regime,
-                confluence=confluence, mtf=mtf, structure=None,
-                risk_plan=None, atr_pct=2.0, fusion=fusion,
-                contradiction=contradiction, confidence=confidence,
+                confluence=confluence, mtf=mtf, structure=regime.structure if regime else None,
+                risk_plan=None, atr_pct=regime.perception.atr_pct if regime else 2.0,
+                fusion=fusion, contradiction=contradiction, confidence=confidence,
             )
-            decision.direction = integrated.final_direction
-            decision.confidence = int(integrated.final_confidence * 100)
-            print("[Fuzzy Engine] Active.")
+            if integrated.used_fuzzy:
+                new_action = _FUZZY_DIRECTION_TO_ACTION.get(integrated.final_direction, decision.action)
+                if new_action != decision.action:
+                    decision.why.append(f"FUZZY_OVERRIDE: crisp={decision.action} -> fuzzy={new_action}")
+                decision.action = new_action
+                confidence.confidence = int(integrated.final_confidence * 100)
+            print("[Fuzzy Engine] Active. used_fuzzy=" + str(integrated.used_fuzzy) +
+                  " notes=" + str(integrated.comparison_notes))
         except Exception as e:
             print("[Fuzzy Engine] Skipped: " + str(e))
 
@@ -155,10 +131,20 @@ def main():
     parser.add_argument("--challenge", nargs=2)
     parser.add_argument("--compare-arsan", action="store_true")
     parser.add_argument("--compare-arsan-live", action="store_true")
+    parser.add_argument("--fuzzy-engine", action="store_true",
+                         help="Enable the Fuzzy Engine for the live single-shot analysis "
+                              "(no --backtest/etc). Not wired into --backtest and friends "
+                              "yet (see project notes).")
     args = parser.parse_args()
 
     needs_universe = args.backtest or args.walkforward or args.stress or \
         args.montecarlo or args.versions or args.challenge
+
+    if args.fuzzy_engine:
+        settings.FUZZY_BACKTEST_ENABLED = True
+        if args.walkforward or args.stress or args.montecarlo or args.versions or args.challenge:
+            print("[Fuzzy Engine] Note: --fuzzy-engine is wired into --backtest only so far. "
+                  "It does not yet affect --walkforward/--stress/--montecarlo/--versions/--challenge.")
 
     universe = None
     if needs_universe:
@@ -176,7 +162,7 @@ def main():
             return
 
     if args.backtest:
-        summary = run_backtest(universe.bars, base_tf="15M")
+        summary = run_backtest(universe.bars, base_tf="15M", use_fuzzy=args.fuzzy_engine)
         print(f"total_trades={summary.total_trades}  win_rate={summary.win_rate}  "
               f"net_return_pct={summary.net_return_pct}  profit_factor={summary.profit_factor}  "
               f"max_drawdown_pct={summary.max_drawdown_pct}")
@@ -277,7 +263,7 @@ def main():
             print("Challenger error: " + str(e))
 
     else:
-        run_analysis(args.coin, args.timeframe)
+        run_analysis(args.coin, args.timeframe, lookback_days=args.days)
 
 
 if __name__ == "__main__":
