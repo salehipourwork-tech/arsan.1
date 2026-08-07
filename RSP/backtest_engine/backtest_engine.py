@@ -84,8 +84,15 @@ def _known_slice(df: pd.DataFrame, ts, max_bars: int = None) -> pd.DataFrame:
 
 
 def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
-                  min_history: int = 60, step_after_trade: bool = True,
-                  use_fuzzy: bool = False) -> BacktestSummary:
+                  min_history: int = 60, step_after_trade: bool = True) -> BacktestSummary:
+    """
+    توجه (Feature Flag): این تابع دیگر پارامتر use_fuzzy ندارد. تنها نقطه‌ی
+    کنترل فعال/غیرفعال بودن لایه‌ی فازی پیشرفته، settings.FUZZY_BACKTEST_ENABLED
+    است — هیچ فایل دیگری (از جمله همین فایل) اجازه‌ی override مستقل ندارد.
+    وقتی False است: هیچ import و هیچ فراخوانی فازی رخ نمی‌دهد و رفتار دقیقاً
+    برابر با نسخه‌ی Baseline (بدون فازی) است؛ Overhead عملاً صفر.
+    """
+    use_fuzzy = bool(settings.FUZZY_BACKTEST_ENABLED)
     base_df = bars_by_tf.get(base_tf)
     summary = BacktestSummary()
     if base_df is None or base_df.empty or len(base_df) < min_history + 5:
@@ -115,6 +122,7 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
         confidence = compute_confidence(fusion, mtf, contradiction, quality.quality_score, regime.perception.atr_pct)
         decision = decide(regime, fusion, mtf, contradiction, confidence, quality.quality_ok)
 
+        fuzzy_explain = None
         if use_fuzzy and _FUZZY_AVAILABLE:
             try:
                 pre_risk_plan = plan_risk(decision.action, known_base, regime) \
@@ -128,10 +136,24 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
                 if integrated.used_fuzzy:
                     fuzzy_steps += 1
                     if integrated.fuzzy_report is not None:
-                        fuzzy_scores.append(integrated.fuzzy_report.opportunity_score)
-                        if integrated.fuzzy_report.rejected_trade:
-                            reason = integrated.fuzzy_report.notes[-1] if integrated.fuzzy_report.notes else "UNKNOWN"
+                        fr = integrated.fuzzy_report
+                        fuzzy_scores.append(fr.opportunity_score)
+                        if fr.rejected_trade:
+                            reason = fr.notes[-1] if fr.notes else "UNKNOWN"
                             fuzzy_rejections[reason] = fuzzy_rejections.get(reason, 0) + 1
+                        # Task 4 — Explainable Fuzzy AI: هر آنچه برای دیباگ یک تصمیم فازی لازم است
+                        fuzzy_explain = {
+                            "rule_fired": fr.primary_reason,
+                            "active_rules": fr.active_rules,
+                            "opportunity_score": fr.opportunity_score,
+                            "fuzzy_confidence": fr.confidence,
+                            "risk_quality": fr.risk_quality,
+                            "entry_quality": fr.entry_quality,
+                            "volatility_quality": fr.volatility_quality,
+                            "contradiction_severity": fr.contradiction_severity,
+                            "rejected_trade": fr.rejected_trade,
+                            "notes": fr.notes,
+                        }
                     new_action = _FUZZY_DIRECTION_TO_ACTION.get(integrated.final_direction, decision.action)
                     if new_action != decision.action:
                         fuzzy_overrides += 1
@@ -175,6 +197,8 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
                         "selected_strategy": selection.selected.name if selection.selected else None,
                         "data_quality_score": quality.quality_score,
                     }
+                    if fuzzy_explain is not None:
+                        evidence_snapshot["fuzzy"] = fuzzy_explain
                     summary.trades.append(BacktestTradeLog(
                         timestamp=str(current_ts), action=decision.action, regime=regime.regime,
                         confidence=confidence.confidence, trade_quality=tq.score,
