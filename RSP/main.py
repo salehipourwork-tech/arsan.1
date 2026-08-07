@@ -118,6 +118,69 @@ def run_analysis(coin, timeframe="1h", lookback_days=None):
         log_experiment(coin, report)
 
 
+def _verdict(pct_diff: float, higher_is_better: bool, tolerance_pct: float = 1.0) -> str:
+    if abs(pct_diff) <= tolerance_pct:
+        return "EQUAL"
+    improved = (pct_diff > 0) == higher_is_better
+    return "BETTER" if improved else "WORSE"
+
+
+def _run_fuzzy_compare(universe):
+    """
+    Task 9 — Automatic Comparison: Baseline (فازی خاموش) vs Fuzzy (فازی روشن)،
+    روی همان universe (همان داده)، به‌علاوه ستون Diff/Improvement% و نتیجه‌ی
+    نهایی BETTER/EQUAL/WORSE برای هر معیار. تنها نقطه‌ی کنترل فازی همچنان
+    settings.FUZZY_BACKTEST_ENABLED است؛ این تابع فقط آن را قبل/بعد از هر
+    اجرا سوییچ می‌کند، دقیقاً مثل چیزی که main.py --fuzzy-engine انجام می‌دهد.
+    """
+    settings.FUZZY_BACKTEST_ENABLED = False
+    baseline = run_backtest(universe.bars, base_tf="15M")
+
+    settings.FUZZY_BACKTEST_ENABLED = True
+    fuzzy = run_backtest(universe.bars, base_tf="15M")
+
+    metrics = [
+        ("total_trades", baseline.total_trades, fuzzy.total_trades, None),
+        ("win_rate", baseline.win_rate, fuzzy.win_rate, True),
+        ("net_return_pct", baseline.net_return_pct, fuzzy.net_return_pct, True),
+        ("profit_factor", baseline.profit_factor, fuzzy.profit_factor, True),
+        ("max_drawdown_pct", baseline.max_drawdown_pct, fuzzy.max_drawdown_pct, False),
+    ]
+
+    print(f"{'metric':<18} {'baseline':>12} {'fuzzy':>12} {'diff':>12} {'improve%':>10}  verdict")
+    print("-" * 80)
+    verdicts = []
+    for name, b, f, higher_is_better in metrics:
+        diff = f - b
+        pct = (diff / abs(b) * 100) if b not in (0, 0.0) else (0.0 if f == b else float("inf"))
+        if higher_is_better is None:
+            verdict = "N/A"
+        else:
+            verdict = _verdict(pct, higher_is_better)
+            verdicts.append(verdict)
+        print(f"{name:<18} {b:>12}  {f:>12}  {diff:>+12.3f}  {pct:>+9.1f}%  {verdict}")
+
+    n_worse = verdicts.count("WORSE")
+    n_better = verdicts.count("BETTER")
+    print("-" * 80)
+    if n_worse > 0 and n_better == 0:
+        overall = "WORSE — fuzzy باید خاموش بماند (Reference Engine همچنان نسخه‌ی بدون فازی است)"
+    elif n_better > 0 and n_worse == 0:
+        overall = "BETTER — فازی روی این بازه از Baseline بهتر بود"
+    else:
+        overall = "MIXED — برخی معیارها بهتر و برخی بدتر؛ تصمیم قطعی نیاز به Backtestهای بیشتر دارد"
+    print(f"Overall: {overall}")
+
+    if fuzzy.fuzzy_diagnostics:
+        d = fuzzy.fuzzy_diagnostics
+        print(f"\n[fuzzy_steps={d['fuzzy_steps']}  fuzzy_overrides={d['fuzzy_overrides']}  "
+              f"opportunity_score_avg={d['opportunity_score_avg']}]")
+        if d["rejection_reasons"]:
+            print("Top rejection reasons:")
+            for reason, count in sorted(d["rejection_reasons"].items(), key=lambda x: -x[1])[:5]:
+                print(f"  {count:>5}x  {reason}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="RSP")
     parser.add_argument("--coin", default="bitcoin")
@@ -134,13 +197,16 @@ def main():
     parser.add_argument("--compare-arsan", action="store_true")
     parser.add_argument("--compare-arsan-live", action="store_true")
     parser.add_argument("--fuzzy-engine", action="store_true",
-                         help="Enable the Fuzzy Engine for the live single-shot analysis "
-                              "(no --backtest/etc). Not wired into --backtest and friends "
-                              "yet (see project notes).")
+                         help="Enable the advanced Fuzzy Engine (fuzzy_core) for --backtest "
+                              "and for plain live analysis. Sole control point: "
+                              "settings.FUZZY_BACKTEST_ENABLED.")
+    parser.add_argument("--fuzzy-compare", action="store_true",
+                         help="Run --backtest twice (fuzzy OFF, then ON) on the same data and "
+                              "print an automatic Baseline vs Fuzzy vs Diff vs Verdict table.")
     args = parser.parse_args()
 
     needs_universe = args.backtest or args.walkforward or args.stress or \
-        args.montecarlo or args.versions or args.challenge
+        args.montecarlo or args.versions or args.challenge or args.fuzzy_compare
 
     if args.fuzzy_engine:
         settings.FUZZY_BACKTEST_ENABLED = True
@@ -163,8 +229,12 @@ def main():
                   " (coin=" + args.coin + "). Cannot run this command.")
             return
 
+    if args.fuzzy_compare:
+        _run_fuzzy_compare(universe)
+        return
+
     if args.backtest:
-        summary = run_backtest(universe.bars, base_tf="15M", use_fuzzy=args.fuzzy_engine)
+        summary = run_backtest(universe.bars, base_tf="15M")
         print(f"total_trades={summary.total_trades}  win_rate={summary.win_rate}  "
               f"net_return_pct={summary.net_return_pct}  profit_factor={summary.profit_factor}  "
               f"max_drawdown_pct={summary.max_drawdown_pct}")
