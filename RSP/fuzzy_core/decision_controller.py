@@ -118,17 +118,19 @@ def _permission_gate(
         return False, f"CONTRADICTION_SEVERE (μ={severe_contra:.2f})"
 
     # Hard reject: entry quality very weak
-    weak_entry = entry_q.get("very_weak", 0.0) + entry_q.get("weak", 0.0)
+    # نکته‌ی محاسباتی: very_weak و weak هم‌پوشانی دارند، پس «یا این یا آن» (Fuzzy OR)
+    # باید max باشد نه sum — جمع می‌تواند از ۱.۰ رد شود و گیت را بیش‌ازحد سخت‌گیر کند.
+    weak_entry = max(entry_q.get("very_weak", 0.0), entry_q.get("weak", 0.0))
     if weak_entry >= 0.60:
         return False, f"ENTRY_QUALITY_TOO_WEAK (μ_weak={weak_entry:.2f})"
 
     # Hard reject: risk quality very weak
-    weak_risk = risk_q.get("very_weak", 0.0) + risk_q.get("weak", 0.0)
+    weak_risk = max(risk_q.get("very_weak", 0.0), risk_q.get("weak", 0.0))
     if weak_risk >= 0.60:
         return False, f"RISK_QUALITY_TOO_WEAK (μ_weak={weak_risk:.2f})"
 
     # Hard reject: volatility very poor
-    poor_vol = volatility_q.get("very_poor", 0.0) + volatility_q.get("poor", 0.0)
+    poor_vol = max(volatility_q.get("very_poor", 0.0), volatility_q.get("poor", 0.0))
     if poor_vol >= 0.60:
         return False, f"VOLATILITY_TOO_POOR (μ_poor={poor_vol:.2f})"
 
@@ -251,9 +253,12 @@ def run_fuzzy_decision(
         notes.append("STABILITY_CHECK_FAILED: تصمیمات اخیر ناپایدار هستند")
         # Don't override decision, just flag it
 
-    # Hysteresis
-    if history.hysteresis_block(report.decision, report.opportunity_score,
-                                threshold_drop=settings.FUZZY_HYSTERESIS_DROP):
+    # Hysteresis — فقط وقتی معنا دارد که تصمیم فعلی از گیت سخت‌گیر رد نشده باشد؛
+    # یک Reject صریح (ریسک/ورود/نوسان/تضاد ضعیف) هرگز نباید توسط Hysteresis
+    # به یک معامله‌ی LONG/SHORT قبلی برگردانده شود — وگرنه Hysteresis عملاً
+    # گیت را دور می‌زند و معاملاتی را که همین کندل رد شده‌اند اجرا می‌کند.
+    if not report.rejected_trade and history.hysteresis_block(
+            report.decision, report.opportunity_score, threshold_drop=settings.FUZZY_HYSTERESIS_DROP):
         report.hysteresis_applied = True
         notes.append("HYSTERESIS_APPLIED: تغییر تصمیم بلاک شد")
         # Keep previous decision or HOLD
