@@ -185,9 +185,15 @@ def evaluate_entry_quality(mtf: MTFReport, structure: StructureReport) -> Dict[s
 
 
 # =============================================================================
-# Phase 32 — Fuzzy Risk Quality
+# Phase 32 — Fuzzy Risk Quality  (بازطراحی‌شده: percentile-based + بدون آستانه‌ی مرده)
 # =============================================================================
-def _raw_risk_quality(risk_plan: Optional[RiskPlan], atr_pct: float) -> float:
+def _raw_risk_quality_legacy(risk_plan: Optional[RiskPlan], atr_pct: float) -> float:
+    """
+    فرمول قدیمی (fallback وقتی تاریخچه‌ی ATR کافی نیست). روی داده‌ی واقعی این
+    پروژه (ETH/15M) عملاً همیشه ثابت ۰.۷۵ می‌دهد، چون risk_reward طراحی‌شده
+    همیشه دقیقاً ۲.۰ است و atr_pct هیچ‌وقت به آستانه‌ی ۴٪ نمی‌رسد — نگه داشته
+    شده فقط برای رفتار یکسان وقتی history در دسترس نیست (مثلاً چند کندل اول).
+    """
     if risk_plan is None or not risk_plan.valid:
         return 0.10
 
@@ -209,29 +215,119 @@ def _raw_risk_quality(risk_plan: Optional[RiskPlan], atr_pct: float) -> float:
     return _clamp01(score)
 
 
-def evaluate_risk_quality(risk_plan: Optional[RiskPlan], atr_pct: float) -> Dict[str, float]:
+_REGIME_RISK_ADJUST = {
+    # چقدر مدیریت ریسک در این رژیم «قابل‌اتکاتر»ه — رژیم‌های روند‌دار قوی
+    # ریسک قابل‌پیش‌بینی‌تری دارند تا رنج/برک‌اوت. اعداد کوچک‌اند (± ۰.۱۰ سقف)
+    # که فقط یک تعدیل باشند، نه محرک اصلی امتیاز.
+    "STRONG_UPTREND": 0.05, "STRONG_DOWNTREND": 0.05,
+    "UPTREND": 0.03, "DOWNTREND": 0.03,
+    "WEAK_UPTREND": 0.0, "WEAK_DOWNTREND": 0.0,
+    "LOW_VOLATILITY": 0.05, "HIGH_VOLATILITY": -0.10,
+    "BREAKOUT": -0.05,
+}
+
+
+def _raw_risk_quality(risk_plan: Optional[RiskPlan], atr_pct: float,
+                       atr_history: Optional[list] = None,
+                       regime: Optional[RegimeReport] = None) -> float:
     """
-    ورودی: RiskPlan + ATR%
+    بازطراحی داده‌محور: به‌جای آستانه‌ی ثابت ۴٪/۶٪ روی ATR% مطلق (که برای این
+    نماد/تایم‌فریم هیچ‌وقت لمس نمی‌شود و risk_quality را روی یک عدد ثابت
+    قفل می‌کرد)، «سختی مدیریت ریسک» را نسبت به توزیع تاریخی خودِ همین نماد
+    می‌سنجیم: رتبه‌ی درصدی ATR% فعلی درون یک پنجره‌ی تاریخی گذشته (walk-forward
+    safe، چون atr_history فقط شامل کندل‌های قبل از لحظه‌ی تصمیم است).
+
+    RR همچنان جزو فرمول است (برای وقتی که در آینده دیگر ثابت نباشد)، فقط دیگر
+    تنها محرک نیست.
+    """
+    if risk_plan is None or not risk_plan.valid:
+        return 0.10
+
+    rr = risk_plan.risk_reward or 0.0
+    if rr >= 3.0:
+        rr_score = 0.95
+    elif rr >= 2.0:
+        rr_score = 0.75 + (rr - 2.0) * 0.20
+    elif rr >= 1.5:
+        rr_score = 0.50 + (rr - 1.5) * 0.50
+    else:
+        rr_score = 0.20 + rr * 0.20
+
+    from RSP.fuzzy_core.bounded_uncertainty import rolling_percentile_score
+    from RSP.config import settings as _s
+    pct = rolling_percentile_score(
+        atr_pct, atr_history,
+        min_samples=_s.RISK_QUALITY_PERCENTILE_MIN_SAMPLES,
+        target_samples=_s.VOLATILITY_PERCENTILE_TARGET_SAMPLES,
+    )
+    if pct is None:
+        # fallback به فرمول قدیمی وقتی هنوز تاریخچه‌ی کافی نداریم
+        return _raw_risk_quality_legacy(risk_plan, atr_pct)
+
+    # رتبه‌ی بالا (ATR فعلی نسبت به تاریخچه‌ی خودش بالاست) = مدیریت ریسک سخت‌تر
+    atr_penalty = pct.value * 0.35  # سقف جریمه: ۰.۳۵ (نه یک jump ناگهانی)
+
+    regime_adj = _REGIME_RISK_ADJUST.get(regime.regime, 0.0) if regime is not None else 0.0
+
+    score = rr_score - atr_penalty + regime_adj
+    return _clamp01(score)
+
+
+def _raw_risk_quality_bounded(risk_plan: Optional[RiskPlan], atr_pct: float,
+                               atr_history: Optional[list] = None,
+                               regime: Optional[RegimeReport] = None):
+    """نسخه‌ی Bounded Uncertainty: هم value و هم بازه‌ی اطمینان/confidence."""
+    from RSP.fuzzy_core.bounded_uncertainty import rolling_percentile_score, BoundedScore
+    from RSP.config import settings as _s
+    value = _raw_risk_quality(risk_plan, atr_pct, atr_history, regime)
+    pct = rolling_percentile_score(
+        atr_pct, atr_history,
+        min_samples=_s.RISK_QUALITY_PERCENTILE_MIN_SAMPLES,
+        target_samples=_s.VOLATILITY_PERCENTILE_TARGET_SAMPLES,
+    )
+    if pct is None:
+        # بدون تاریخچه‌ی کافی، بازه‌ی خیلی گسترده و confidence پایین گزارش می‌شود
+        # (صادقانه: یعنی «نمی‌دانیم»، نه یک بازه‌ی دلخواه تنگ)
+        return BoundedScore(value=round(value, 4), lower=0.0, upper=1.0,
+                             confidence=0.0, n_samples=0 if not atr_history else len(atr_history))
+    spread = pct.upper - pct.lower
+    return BoundedScore(
+        value=round(value, 4),
+        lower=round(_clamp01(value - spread * 0.35), 4),
+        upper=round(_clamp01(value + spread * 0.35), 4),
+        confidence=pct.confidence, n_samples=pct.n_samples,
+    )
+
+
+def evaluate_risk_quality(risk_plan: Optional[RiskPlan], atr_pct: float,
+                           atr_history: Optional[list] = None,
+                           regime: Optional[RegimeReport] = None) -> Dict[str, float]:
+    """
+    ورودی: RiskPlan + ATR% (+ اختیاری: تاریخچه‌ی ATR برای percentile scoring،
+    و regime برای تعدیل کوچک بر اساس نوع رژیم)
     خروجی: fuzzy risk quality
 
-    منطق:
-      - RR >= 2.0 -> strong
-      - RR < 1.5 -> weak
-      - ATR% very high -> risk management harder -> moderate penalty
+    منطق (بازطراحی‌شده): RR + رتبه‌ی نسبی ATR% درون تاریخچه‌ی خودش (نه آستانه‌ی
+    مطلق مرده) + تعدیل کوچک رژیم. اگر atr_history داده نشود، به فرمول قدیمی
+    (آستانه‌ی ثابت) برمی‌گردد — کاملاً backward-compatible.
     """
     var = get_quality_variable("risk_quality")
     if var is None:
         return {}
-    return var.fuzzify(_raw_risk_quality(risk_plan, atr_pct))
+    return var.fuzzify(_raw_risk_quality(risk_plan, atr_pct, atr_history, regime))
 
 
 # =============================================================================
-# Phase 33 — Fuzzy Volatility Quality
+# Phase 33 — Fuzzy Volatility Quality  (بازطراحی‌شده: percentile-based)
 # =============================================================================
-def _raw_volatility_quality(atr_pct: float, regime: RegimeReport) -> float:
+def _raw_volatility_quality_legacy(atr_pct: float, regime: RegimeReport) -> float:
     """
-    خروجی روی مقیاس «بدی» (۱.۰ = خیلی بد/نامنظم) — یعنی مستقیماً قابل fuzzify
-    روی volatility_quality است (excellent در x کم، very_poor در x زیاد).
+    فرمول قدیمی (fallback). جهت این فرمول («بدی» بالا وقتی ATR% بالا) روی
+    ۲۰۴۹ رکورد واقعی تست شد و جهتش درست بود (correlation منفی معنادار با pnl،
+    p<0.0001) — مشکل polarity نبود؛ مشکل این بود که آستانه‌های مطلق (۰.۵٪ تا
+    ۶٪+) برای این نماد/تایم‌فریم خیلی بزرگ‌اند: ATR% واقعی این داده هیچ‌وقت از
+    ۱.۹۳٪ رد نشد، پس ۷۳٪ رکوردها در ناحیه‌ی تخت "goodness=1.0" افتادند و امتیاز
+    برای اکثر معاملات عملاً ثابت (بدون تفکیک‌پذیری) بود.
     """
     if atr_pct <= 0.5:
         goodness = 1.0
@@ -254,25 +350,66 @@ def _raw_volatility_quality(atr_pct: float, regime: RegimeReport) -> float:
     return _clamp01(1.0 - goodness)
 
 
-def evaluate_volatility_quality(atr_pct: float, regime: RegimeReport) -> Dict[str, float]:
+def _raw_volatility_quality(atr_pct: float, regime: RegimeReport,
+                             atr_history: Optional[list] = None) -> float:
     """
-    ورودی: ATR% + Regime
+    خروجی روی مقیاس «بدی» (۱.۰ = خیلی بد/نامنظم)، همان جهتی که قبلاً هم بود
+    و روی داده‌ی واقعی تأیید شد. تفاوت: به‌جای آستانه‌ی مطلق، رتبه‌ی درصدی
+    ATR% فعلی نسبت به تاریخچه‌ی خودِ همین نماد (walk-forward safe) استفاده
+    می‌شود تا امتیاز واقعاً درون کل بازه‌ی داده پخش شود، نه اینکه اکثر
+    رکوردها روی یک عدد ثابت بیفتند.
+    """
+    from RSP.fuzzy_core.bounded_uncertainty import rolling_percentile_score
+    from RSP.config import settings as _s
+    pct = rolling_percentile_score(
+        atr_pct, atr_history,
+        min_samples=_s.VOLATILITY_PERCENTILE_MIN_SAMPLES,
+        target_samples=_s.VOLATILITY_PERCENTILE_TARGET_SAMPLES,
+    )
+    if pct is None:
+        return _raw_volatility_quality_legacy(atr_pct, regime)
+
+    badness = pct.value  # رتبه‌ی بالا = نسبت به تاریخچه‌ی خودش پرنوسان‌تر = بدتر
+    if regime.regime == "HIGH_VOLATILITY":
+        badness = max(badness, 0.65)
+    elif regime.regime == "LOW_VOLATILITY":
+        badness = min(badness, 0.30)
+
+    return _clamp01(badness)
+
+
+def _raw_volatility_quality_bounded(atr_pct: float, regime: RegimeReport,
+                                     atr_history: Optional[list] = None):
+    """نسخه‌ی Bounded Uncertainty برای volatility_quality."""
+    from RSP.fuzzy_core.bounded_uncertainty import rolling_percentile_score, BoundedScore
+    from RSP.config import settings as _s
+    pct = rolling_percentile_score(
+        atr_pct, atr_history,
+        min_samples=_s.VOLATILITY_PERCENTILE_MIN_SAMPLES,
+        target_samples=_s.VOLATILITY_PERCENTILE_TARGET_SAMPLES,
+    )
+    value = _raw_volatility_quality(atr_pct, regime, atr_history)
+    if pct is None:
+        return BoundedScore(value=round(value, 4), lower=0.0, upper=1.0,
+                             confidence=0.0, n_samples=0 if not atr_history else len(atr_history))
+    return BoundedScore(value=round(value, 4), lower=pct.lower, upper=pct.upper,
+                         confidence=pct.confidence, n_samples=pct.n_samples)
+
+
+def evaluate_volatility_quality(atr_pct: float, regime: RegimeReport,
+                                 atr_history: Optional[list] = None) -> Dict[str, float]:
+    """
+    ورودی: ATR% + Regime (+ اختیاری: تاریخچه‌ی ATR برای percentile scoring)
     خروجی: fuzzy volatility quality
 
-    منطق:
-      - ATR% 0.5-2.0 -> excellent (predictable)
-      - ATR% 2.0-4.0 -> good
-      - ATR% 4.0-6.0 -> moderate
-      - ATR% > 6.0 -> poor (chaotic)
-      - HIGH_VOLATILITY regime -> poor regardless
-
-    نکته: خروجی این تابع خودش («بدی» 0..1) مستقیماً به fuzzify داده می‌شود؛
-    دیگر نیازی به معکوس‌کردن دستی در بیرون از تابع نیست.
+    منطق (بازطراحی‌شده): رتبه‌ی درصدی ATR% فعلی نسبت به تاریخچه‌ی خودِ همین
+    نماد (نه آستانه‌ی مطلق). اگر atr_history داده نشود، به فرمول قدیمی
+    (آستانه‌ی ثابت) برمی‌گردد — کاملاً backward-compatible.
     """
     var = get_quality_variable("volatility_quality")
     if var is None:
         return {}
-    return var.fuzzify(_raw_volatility_quality(atr_pct, regime))
+    return var.fuzzify(_raw_volatility_quality(atr_pct, regime, atr_history))
 
 
 # =============================================================================
@@ -367,9 +504,20 @@ def evaluate_signal_confidence(confidence: ConfidenceReport) -> Dict[str, float]
 
 
 # =============================================================================
-# Phase 37 — Fuzzy Contradiction Severity
+# Phase 37 — Fuzzy Contradiction Severity  (بازطراحی‌شده: decoupled از گیت گسسته)
 # =============================================================================
-def _raw_contradiction_severity(contradiction: ContradictionReport) -> float:
+def _raw_contradiction_severity_legacy(contradiction: ContradictionReport) -> float:
+    """
+    فرمول قدیمی. Root cause یافته‌شده: contradiction.severity فقط وقتی
+    SEVERE/MODERATE می‌شود که contradiction.conflict_detected=True — و در آن
+    حالت decide() (تصمیم‌گیر Crisp) از قبل خودش action را WAIT/NO_TRADE کرده
+    (RSP/decision_engine/decision_brain.py حدود خط ۷۳). یعنی هر رکوردی که
+    اصلاً به BUY/SELL برسد، severity="NONE" تضمین‌شده است و این فرمول برایش
+    فقط conflict_ratio خام (که با آستانه‌ی فعلی BLOCK_THRESHOLD=0.15 عملاً
+    almost-binary است) را برمی‌گرداند — دقیقاً همان چیزی که در export دیدیم:
+    ثابت ۰.۰ برای هر ۲۰۴۹ معامله‌ی واقعی. این «باگ» نیست، محدودیت ساختاری
+    فرمول فعلی است؛ نگه داشته شده فقط برای مقایسه/فالبک.
+    """
     score = contradiction.conflict_ratio
     if contradiction.mtf_disagreement:
         score += 0.15
@@ -382,20 +530,69 @@ def _raw_contradiction_severity(contradiction: ContradictionReport) -> float:
     return _clamp01(score)
 
 
+def _raw_contradiction_severity(contradiction: ContradictionReport) -> float:
+    """
+    نسخه‌ی پیوسته و decoupled از گیت گسسته‌ی Crisp.
+
+    Root cause (محور ۱): در fuzzy_training_export.py امتیاز فقط برای رکوردهایی
+    محاسبه می‌شود که decision.action از قبل BUY/SELL شده — یعنی contradiction
+    قبلاً conflict_detected=False بوده (وگرنه decide() خودش WAIT/NO_TRADE
+    می‌داد). در نتیجه severity همیشه "NONE" است و امتیاز قدیمی (که برای
+    SEVERE/MODERATE یک max() گسسته می‌زد) برای این جمعیت همیشه در بهترین حالت
+    fadeی از conflict_ratio تنها می‌ماند — که خودش هم با BLOCK_THRESHOLD فعلی
+    (۰.۱۵) و اندازه‌ی معمول شواهد، عملاً یا ۰ یا بالای آستانه است (بدون حالت
+    میانی قابل مشاهده در جمعیت survivor). در backtest_engine.py برعکس، لایه‌ی
+    فازی روی *همه‌ی* کندل‌ها اجرا می‌شود (چه decision.action=BUY/SELL باشد چه
+    WAIT/NO_TRADE) — پس آنجا می‌توانیم severity=SEVERE (raw≈۰.۸۰ -> μ_severe
+    فازی‌شده ≈۰.۵۰، دقیقاً همان عددی که در --fuzzy-compare دیده شد) را هم
+    ببینیم. این دو مسیر روی دو جمعیت متفاوت از کندل‌ها کار می‌کردند؛ عدم‌تطابق
+    واقعی، «باگ pipeline» به‌معنای خطای محاسباتی نبود.
+
+    برای این‌که contradiction_severity یک feature قابل‌استفاده برای
+    AHP/ANFIS روی دقیقاً همان جمعیتی باشد که واقعاً معامله می‌شوند (BUY/SELL
+    survivors)، امتیاز را از سیگنال‌های پیوسته‌ای می‌سازیم که مستقل از threshold
+    گسسته‌ی conflict_detected همیشه در دسترس‌اند:
+      - قدرت اجماع (|net_score|) — هرچه پایین‌تر، عدم‌قطعیت جهت بیشتر
+      - conflict_ratio نسبت به BLOCK_THRESHOLD (به‌جای max() گسسته، یک رمپ خطی)
+      - mtf_disagreement (bonus کوچک، فقط چون این خودش می‌تواند conflict_detected
+        را true کند، در جمعیت survivor همیشه False است ولی برای بارهای دیگر —
+        مثلاً مصرف تشخیصی روی کل جمعیت — همچنان معنا دارد)
+
+    این تابع منطق گیت Crisp (decision_brain.py) را عوض نمی‌کند — فقط سیگنال
+    مصرفی fuzzy/feature را از آن گیت گسسته جدا می‌کند.
+    """
+    from RSP.config import settings as _s
+    weak_consensus = _clamp01(1.0 - abs(contradiction.net_score))
+    ratio_component = _clamp01(contradiction.conflict_ratio / max(_s.CONTRADICTION_BLOCK_THRESHOLD, 1e-6))
+
+    score = 0.55 * weak_consensus + 0.45 * ratio_component
+    if contradiction.mtf_disagreement:
+        score = _clamp01(score + 0.15)
+    if contradiction.reasons and len(contradiction.reasons) >= 2:
+        score = _clamp01(score + 0.05)
+    return _clamp01(score)
+
+
 def evaluate_contradiction_severity(contradiction: ContradictionReport) -> Dict[str, float]:
     """
     ورودی: ContradictionReport
     خروجی: fuzzy contradiction severity
 
-    منطق:
-      - conflict_ratio -> primary driver
-      - mtf_disagreement -> bonus severity
-      - severity flag -> direct mapping
+    کنترل rollback: settings.CONTRADICTION_SCORING_MODE
+      - "legacy"     (پیش‌فرض — Baseline فعلی دست‌نخورده می‌ماند): فرمول قدیمی
+      - "continuous": فرمول جدید decoupled (برای کالیبراسیون/AHP-ANFIS از feature
+        واقعاً دارای واریانس روی جمعیت BUY/SELL survivor)
+    تغییر mode روی گیت Permission (decision_controller._permission_gate) هم اثر
+    می‌گذارد چون از همین dict مصرف می‌کند — به همین دلیل پیش‌فرض را عوض نکردیم.
     """
+    from RSP.config import settings as _s
     var = get_quality_variable("contradiction_severity")
     if var is None:
         return {}
-    return var.fuzzify(_raw_contradiction_severity(contradiction))
+    mode = getattr(_s, "CONTRADICTION_SCORING_MODE", "legacy")
+    raw = _raw_contradiction_severity(contradiction) if mode == "continuous" \
+        else _raw_contradiction_severity_legacy(contradiction)
+    return var.fuzzify(raw)
 
 
 # =============================================================================
