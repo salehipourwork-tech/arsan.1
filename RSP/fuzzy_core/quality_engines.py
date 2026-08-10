@@ -41,14 +41,26 @@ def _safe_ratio(numerator: float, denominator: float, default: float = 0.0) -> f
 # Phase 29 — Fuzzy Trend Quality
 # =============================================================================
 def _raw_trend_quality(regime: RegimeReport, confluence: ConfluenceReport) -> float:
+    # کالیبره‌شده با داده‌ی واقعی (fuzzy_training_export.py روی ETH/240d، n=2020 معامله‌ی
+    # واقعی؛ امتیاز = ترکیب normalized(mean_pnl) و normalized(win_rate) به‌ازای هر رژیم).
+    # قبلاً STRONG_UPTREND=0.90 (بالاترین) بود در حالی که در داده‌ی واقعی بدترین عملکرد
+    # را داشت (win_rate=29.0%, mean_pnl=-0.310) — این خطای قطبیت اینجا اصلاح شده.
+    # رژیم‌هایی که در داده‌ی معاملاتی واقعی نمونه‌ی کافی نداشتند (RANGE/TRANSITION/
+    # RECOVERY/CRASH/HIGH_VOLATILITY/UNKNOWN) هنوز مقدار قبلی (حدس دامنه‌ای) را دارند —
+    # علامت‌گذاری شده تا معلوم باشد کدام‌ها calibrated و کدام‌ها هنوز حدسی‌اند.
     regime_scores = {
-        "STRONG_UPTREND": 0.90, "STRONG_DOWNTREND": 0.90,
-        "UPTREND": 0.70, "DOWNTREND": 0.70,
-        "WEAK_UPTREND": 0.45, "WEAK_DOWNTREND": 0.45,
-        "RANGE": 0.20, "TRANSITION": 0.15,
-        "BREAKOUT": 0.60, "BREAKDOWN": 0.60,
-        "RECOVERY": 0.50, "CRASH": 0.10,
-        "HIGH_VOLATILITY": 0.25, "LOW_VOLATILITY": 0.40,
+        # --- calibrated from real ETH trade outcomes (n>=15 per regime) ---
+        "WEAK_DOWNTREND": 0.90,     # n=237  win_rate=48.1%  mean_pnl=+0.208  (بهترین)
+        "UPTREND": 0.68,            # n=381  win_rate=43.6%  mean_pnl=+0.048
+        "LOW_VOLATILITY": 0.64,     # n=61   win_rate=44.3%  mean_pnl=-0.019
+        "STRONG_DOWNTREND": 0.57,   # n=288  win_rate=39.9%  mean_pnl=+0.002
+        "WEAK_UPTREND": 0.47,       # n=269  win_rate=39.0%  mean_pnl=-0.109
+        "DOWNTREND": 0.41,          # n=590  win_rate=38.5%  mean_pnl=-0.169
+        "BREAKOUT": 0.15,           # n=11 (نمونه‌ی کم) win_rate=0.0%  mean_pnl=-0.871
+        "STRONG_UPTREND": 0.10,     # n=183  win_rate=29.0%  mean_pnl=-0.310  (بدترین)
+        # --- not yet seen in real trade data — کماکان حدس دامنه‌ای، نه کالیبره‌شده ---
+        "BREAKDOWN": 0.60, "RECOVERY": 0.50, "CRASH": 0.10,
+        "RANGE": 0.20, "TRANSITION": 0.15, "HIGH_VOLATILITY": 0.25,
         "UNKNOWN": 0.10,
     }
     base = regime_scores.get(regime.regime, 0.30)
