@@ -22,6 +22,11 @@ class PerceptionReport:
     atr_pct: float = 0.0
     rsi_value: float = 50.0
     volume_trend: str = "UNKNOWN"
+    # تاریخچه‌ی ATR% (فقط تا همین کندل، هرگز آینده) — برای Bounded Uncertainty /
+    # percentile-based scoring در volatility_quality و risk_quality. چون از همان
+    # df ورودی (که خودش قبلاً توسط caller به تاریخچه‌ی تا لحظه‌ی تصمیم محدود شده)
+    # ساخته می‌شود، ذاتاً walk-forward-safe است.
+    atr_pct_series: List[float] = field(default_factory=list)
 
 
 def perceive_market(df: pd.DataFrame) -> PerceptionReport:
@@ -54,6 +59,15 @@ def perceive_market(df: pd.DataFrame) -> PerceptionReport:
     report.adx_value = round(adx_val, 2)
     report.atr_pct = round(atr_pct, 3)
     report.rsi_value = round(rsi_val, 2)
+
+    # atr_series از ta.atr همین‌جا محاسبه شده؛ فقط به % close تبدیل و به یک
+    # پنجره‌ی محدود (حداکثر ۵۰۰ کندل گذشته) کپ می‌کنیم — منطق ATR تغییری نکرده،
+    # فقط یک نمای تاریخی از همان مقدار برای caller اضافه می‌شود.
+    try:
+        atr_pct_full = (atr_series / close * 100).dropna()
+        report.atr_pct_series = [round(v, 3) for v in atr_pct_full.tail(500).tolist()]
+    except Exception:
+        report.atr_pct_series = []
 
     recent_vol = volume.iloc[-10:].mean()
     prior_vol = volume.iloc[-20:-10].mean() if len(volume) >= 20 else recent_vol
