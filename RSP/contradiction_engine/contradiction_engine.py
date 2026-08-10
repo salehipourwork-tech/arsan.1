@@ -21,6 +21,11 @@ class ContradictionReport:
     reasons: List[str] = field(default_factory=list)
     mtf_disagreement: bool = False
     severity: str = "NONE"   # NONE | MODERATE | SEVERE
+    # فقط برای مصرف feature/fuzzy-scoring (نه گیت‌گذاری Crisp): سیگنال پیوسته‌ی
+    # قدرت اجماع، مستقل از threshold گسسته‌ی conflict_detected. این فیلد هیچ
+    # اثری روی منطق گیت بالا ندارد (که همچنان فقط conflict_ratio/mtf_disagreement/
+    # net_score را در سه شرط OR بالا مصرف می‌کند).
+    net_score: float = 0.0
 
 
 def detect_contradictions(fusion: FusionReport, mtf: MTFReport) -> ContradictionReport:
@@ -29,6 +34,7 @@ def detect_contradictions(fusion: FusionReport, mtf: MTFReport) -> Contradiction
     total_evidence = len(fusion.bullish_evidence) + len(fusion.bearish_evidence) + len(fusion.neutral_evidence)
     conflicting = len(fusion.conflicting_evidence)
     report.conflict_ratio = round(conflicting / total_evidence, 3) if total_evidence else 0.0
+    report.net_score = fusion.net_score
 
     if fusion.bullish_evidence and fusion.bearish_evidence:
         # هر دو جهت شواهد معتبر دارند
