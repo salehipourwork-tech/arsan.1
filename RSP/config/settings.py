@@ -245,6 +245,26 @@ CONTRADICTION_BLOCK_THRESHOLD = 0.15  # قبلاً 0.45 بود؛ روی داده
 # failure_analysis). 0.15 یعنی هر تناقض معنادار (حتی یک دسته) اکنون بلاک می‌شود.
 CONTRADICTION_SEVERE_THRESHOLD = 0.70  # از این به بالا (یا تضاد چندگانه) => تضاد "شدید"، NO_TRADE به‌جای WAIT
 
+# ---------------------------------------------------------------------------
+# Bounded Uncertainty / Fuzzy Feature Redesign (root-cause fixes: contradiction
+# pipeline mismatch + volatility/risk quality dead thresholds). همه پیش‌فرض به
+# رفتار قدیمی/Baseline‌اند تا هیچ نتیجه‌ی قبلی بی‌اجازه عوض نشود؛ صراحتاً باید
+# فعال شوند و کاملاً rollback-پذیرند (فقط برگرداندن این مقادیر به حالت قبل).
+# ---------------------------------------------------------------------------
+CONTRADICTION_SCORING_MODE = "legacy"     # "legacy" | "continuous" — نگاه کنید
+# quality_engines.evaluate_contradiction_severity. "continuous" یعنی
+# contradiction_severity دیگر از severity گسسته (که فقط وقتی conflict_detected
+# باشد غیرصفر است، یعنی هیچ‌وقت روی معاملات واقعی BUY/SELL دیده نمی‌شود) بلکه
+# از قدرت اجماع پیوسته (net_score) و conflict_ratio نسبی می‌آید.
+
+USE_PERCENTILE_RISK_VOLATILITY = False    # True یعنی decision_controller به‌جای
+# آستانه‌ی مطلق ATR% (که برای این نماد هیچ‌وقت لمس نمی‌شد)، رتبه‌ی درصدی ATR%
+# را نسبت به تاریخچه‌ی خودِ همان نماد (regime.perception.atr_pct_series) به
+# evaluate_volatility_quality/evaluate_risk_quality پاس می‌دهد.
+VOLATILITY_PERCENTILE_MIN_SAMPLES = 30     # کمتر از این تعداد کندل تاریخی => fallback به فرمول قدیمی
+VOLATILITY_PERCENTILE_TARGET_SAMPLES = 300  # تعداد نمونه‌ای که confidence=1.0 می‌شود
+RISK_QUALITY_PERCENTILE_MIN_SAMPLES = 30
+
 
 # ---------------------------------------------------------------------------
 # Backtest / Simulator (Phase 18/19)
