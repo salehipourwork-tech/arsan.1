@@ -171,8 +171,14 @@ def run_fuzzy_decision(
     report.trend_quality = evaluate_trend_quality(regime, confluence)
     report.momentum_quality = evaluate_momentum_quality(confluence)
     report.entry_quality = evaluate_entry_quality(mtf, structure)
-    report.risk_quality = evaluate_risk_quality(risk_plan, atr_pct)
-    report.volatility_quality = evaluate_volatility_quality(atr_pct, regime)
+
+    # Bounded Uncertainty / percentile-based ATR scoring — کاملاً rollback-پذیر
+    # با settings.USE_PERCENTILE_RISK_VOLATILITY (پیش‌فرض False = رفتار قدیمی)
+    atr_history = None
+    if settings.USE_PERCENTILE_RISK_VOLATILITY and regime is not None:
+        atr_history = getattr(getattr(regime, "perception", None), "atr_pct_series", None)
+    report.risk_quality = evaluate_risk_quality(risk_plan, atr_pct, atr_history, regime)
+    report.volatility_quality = evaluate_volatility_quality(atr_pct, regime, atr_history)
     report.market_stability = evaluate_market_stability(regime, structure)
     report.signal_strength = evaluate_signal_strength(fusion)
     report.signal_confidence = evaluate_signal_confidence(confidence)
