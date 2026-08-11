@@ -403,10 +403,25 @@ def evaluate_volatility_quality(atr_pct: float, regime: RegimeReport,
     خروجی: fuzzy volatility quality
 
     منطق (بازطراحی‌شده): رتبه‌ی درصدی ATR% فعلی نسبت به تاریخچه‌ی خودِ همین
-    نماد (نه آستانه‌ی مطلق). اگر atr_history داده نشود، به فرمول قدیمی
-    (آستانه‌ی ثابت) برمی‌گردد — کاملاً backward-compatible.
+    نماد (نه آستانه‌ی مطلق). اگر atr_history داده نشود یا نمونه کافی نباشد،
+    به فرمول قدیمی (آستانه‌ی ثابت) برمی‌گردد — کاملاً backward-compatible.
+
+    کالیبراسیون گیت: چون خروجی percentile-based یک مقیاس کاملاً متفاوت
+    (تقریباً Uniform روی [0,1]) از فرمول قدیمی دارد، وقتی مسیر percentile
+    واقعاً فعال است از یک LinguisticVariable جداگانه و کالیبره‌شده
+    ("volatility_quality_v2") استفاده می‌شود؛ در غیر این صورت همان متغیر
+    قدیمی. این یعنی _permission_gate با هر دو مسیر سازگار می‌ماند بدون اینکه
+    شکل قدیمی برای مقیاس جدید (که باعث رد ۳۰٪+ معاملات می‌شد) دوباره استفاده شود.
     """
-    var = get_quality_variable("volatility_quality")
+    from RSP.fuzzy_core.bounded_uncertainty import rolling_percentile_score
+    from RSP.config import settings as _s
+    pct = rolling_percentile_score(
+        atr_pct, atr_history,
+        min_samples=_s.VOLATILITY_PERCENTILE_MIN_SAMPLES,
+        target_samples=_s.VOLATILITY_PERCENTILE_TARGET_SAMPLES,
+    )
+    var_name = "volatility_quality_v2" if pct is not None else "volatility_quality"
+    var = get_quality_variable(var_name)
     if var is None:
         return {}
     return var.fuzzify(_raw_volatility_quality(atr_pct, regime, atr_history))
