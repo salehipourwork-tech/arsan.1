@@ -251,13 +251,17 @@ CONTRADICTION_SEVERE_THRESHOLD = 0.70  # از این به بالا (یا تضا�
 # رفتار قدیمی/Baseline‌اند تا هیچ نتیجه‌ی قبلی بی‌اجازه عوض نشود؛ صراحتاً باید
 # فعال شوند و کاملاً rollback-پذیرند (فقط برگرداندن این مقادیر به حالت قبل).
 # ---------------------------------------------------------------------------
-CONTRADICTION_SCORING_MODE = "continuous"     # "legacy" | "continuous" — نگاه کنید
+CONTRADICTION_SCORING_MODE = "legacy"     # "legacy" | "continuous" — نگاه کنید
 # quality_engines.evaluate_contradiction_severity. "continuous" یعنی
 # contradiction_severity دیگر از severity گسسته (که فقط وقتی conflict_detected
 # باشد غیرصفر است، یعنی هیچ‌وقت روی معاملات واقعی BUY/SELL دیده نمی‌شود) بلکه
 # از قدرت اجماع پیوسته (net_score) و conflict_ratio نسبی می‌آید.
 
-USE_PERCENTILE_RISK_VOLATILITY = True     # True یعنی decision_controller به‌جای
+USE_PERCENTILE_RISK_VOLATILITY = True     # پیش‌فرض به True تغییر کرد (بعد از کالیبراسیون
+# گیت poor/very_poor روی مقیاس جدید — نگاه کنید membership.build_volatility_quality_variable_v2
+# و تست‌های test_volatility_risk_gate_calibration.py). برای rollback فوری به رفتار
+# قدیمی، فقط همین یک خط را به False برگردانید — هیچ فایل دیگری نیاز به تغییر ندارد.
+# True یعنی decision_controller به‌جای
 # آستانه‌ی مطلق ATR% (که برای این نماد هیچ‌وقت لمس نمی‌شد)، رتبه‌ی درصدی ATR%
 # را نسبت به تاریخچه‌ی خودِ همان نماد (regime.perception.atr_pct_series) به
 # evaluate_volatility_quality/evaluate_risk_quality پاس می‌دهد.
