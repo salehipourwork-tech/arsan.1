@@ -213,6 +213,23 @@ def run_fuzzy_decision(
     report.active_rules = inference.active_rules
     report.opportunity_score = inference.defuzzified_score
 
+    # --- AHP Opportunity Scoring (اختیاری، rollback-safe) ---
+    # پیش‌فرض settings.OPPORTUNITY_SCORING_METHOD="rules" یعنی رفتار بالا
+    # (rule-based Sugeno/Mamdani) دست‌نخورده می‌ماند. فقط وقتی صراحتاً "ahp"
+    # انتخاب شود، opportunity_score با ترکیب وزن‌دار AHP (فقط ۳ feature
+    # تأییدشده: trend_quality, risk_quality_v2, volatility_quality_v2)
+    # جایگزین می‌شود. inference رول‌بیس همچنان محاسبه و در گزارش نگه داشته
+    # می‌شود (برای مقایسه/دیباگ)، فقط عدد نهایی که به گیت می‌رود عوض می‌شود.
+    if getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules") == "ahp":
+        from RSP.fuzzy_core.ahp_scoring import ahp_opportunity_score
+        from RSP.fuzzy_core.quality_engines import _raw_trend_quality, _raw_risk_quality, _raw_volatility_quality
+        trend_raw = _raw_trend_quality(regime, confluence)
+        risk_raw = _raw_risk_quality(risk_plan, atr_pct, atr_history, regime)
+        vol_raw = _raw_volatility_quality(atr_pct, regime, atr_history)
+        report.opportunity_score = ahp_opportunity_score(trend_raw, risk_raw, vol_raw)
+        notes.append(f"AHP opportunity_score={report.opportunity_score} "
+                      f"(rule-based بود: {inference.defuzzified_score})")
+
     # --- Phase 46: Dynamic Confidence Calibration ---
     # opportunity_score (0..100) mapped to confidence (0..1)
     raw_conf = report.opportunity_score / 100.0
