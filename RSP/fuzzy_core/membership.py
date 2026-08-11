@@ -183,6 +183,39 @@ def build_volatility_quality_variable() -> LinguisticVariable:
     )
 
 
+def build_volatility_quality_variable_v2() -> LinguisticVariable:
+    """
+    نسخه‌ی کالیبره‌شده برای raw score جدید (percentile-based، تقریباً Uniform(0,1)
+    چون خودش رتبه‌ی درصدی است). فقط وقتی مصرف می‌شود که
+    settings.USE_PERCENTILE_RISK_VOLATILITY=True باشد (RSP/fuzzy_core/
+    quality_engines.evaluate_volatility_quality).
+
+    منطق کالیبراسیون: چون badness خودش percentile rank است (تقریباً Uniform
+    روی [0,1] با ساخت ریاضی، مستقل از این‌که این نماد/بازه‌ی خاص چه توزیعی
+    داشته — این ویژگی ذاتی percentile rank است، نه برازش‌شده روی این دیتاست)،
+    مرزهای Term را به‌جای مقدار مطلق ATR%، بر اساس «سهم جمعیتی موردنظر» تعیین
+    کردیم: very_poor/poor فقط باید تقریباً بدترین یک‌ششم (~15-18%) توزیع
+    نسبی نوسان را رد کنند - نه مطابق شکل قدیمی که برای یک توزیع کاملاً متفاوت
+    (چسبیده به صفر) طراحی شده بود. روی training_data.json واقعی (۲۰۵۰ رکورد
+    ETH/240D) این باعث می‌شود ۱۷.۸٪ از رکوردها گیت poor/very_poor را لمس کنند
+    (به‌جای ۳۰.۴٪ با مرزهای قدیمی، و ۰٪ با فرمول خیلی قدیمی legacy). هیچ عددی
+    از این کالیبراسیون با بهینه‌سازی مستقیم روی pnl این دیتاست به دست نیامده؛
+    فقط با درصد جمعیتی هدف (rank-based) که برای هر نماد/بازه‌ی دیگری هم به
+    همین شکل تعمیم پیدا می‌کند (چون ورودی همیشه percentile rank است).
+    """
+    return LinguisticVariable(
+        name="volatility_quality_v2",
+        domain=(0.0, 1.0),
+        terms=[
+            Term("very_poor", lambda x: s_shaped(x, 0.93, 1.00), "s_shaped"),      # بدترین ~۷٪
+            Term("poor", lambda x: trapezoidal(x, 0.85, 0.90, 0.95, 0.98), "trapezoidal"),  # ~۷۵ تا ۹۵ صدک
+            Term("moderate", lambda x: triangular(x, 0.25, 0.50, 0.80), "triangular"),       # میانه‌ی توزیع
+            Term("good", lambda x: triangular(x, 0.08, 0.20, 0.40), "triangular"),
+            Term("excellent", lambda x: z_shaped(x, 0.05, 0.15), "z_shaped"),      # بهترین ~۱۰-۱۵٪
+        ],
+    )
+
+
 def build_market_stability_variable() -> LinguisticVariable:
     """Phase 34: Fuzzy Market Stability"""
     return build_quality_variable("market_stability", 0.20, 0.40, 0.65, 0.85)
@@ -248,6 +281,7 @@ QUALITY_VARIABLE_REGISTRY = {
     "entry_quality": build_entry_quality_variable(),
     "risk_quality": build_risk_quality_variable(),
     "volatility_quality": build_volatility_quality_variable(),
+    "volatility_quality_v2": build_volatility_quality_variable_v2(),
     "market_stability": build_market_stability_variable(),
     "signal_strength": build_signal_strength_variable(),
     "signal_confidence": build_signal_confidence_variable(),
