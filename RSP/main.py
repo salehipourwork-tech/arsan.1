@@ -5,6 +5,16 @@ import os
 import sys
 import argparse
 
+# روی ویندوز، وقتی خروجی به فایل/pipe ریدایرکت می‌شود (مثلاً `> out.txt`)، پایتون
+# به‌جای code page کنسول از cp1252 سیستم استفاده می‌کند که فارسی را پشتیبانی
+# نمی‌کند و باعث UnicodeEncodeError روی هر print فارسی می‌شود. اینجا صراحتاً
+# stdout/stderr را UTF-8 می‌کنیم تا خروجی‌ریدایرکت‌شده هم قابل‌اعتماد باشد.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
