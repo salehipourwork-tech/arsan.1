@@ -118,12 +118,29 @@ def test_no_valid_risk_plan_still_bounded():
     print("OK: RiskPlan نامعتبر هم bounded می‌ماند")
 
 
+def test_ahp_score_bounded_and_rollback_safe():
+    """
+    ahp_opportunity_score همیشه در [0,100] است. و default settings
+    (OPPORTUNITY_SCORING_METHOD="rules") یعنی run_fuzzy_decision اصلاً از AHP
+    استفاده نمی‌کند - این را با فراخوانی مستقیم تابع AHP (مستقل از فراخوانی
+    توسط decision_controller) و بررسی مقدار پیش‌فرض settings تأیید می‌کنیم.
+    """
+    from RSP.fuzzy_core.ahp_scoring import ahp_opportunity_score
+    assert getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules") == "rules", \
+        "پیش‌فرض باید rules بماند (rollback-safe)؛ اگر عمداً به ahp تغییر دادید این تست را نادیده بگیرید"
+    for trend, risk, vol_bad in [(0.0, 0.0, 0.0), (1.0, 1.0, 1.0), (0.5, 0.3, 0.9), (-1, 2, -5)]:
+        s = ahp_opportunity_score(trend, risk, vol_bad)
+        assert 0.0 <= s <= 100.0, f"AHP score خارج از بازه: {s}"
+    print("OK: ahp_opportunity_score همیشه bounded [0,100] و پیش‌فرض rollback-safe است")
+
+
 if __name__ == "__main__":
     tests = [
         test_baseline_unchanged_when_no_history_passed,
         test_percentile_mode_does_not_reject_runaway,
         test_fuzzy_outputs_bounded_and_finite,
         test_no_valid_risk_plan_still_bounded,
+        test_ahp_score_bounded_and_rollback_safe,
     ]
     failed = 0
     for t in tests:
