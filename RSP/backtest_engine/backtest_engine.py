@@ -17,6 +17,7 @@ computation) - این بهینه‌سازی در این نسخه انجام نش
 معامله‌ی هم‌زمان پشتیبانی نمی‌شود - مستند در README).
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List
 import pandas as pd
@@ -74,6 +75,23 @@ class BacktestSummary:
     fuzzy_diagnostics: dict = field(default_factory=dict)
 
 
+_GATE_NAME_RE = re.compile(r"GATE_REJECTED:\s*([A-Z_]+)")
+
+
+def _gate_name(reason: str) -> str:
+    """
+    از متن یک دلیل رد (مثلاً 'GATE_REJECTED: RISK_QUALITY_TOO_WEAK (μ_weak=0.96)')
+    فقط نام Gate را استخراج می‌کند (مستقل از مقدار μ) تا در Failure Analysis
+    بشود رد‌ها را بر اساس Gate گروه‌بندی کرد، نه بر اساس رشته‌ی کامل شامل عدد.
+    """
+    m = _GATE_NAME_RE.match(reason or "")
+    if m:
+        return m.group(1)
+    if "STABILITY_CHECK_FAILED" in (reason or ""):
+        return "STABILITY_CHECK_FAILED"
+    return "OTHER"
+
+
 def _known_slice(df: pd.DataFrame, ts, max_bars: int = None) -> pd.DataFrame:
     if df is None or df.empty:
         return df
@@ -105,6 +123,11 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
 
     fuzzy_scores: List[float] = []
     fuzzy_rejections: Dict[str, int] = {}
+    # Task 1 سند کالیبراسیون (RSP_Fuzzy_Primary_Suspect_Calibration_Prompt):
+    # Failure Analysis روی rejected trades -> برای هر معامله‌ی واقعی که فازی
+    # رد کرده، gate_name -> {"wins": n, "losses": m} (شبیه‌سازی shadow، بدون
+    # اثر روی equity/trade count).
+    rejected_trade_outcomes: Dict[str, Dict[str, int]] = {}
     fuzzy_overrides = 0
     fuzzy_steps = 0
 
@@ -123,10 +146,35 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
         decision = decide(regime, fusion, mtf, contradiction, confidence, quality.quality_ok)
 
         fuzzy_explain = None
-        if use_fuzzy and _FUZZY_AVAILABLE:
+        # --- ROOT-CAUSE FIX (RSP_Fuzzy_Primary_Suspect_Calibration_Prompt) ---
+        # قبلاً این بلوک روی *هر* کندل اجرا می‌شد (چه decision.action یک
+        # کاندید واقعی BUY/SELL باشد چه WAIT/HOLD/NO_TRADE — که ~۹۸٪ کندل‌ها
+        # همین حالت دوم بودند). چون run_fuzzy_decision با direction="NEUTRAL"
+        # (یعنی وقتی crisp از قبل WAIT است) هرگز LONG/SHORT برنمی‌گرداند، خروجی
+        # فازی روی این کندل‌ها هیچ‌وقت decision.action را به BUY/SELL تبدیل
+        # نمی‌کرد و رفتار معاملاتی (trades/win_rate/net_return/PF/maxDD) کاملاً
+        # بدون تغییر می‌ماند — اما سه اثر جانبی گمراه‌کننده داشت که دقیقاً همان
+        # چیزی بود که در validation چندکوینه اشتباه‌برانگیز به نظر می‌رسید:
+        #   1) fuzzy_rejection_reasons/fuzzy_steps/fuzzy_overrides روی جمعیتِ
+        #      اشتباه (کندل‌های بدون سیگنال) جمع می‌شدند؛ در نتیجه Failure
+        #      Analysis روی «rejected trades» واقعی که سند خواسته اساساً ممکن
+        #      نبود (rejection_rate=98% گزارش می‌شد در حالی که هیچ معامله‌ی
+        #      واقعی‌ای رد نشده بود).
+        #   2) روی کندل‌های بدون سیگنال risk_plan=None است، پس _raw_risk_quality
+        #      همیشه دقیقاً raw=0.10 (μ_weak≈۰.۹۶ ثابت) برمی‌گرداند — همین یک
+        #      مقدار ثابت به‌تنهایی اکثریت رد‌های گزارش‌شده (RISK_QUALITY_TOO_WEAK)
+        #      را در JSON خروجی می‌ساخت، بدون این‌که هیچ معامله‌ی واقعی رد شود.
+        #   3) هزاران «fuzzy_overrides» گزارش‌شده در واقع فقط برچسب‌زنی دوباره‌ی
+        #      WAIT -> NO_TRADE بود (هر دو یعنی «این کندل معامله نکن»)، نه یک
+        #      override استراتژیک واقعی روی یک تصمیم معاملاتی.
+        # پس این بلوک اکنون فقط وقتی اجرا می‌شود که crisp decision واقعاً یک
+        # کاندید معامله (BUY/SELL) باشد؛ خروجی معاملاتی بایت‌به‌بایت یکسان
+        # می‌ماند (چون خروجی فازی روی سایر کندل‌ها هرگز اثر نداشت)، فقط
+        # دیاگ‌نوستیک‌ها اکنون روی جمعیت درست اندازه‌گیری می‌شوند.
+        if use_fuzzy and _FUZZY_AVAILABLE and decision.action in ("BUY", "SELL"):
+            original_action = decision.action
             try:
-                pre_risk_plan = plan_risk(decision.action, known_base, regime) \
-                    if decision.action in ("BUY", "SELL") else None
+                pre_risk_plan = plan_risk(original_action, known_base, regime)
                 integrated = integrate_fuzzy_decision(
                     coin="", crisp_decision=decision, regime=regime,
                     confluence=confluence, mtf=mtf, structure=regime.structure if regime else None,
@@ -139,8 +187,33 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
                         fr = integrated.fuzzy_report
                         fuzzy_scores.append(fr.opportunity_score)
                         if fr.rejected_trade:
-                            reason = fr.notes[-1] if fr.notes else "UNKNOWN"
+                            # نکته: قبلاً اینجا fr.notes[-1] خوانده می‌شد که می‌توانست بعداً
+                            # توسط یادداشت‌های نامرتبط (مثلاً STABILITY_CHECK_FAILED که فقط
+                            # یک flag است و هرگز rejected_trade را عوض نمی‌کند — نگاه کن به
+                            # decision_controller.py) بازنویسی شود و Gate واقعیِ رد‌کننده را
+                            # اشتباه گزارش کند. fr.primary_reason همیشه دقیقاً همان
+                            # gate_reason خام _permission_gate است (بدون این ریسک)، پس
+                            # منبع درست برای Failure Analysis (Task 2 سند) همین است.
+                            reason = f"GATE_REJECTED: {fr.primary_reason}" if fr.primary_reason \
+                                else (fr.notes[-1] if fr.notes else "UNKNOWN")
                             fuzzy_rejections[reason] = fuzzy_rejections.get(reason, 0) + 1
+                            # --- Task 1: Failure Analysis روی rejected trades ---
+                            # همین معامله‌ای که فازی رد کرده را (فقط برای
+                            # دیاگ‌نوستیک — بدون اثر روی equity/trade count/
+                            # cooldown) با همان risk_plan شبیه‌سازی می‌کنیم تا
+                            # مشخص شود اگر واقعاً اجرا می‌شد WIN بود یا LOSS.
+                            if pre_risk_plan is not None and pre_risk_plan.valid:
+                                shadow_future_bars = base_df.iloc[i + 1:]
+                                shadow_result = simulate_trade(
+                                    original_action, pre_risk_plan.entry,
+                                    pre_risk_plan.stop_loss, pre_risk_plan.take_profit,
+                                    shadow_future_bars,
+                                )
+                                if shadow_result.outcome in ("WIN", "LOSS"):
+                                    gate = _gate_name(reason)
+                                    bucket = rejected_trade_outcomes.setdefault(
+                                        gate, {"wins": 0, "losses": 0})
+                                    bucket["wins" if shadow_result.outcome == "WIN" else "losses"] += 1
                         # Task 4 — Explainable Fuzzy AI: هر آنچه برای دیباگ یک تصمیم فازی لازم است
                         fuzzy_explain = {
                             "rule_fired": fr.primary_reason,
@@ -245,6 +318,9 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
             "opportunity_score_avg": round(sum(fuzzy_scores) / len(fuzzy_scores), 2) if fuzzy_scores else None,
             "current_threshold": settings.FUZZY_OPPORTUNITY_THRESHOLD,
             "rejection_reasons": fuzzy_rejections,
+            # Task 1-3 سند کالیبراسیون: نتیجه‌ی Failure Analysis روی rejected
+            # trades واقعی، به تفکیک Gate — {"RISK_QUALITY_TOO_WEAK": {"wins": n, "losses": m}, ...}
+            "rejected_trade_outcomes": rejected_trade_outcomes,
         }
 
     return summary
