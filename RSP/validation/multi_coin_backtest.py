@@ -62,6 +62,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from typing import Dict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -116,6 +117,24 @@ def _summary_to_dict(s):
     # exposure واقعاً در BacktestSummary موجود نیست (موتور آن را محاسبه/برنمی‌گرداند)
     # -> عمداً None می‌گذاریم، نه یک عدد ساختگی.
     d["exposure"] = None
+
+    # --- Task 1-3 سند کالیبراسیون: Failure Analysis روی rejected trades ---
+    # از حالا که fuzzy_steps/rejection_reasons فقط روی کاندیدهای واقعی BUY/SELL
+    # جمع می‌شوند (نه روی هر کندل)، rejected_trade_outcomes همان چیزی است که
+    # سند خواسته: هر Gate چند معامله‌ی WIN و چند LOSS را رد کرده.
+    rto = fd.get("rejected_trade_outcomes") or {}
+    d["rejected_trade_outcomes"] = rto
+    total_rejected_wins = sum(v.get("wins", 0) for v in rto.values())
+    total_rejected_losses = sum(v.get("losses", 0) for v in rto.values())
+    total_rejected_known = total_rejected_wins + total_rejected_losses
+    d["rejected_win_rate"] = (
+        round(100 * total_rejected_wins / total_rejected_known, 2)
+        if total_rejected_known else None
+    )
+    d["rejected_loss_rate"] = (
+        round(100 * total_rejected_losses / total_rejected_known, 2)
+        if total_rejected_known else None
+    )
     return d
 
 
@@ -257,6 +276,45 @@ def print_table(results, label):
             print(f"⚠ {n_unverified} کوین با fuzzy_on=True اما fuzzy_runtime_verified=False — بررسی کن.")
 
 
+def print_failure_analysis(results):
+    """
+    Task 1-3 سند کالیبراسیون: به ازای هر Gate، در کل ۸ کوین، چند معامله‌ی
+    واقعی WIN و چند LOSS رد شده — تا مشخص شود کدام Gate واقعاً false
+    rejection بالا دارد (باید محکم شود) و کدام درست عمل می‌کند (نباید صرفاً
+    برای افزایش trade count سست شود).
+    """
+    agg: Dict[str, Dict[str, int]] = {}
+    for r in results:
+        if r.get("error"):
+            continue
+        rto = (r.get("backtest") or {}).get("rejected_trade_outcomes") or {}
+        for gate, wl in rto.items():
+            bucket = agg.setdefault(gate, {"wins": 0, "losses": 0})
+            bucket["wins"] += wl.get("wins", 0)
+            bucket["losses"] += wl.get("losses", 0)
+
+    if not agg:
+        print("\n(هیچ rejected_trade_outcome ثبت نشد — یا فازی خاموش بود یا هیچ "
+              "کاندید واقعی BUY/SELL رد نشد)")
+        return
+
+    print("\n" + "=" * 100)
+    print("FAILURE ANALYSIS — rejected trades به تفکیک Gate (مجموع همه‌ی کوین‌ها)")
+    print("=" * 100)
+    print(f"{'gate':<32}{'rejected_wins':>15}{'rejected_losses':>17}{'total':>9}{'rejected_win_rate%':>20}")
+    print("-" * 100)
+    for gate, wl in sorted(agg.items(), key=lambda kv: -(kv[1]["wins"] + kv[1]["losses"])):
+        total = wl["wins"] + wl["losses"]
+        wr = round(100 * wl["wins"] / total, 2) if total else 0.0
+        flag = "  <-- بیشتر WIN رد می‌کند، سست‌تر کن" if wr > 50 else ""
+        print(f"{gate:<32}{wl['wins']:>15}{wl['losses']:>17}{total:>9}{wr:>20.2f}{flag}")
+    print("=" * 100)
+    print("راهنما: rejected_win_rate بالای ۵۰٪ یعنی این Gate بیشتر معاملات "
+          "WIN را حذف می‌کند تا LOSS -> کاندید اصلی برای سست‌شدن Calibration. "
+          "پایین (نزدیک صفر) یعنی Gate درست عمل می‌کند و نباید صرفاً برای "
+          "افزایش trade count تغییر کند (طبق سند کالیبراسیون).")
+
+
 def _run_suite(coins, days, skip_walkforward, min_history, fuzzy_on):
     results = []
     for coin in coins:
@@ -308,6 +366,8 @@ def main():
         label = "fuzzy" if fuzzy_on else "baseline"
         results = _run_suite(coins, args.days, args.skip_walkforward, args.min_history, fuzzy_on)
         print_table(results, label)
+        if label == "fuzzy":
+            print_failure_analysis(results)
         all_blocks[label] = {
             "config_snapshot": {
                 "OPPORTUNITY_SCORING_METHOD": settings.OPPORTUNITY_SCORING_METHOD,
