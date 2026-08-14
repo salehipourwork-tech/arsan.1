@@ -94,6 +94,20 @@ FUZZY_BACKTEST_ENABLED = False       # با main.py --fuzzy-engine در زمان
 FUZZY_INFERENCE_METHOD = "Sugeno"    # یا "Mamdani"
 FUZZY_CONFLICT_METHOD = "conservative_weighted"
 FUZZY_OPPORTUNITY_THRESHOLD = 50.0   # حداقل opportunity_score (0..100) برای عبور از Permission Gate
+
+# --- Root-Cause Fix Batch (2026-08-13/14) ---
+# این دو پرچم پیش‌فرض خاموش/محافظه‌کارانه‌اند: بدون داده‌ی بازار زنده در همین
+# محیط نمی‌شود اثبات کرد که فعال‌سازی‌شان روی داده‌ی واقعی سودآوری را برمی‌گرداند؛
+# پیش از فعال‌سازی در تولید حتماً با multi_coin_backtest.py + walk_forward روی
+# داده‌ی واقعی خودتان صحت‌سنجی شود (نگاه کنید به ROOT_CAUSE_FIX_REPORT.md).
+VOLATILITY_REGIME_PRIOR_WEIGHT = 0.35
+# جایگزین soft-blend به‌جای hard-clamp رژیم در volatility_quality (فعال به‌طور
+# پیش‌فرض چون رفتار قبلی یک باگ تفکیک‌پذیری بود، نه یک تصمیم طراحی عمدی؛
+# مقدار ۰٫۳۵ محافظه‌کارانه انتخاب شد: اثر رژیم را کاملاً حذف نمی‌کند، فقط
+# دیگر رتبه‌ی نسبی درون رژیم را صاف نمی‌کند).
+
+FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD = False  # پیش‌فرض خاموش — نیاز به صحت‌سنجی
+FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE = 0.55  # اگر روشن شود: آستانه = این percentile از تاریخچه‌ی خودِ opportunity_score همان کوین (self-relative)، به‌جای یک عدد مطلق مشترک بین ۸ کوین با توزیع امتیاز متفاوت
 FUZZY_DECISION_HISTORY_LEN = 5       # طول تاریخچه برای Stability Check
 FUZZY_STABILITY_MIN_CONSISTENT = 3   # چند تصمیم آخر باید یکسان باشند
 FUZZY_HYSTERESIS_DROP = 15.0         # افت لازم در score برای خروج از LONG/SHORT
