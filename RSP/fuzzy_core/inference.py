@@ -121,8 +121,26 @@ def run_fuzzy_inference(
     report.rule_firing_strengths = firing
     report.active_rules = get_active_rules(firing, threshold=0.01)
 
-    if not report.active_rules:
-        report.notes.append("هیچ Rule فعالی - خروجی صفر (NO_TRADE ایمن)")
+    # ROOT-CAUSE FIX (confirmed by production evidence, 2026-08-13):
+    # نسخه‌ی قبلی اینجا چک می‌کرد `if not report.active_rules` — یعنی لیست
+    # rule هایی که از آستانه‌ی گزارش‌دهی (threshold=0.01) رد شده‌اند. این
+    # threshold صرفاً برای «کدام rule را در گزارش/UI به‌عنوان active نشان
+    # بده» طراحی شده بود، ولی به‌اشتباه به مسیر امتیازدهی هم وصل شده بود:
+    # هر لحظه که هیچ rule ای به‌اندازه‌ی ۰٫۰۱ فایر نمی‌کرد (even اگر rule های
+    # دیگر با قدرت کوچک‌تر، مثلاً ۰٫۰۰۳، فایر کرده بودند) کل امتیاز به‌طور
+    # کامل صفر می‌شد. روی داده‌ی واقعی تولید (RSP/main.py --fuzzy-compare,
+    # 240 روز، چند کوین) این مسیر ۴۵-۵۸٪ کل مراحل را درگیر کرد — یعنی نزدیک
+    # به نیمی از تصمیم‌ها اصلاً بر پایه‌ی داده نبودند، بلکه یک صفر کور بودند
+    # که بعداً به‌اشتباه به‌عنوان "OPPORTUNITY_SCORE_BELOW_THRESHOLD (0.0 <
+    # 50.0)" در آمار رد معاملات ثبت می‌شد — این آمار evidence واقعی نیست.
+    # فیکس: فقط وقتی firing واقعاً کاملاً خالی است (هیچ rule ای حتی با
+    # کوچک‌ترین قدرت فایر نکرده) صفر برگردان؛ در غیر این صورت از همان
+    # weighted-average موجود (_sugeno_defuzzify) روی firing خام استفاده کن —
+    # این تابع خودش از قبل safe است (total<=0 -> 0.0)، پس این فیکس هیچ
+    # threshold/weight/membership function را عوض نمی‌کند، فقط یک گیت
+    # گزارش‌دهی را از مسیر امتیازدهی جدا می‌کند.
+    if not firing:
+        report.notes.append("هیچ Rule ای حتی جزئی فایر نکرد - خروجی صفر (NO_TRADE ایمن)")
         report.defuzzified_score = 0.0
         return report
 
