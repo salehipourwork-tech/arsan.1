@@ -391,10 +391,25 @@ def _raw_volatility_quality(atr_pct: float, regime: RegimeReport,
         return _raw_volatility_quality_legacy(atr_pct, regime)
 
     badness = pct.value  # رتبه‌ی بالا = نسبت به تاریخچه‌ی خودش پرنوسان‌تر = بدتر
+
+    # ROOT-CAUSE FIX (Suspect #2/#10 — cross-asset generalization):
+    # نسخه‌ی قبلی این‌جا از max()/min() به‌عنوان یک "hard clamp" استفاده می‌کرد.
+    # این کار رتبه‌ی درون-رژیمی (که percentile rank آن را با دقت واقعی محاسبه
+    # کرده بود) را از بین می‌برد: همه‌ی رکوردهای HIGH_VOLATILITY با رتبه‌ی
+    # کمتر از ۰.۶۵ به‌طور یکسان روی ۰.۶۵ صاف می‌شدند و دیگر از هم قابل تفکیک
+    # نبودند؛ مشابه برای LOW_VOLATILITY با سقف ۰.۳۰. چون هر کوین سهم متفاوتی
+    # از کندل‌هایش را در هر رژیم می‌گذراند (و کیفیت تشخیص رژیم بین کوین‌ها
+    # یکسان نیست)، این افت تفکیک‌پذیری به‌شکل نامتقارن روی کوین‌های مختلف اثر
+    # می‌گذاشت — دقیقاً همان الگویی که در evidence دیده شد: گیت روی
+    # ETH/BNB/DOGE عملکرد را بهتر می‌کرد ولی روی BTC/ADA/TRX بدتر.
+    # جایگزین: soft blend به‌جای hard clamp — رژیم را به‌عنوان یک prior با وزن
+    # محدود اعمال می‌کنیم، نه یک کف/سقف صلب. رتبه‌ی نسبی درون رژیم حفظ می‌شود.
+    from RSP.config import settings as _s2
+    regime_blend_w = getattr(_s2, "VOLATILITY_REGIME_PRIOR_WEIGHT", 0.35)
     if regime.regime == "HIGH_VOLATILITY":
-        badness = max(badness, 0.65)
+        badness = (1.0 - regime_blend_w) * badness + regime_blend_w * 0.65
     elif regime.regime == "LOW_VOLATILITY":
-        badness = min(badness, 0.30)
+        badness = (1.0 - regime_blend_w) * badness + regime_blend_w * 0.30
 
     return _clamp01(badness)
 
