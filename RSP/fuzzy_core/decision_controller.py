@@ -59,6 +59,26 @@ class DecisionHistory:
         self.history: deque = deque(maxlen=max_len)
         self.last_trade_decision: Optional[str] = None
         self.last_trade_score: float = 0.0
+        # ROOT-CAUSE FIX: تاریخچه‌ی جداگانه و بلندتر از opportunity_score خام
+        # (نه فقط ۵ تای آخر) تا بشود آستانه‌ی adaptive را self-relative
+        # (نسبت به توزیع امتیاز خودِ همین کوین) محاسبه کرد، به‌جای یک عدد
+        # مطلق مشترک بین کوین‌هایی که میانگین/پراکندگی امتیازشان فرق دارد.
+        self.opportunity_scores: deque = deque(maxlen=500)
+
+    def record_opportunity_score(self, score: float):
+        self.opportunity_scores.append(score)
+
+    def adaptive_threshold(self, fallback: float, percentile: float,
+                            min_samples: int = 30) -> float:
+        """آستانه‌ی self-relative بر پایه‌ی percentile تاریخچه‌ی خودِ همین کوین
+        (فقط گذشته — walk-forward safe، چون caller این را قبل از append کردنِ
+        امتیاز همین کندل صدا می‌زند)."""
+        hist = list(self.opportunity_scores)
+        if len(hist) < min_samples:
+            return fallback
+        hist_sorted = sorted(hist)
+        idx = min(len(hist_sorted) - 1, max(0, int(round(percentile * (len(hist_sorted) - 1)))))
+        return hist_sorted[idx]
 
     def push(self, decision: str, score: float):
         self.history.append((decision, score))
@@ -107,6 +127,7 @@ def _permission_gate(
     risk_q: Dict[str, float],
     entry_q: Dict[str, float],
     volatility_q: Dict[str, float],
+    effective_threshold: Optional[float] = None,
 ) -> tuple:
     """
     بررسی‌های نهایی قبل از صدور مجوز معامله.
@@ -134,9 +155,10 @@ def _permission_gate(
     if poor_vol >= 0.60:
         return False, f"VOLATILITY_TOO_POOR (μ_poor={poor_vol:.2f})"
 
-    # Adaptive threshold from config
-    if opportunity_score < settings.FUZZY_OPPORTUNITY_THRESHOLD:
-        return False, f"OPPORTUNITY_SCORE_BELOW_THRESHOLD ({opportunity_score:.1f} < {settings.FUZZY_OPPORTUNITY_THRESHOLD})"
+    # Adaptive threshold from config (یا self-relative اگر effective_threshold داده شده)
+    threshold = settings.FUZZY_OPPORTUNITY_THRESHOLD if effective_threshold is None else effective_threshold
+    if opportunity_score < threshold:
+        return False, f"OPPORTUNITY_SCORE_BELOW_THRESHOLD ({opportunity_score:.1f} < {threshold:.1f})"
 
     return True, "ALL_GATES_PASSED"
 
@@ -242,13 +264,24 @@ def run_fuzzy_decision(
     report.confidence = round(raw_conf, 4)
 
     # --- Phase 50: Permission Gate ---
+    history = get_history(coin)  # زودتر گرفته می‌شود تا adaptive threshold از آن استفاده کند
+    eff_threshold = None
+    if getattr(settings, "FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD", False):
+        eff_threshold = history.adaptive_threshold(
+            fallback=settings.FUZZY_OPPORTUNITY_THRESHOLD,
+            percentile=settings.FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE,
+        )
+        notes.append(f"ADAPTIVE_THRESHOLD={eff_threshold:.1f} (self-relative, coin={coin})")
+
     allowed, gate_reason = _permission_gate(
         report.opportunity_score,
         report.contradiction_severity,
         report.risk_quality,
         report.entry_quality,
         report.volatility_quality,
+        effective_threshold=eff_threshold,
     )
+    history.record_opportunity_score(report.opportunity_score)
 
     if not allowed:
         report.decision = "NO_TRADE"
@@ -268,7 +301,7 @@ def run_fuzzy_decision(
         notes.append(f"GATE_PASSED: {gate_reason}")
 
     # --- Phase 48-49: Stability & Hysteresis ---
-    history = get_history(coin)
+    # (history از بخش Permission Gate بالا از قبل گرفته شده)
 
     # Stability check
     if not history.is_stable(min_consistent=settings.FUZZY_STABILITY_MIN_CONSISTENT):
