@@ -20,9 +20,9 @@ from typing import Optional
 
 # وزن‌های AHP (از ahp_calibrate.py — Saaty pairwise + geometric mean، CR=0.0)
 AHP_WEIGHTS = {
-    "trend_quality": 0.20,
-    "risk_quality_v2": 0.40,
-    "volatility_quality_v2": 0.40,
+    "trend_quality": 0.60,
+    "risk_quality_v2": 0.20,
+    "volatility_quality_v2": 0.20,
 }
 
 
