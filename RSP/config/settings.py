@@ -106,11 +106,11 @@ VOLATILITY_REGIME_PRIOR_WEIGHT = 0.35
 # مقدار ۰٫۳۵ محافظه‌کارانه انتخاب شد: اثر رژیم را کاملاً حذف نمی‌کند، فقط
 # دیگر رتبه‌ی نسبی درون رژیم را صاف نمی‌کند).
 
-FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD = False  # پیش‌فرض خاموش — نیاز به صحت‌سنجی
+FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD = True  # پیش‌فرض خاموش — نیاز به صحت‌سنجی
 FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE = 0.55  # اگر روشن شود: آستانه = این percentile از تاریخچه‌ی خودِ opportunity_score همان کوین (self-relative)، به‌جای یک عدد مطلق مشترک بین ۸ کوین با توزیع امتیاز متفاوت
 FUZZY_DECISION_HISTORY_LEN = 5       # طول تاریخچه برای Stability Check
 FUZZY_STABILITY_MIN_CONSISTENT = 3   # چند تصمیم آخر باید یکسان باشند
-FUZZY_HYSTERESIS_DROP = 15.0         # افت لازم در score برای خروج از LONG/SHORT
+FUZZY_HYSTERESIS_DROP = 25.0         # افت لازم در score برای خروج از LONG/SHORT
 FUZZY_SIGNAL_WEAK_END = 0.20        # معادل آستانه‌ی قبلی BUY/SELL
 FUZZY_SIGNAL_MODERATE_CENTER = 0.375
 FUZZY_SIGNAL_STRONG_CENTER = 0.55
