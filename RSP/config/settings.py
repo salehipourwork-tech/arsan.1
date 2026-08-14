@@ -89,7 +89,7 @@ STRONG_REGIME_ONLY_MODE = False
 # صریحاً با --fuzzy-engine فعال شود. مرزهای زیر طوری انتخاب شدند که حول
 # همون آستانه‌های سخت قبلی (0.20 برای BUY/SELL و 0.70 برای Exhaustion)
 # مرکز داشته باشند، اما به‌جای یک لبه‌ی تیز، یک گذار نرم بسازند.
-FUZZY_ENGINE_ENABLED = False
+FUZZY_ENGINE_ENABLED = True
 FUZZY_BACKTEST_ENABLED = False       # با main.py --fuzzy-engine در زمان اجرا True می‌شود
 FUZZY_INFERENCE_METHOD = "Sugeno"    # یا "Mamdani"
 FUZZY_CONFLICT_METHOD = "conservative_weighted"
@@ -283,7 +283,7 @@ VOLATILITY_PERCENTILE_MIN_SAMPLES = 30     # کمتر از این تعداد ک�
 VOLATILITY_PERCENTILE_TARGET_SAMPLES = 300  # تعداد نمونه‌ای که confidence=1.0 می‌شود
 RISK_QUALITY_PERCENTILE_MIN_SAMPLES = 30
 
-OPPORTUNITY_SCORING_METHOD = "rules"      # "rules" (پیش‌فرض، Baseline دست‌نخورده)
+OPPORTUNITY_SCORING_METHOD = "ahp"      # "rules" (پیش‌فرض، Baseline دست‌نخورده)
 # | "ahp" — وقتی "ahp" باشد، decision_controller.opportunity_score به‌جای
 # خروجی rule-based Sugeno/Mamdani، از ترکیب وزن‌دار AHP (فقط ۳ feature
 # تأییدشده: trend_quality=0.20, risk_quality_v2=0.40, volatility_quality_v2=0.40
