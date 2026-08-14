@@ -283,7 +283,7 @@ VOLATILITY_PERCENTILE_MIN_SAMPLES = 30     # کمتر از این تعداد ک�
 VOLATILITY_PERCENTILE_TARGET_SAMPLES = 300  # تعداد نمونه‌ای که confidence=1.0 می‌شود
 RISK_QUALITY_PERCENTILE_MIN_SAMPLES = 30
 
-OPPORTUNITY_SCORING_METHOD = "ahp"      # "rules" (پیش‌فرض، Baseline دست‌نخورده)
+OPPORTUNITY_SCORING_METHOD = "rules"      # "rules" (پیش‌فرض، Baseline دست‌نخورده)
 # | "ahp" — وقتی "ahp" باشد، decision_controller.opportunity_score به‌جای
 # خروجی rule-based Sugeno/Mamdani، از ترکیب وزن‌دار AHP (فقط ۳ feature
 # تأییدشده: trend_quality=0.20, risk_quality_v2=0.40, volatility_quality_v2=0.40
