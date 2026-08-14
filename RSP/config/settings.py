@@ -89,7 +89,7 @@ STRONG_REGIME_ONLY_MODE = False
 # صریحاً با --fuzzy-engine فعال شود. مرزهای زیر طوری انتخاب شدند که حول
 # همون آستانه‌های سخت قبلی (0.20 برای BUY/SELL و 0.70 برای Exhaustion)
 # مرکز داشته باشند، اما به‌جای یک لبه‌ی تیز، یک گذار نرم بسازند.
-FUZZY_ENGINE_ENABLED = True
+FUZZY_ENGINE_ENABLED = False
 FUZZY_BACKTEST_ENABLED = False       # با main.py --fuzzy-engine در زمان اجرا True می‌شود
 FUZZY_INFERENCE_METHOD = "Sugeno"    # یا "Mamdani"
 FUZZY_CONFLICT_METHOD = "conservative_weighted"
