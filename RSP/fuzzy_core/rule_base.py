@@ -321,6 +321,56 @@ OPPORTUNITY_RULES: List[FuzzyRule] = [
 ]
 
 
+# =============================================================================
+# Legacy Rule Base: Signal Permission Rules (for evaluate_signal_strength v1)
+# =============================================================================
+
+SIGNAL_PERMISSION_RULES: List[FuzzyRule] = [
+    FuzzyRule(
+        "SP01",
+        antecedents={"signal_strength": "very_weak"},
+        weight=1.0,
+        output_singleton=5.0,
+        description="سیگنال خیلی ضعیف -> اجازه معامله ناچیز",
+    ),
+    FuzzyRule(
+        "SP02",
+        antecedents={"signal_strength": "weak"},
+        weight=1.0,
+        output_singleton=20.0,
+        description="سیگنال ضعیف -> اجازه معامله کم",
+    ),
+    FuzzyRule(
+        "SP03",
+        antecedents={"signal_strength": "moderate"},
+        weight=1.0,
+        output_singleton=50.0,
+        description="سیگنال متوسط -> اجازه معامله متوسط",
+    ),
+    FuzzyRule(
+        "SP04",
+        antecedents={"signal_strength": "strong"},
+        weight=1.0,
+        output_singleton=80.0,
+        description="سیگنال قوی -> اجازه معامله خوب",
+    ),
+    FuzzyRule(
+        "SP05",
+        antecedents={"signal_strength": "very_strong"},
+        weight=1.0,
+        output_singleton=90.0,
+        description="سیگنال خیلی قوی -> اجازه معامله عالی",
+    ),
+    FuzzyRule(
+        "SP06",
+        antecedents={"signal_strength": "extreme"},
+        weight=1.0,
+        output_singleton=40.0,
+        description="سیگنال extreme (اشباع) -> اجازه محتاطانه",
+    ),
+]
+
+
 def evaluate_rules(fuzzified_inputs: Dict[str, Dict[str, float]],
                    rules: Optional[List[FuzzyRule]] = None) -> Dict[str, float]:
     """
