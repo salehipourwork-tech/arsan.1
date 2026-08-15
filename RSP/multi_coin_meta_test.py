@@ -3,6 +3,9 @@
 """
 RSP — Multi-Coin Meta Test v2 (Profitability Fix)
 
+Baseline uses OLD params (RR=2.0, SL=2.5ATR, SL_FIRST)
+Fuzzy uses NEW params (RR=2.5, SL=1.5ATR, PROPORTIONAL)
+
 Run: python RSP/multi_coin_meta_test.py
 """
 
@@ -12,7 +15,7 @@ import json
 import time
 from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List
+from typing import Dict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -33,6 +36,18 @@ COINS = [
 DAYS = 90
 BASE_TF = "15M"
 RATE_LIMIT_SECONDS = 2
+
+# OLD params (Baseline)
+OLD_RR = 2.0
+OLD_SL_MULT = 2.5
+OLD_EXIT = "SL_FIRST"
+OLD_OPP = 50.0
+
+# NEW params (Fuzzy)
+NEW_RR = 2.5
+NEW_SL_MULT = 1.5
+NEW_EXIT = "PROPORTIONAL"
+NEW_OPP = 75.0
 
 
 @dataclass
@@ -56,12 +71,35 @@ class TestResult:
     error: str = ""
 
 
+def _apply_params(rr, sl_mult, exit_mode, opp_threshold):
+    """Temporarily apply scenario-specific params."""
+    settings.RR_TARGET = rr
+    settings.SL_ATR_MULTIPLIER = sl_mult
+    settings.CONSERVATIVE_SL_TP_SAME_CANDLE = exit_mode
+    settings.MIN_OPPORTUNITY_SCORE_FOR_TRADE = opp_threshold
+    settings.FUZZY_OPPORTUNITY_THRESHOLD = opp_threshold
+
+
 def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) -> TestResult:
     result = TestResult(coin=coin, scenario=scenario_name)
-    orig_fuzzy_enabled = settings.FUZZY_BACKTEST_ENABLED
-    orig_opportunity_method = getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules")
+
+    # Save originals
+    orig = {
+        "fuzzy": settings.FUZZY_BACKTEST_ENABLED,
+        "opp_method": getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules"),
+        "rr": getattr(settings, "RR_TARGET", 2.5),
+        "sl": getattr(settings, "SL_ATR_MULTIPLIER", 1.5),
+        "exit": getattr(settings, "CONSERVATIVE_SL_TP_SAME_CANDLE", "PROPORTIONAL"),
+        "opp": getattr(settings, "MIN_OPPORTUNITY_SCORE_FOR_TRADE", 75.0),
+    }
 
     try:
+        # Apply scenario params
+        if scenario_name == "Baseline":
+            _apply_params(OLD_RR, OLD_SL_MULT, OLD_EXIT, OLD_OPP)
+        else:
+            _apply_params(NEW_RR, NEW_SL_MULT, NEW_EXIT, NEW_OPP)
+
         settings.FUZZY_BACKTEST_ENABLED = use_fuzzy
         if use_fuzzy:
             settings.OPPORTUNITY_SCORING_METHOD = "ahp" if use_ahp else "rules"
@@ -69,6 +107,8 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
             settings.OPPORTUNITY_SCORING_METHOD = "rules"
 
         print(f"\n>>> [{coin}] {scenario_name} — fuzzy={use_fuzzy}, ahp={use_ahp}")
+        print(f"    Params: RR={settings.RR_TARGET}, SL={settings.SL_ATR_MULTIPLIER}ATR, "
+              f"Exit={settings.CONSERVATIVE_SL_TP_SAME_CANDLE}, Opp>={settings.MIN_OPPORTUNITY_SCORE_FOR_TRADE}")
 
         universe = build_data_universe(coin, lookback_days=DAYS)
         base_bars = universe.bars.get(BASE_TF)
@@ -96,17 +136,23 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
             result.rejection_reasons = d.get("rejection_reasons", {})
             result.rejected_trade_outcomes = d.get("rejected_trade_outcomes", {})
 
-        print(f" trades={result.total_trades} win_rate={result.win_rate}% "
-              f"net={result.net_return_pct}% PF={result.profit_factor} "
-              f"maxDD={result.max_drawdown_pct}%")
+        print(f"    → trades={result.total_trades} WR={result.win_rate}% "
+              f"Net={result.net_return_pct}% PF={result.profit_factor} "
+              f"MaxDD={result.max_drawdown_pct}%")
 
     except Exception as e:
         result.error = str(e)
-        print(f" ERROR: {e}")
+        print(f"    ERROR: {e}")
 
     finally:
-        settings.FUZZY_BACKTEST_ENABLED = orig_fuzzy_enabled
-        settings.OPPORTUNITY_SCORING_METHOD = orig_opportunity_method
+        # Restore originals
+        settings.FUZZY_BACKTEST_ENABLED = orig["fuzzy"]
+        settings.OPPORTUNITY_SCORING_METHOD = orig["opp_method"]
+        settings.RR_TARGET = orig["rr"]
+        settings.SL_ATR_MULTIPLIER = orig["sl"]
+        settings.CONSERVATIVE_SL_TP_SAME_CANDLE = orig["exit"]
+        settings.MIN_OPPORTUNITY_SCORE_FOR_TRADE = orig["opp"]
+        settings.FUZZY_OPPORTUNITY_THRESHOLD = orig["opp"]
 
     return result
 
@@ -125,7 +171,7 @@ def run_all_scenarios(coin: str) -> dict:
     fuzzy_ahp = run_scenario(coin, "Fuzzy+AHPv2", use_fuzzy=True, use_ahp=True)
     time.sleep(RATE_LIMIT_SECONDS)
 
-    # Meta-Controller (simple selection based on MaxDD)
+    # Meta-Controller
     print(f"\n>>> [{coin}] Meta-Controller")
     rules_dd = abs(fuzzy_rules.max_drawdown_pct) if fuzzy_rules and not fuzzy_rules.error else 999
     ahp_dd = abs(fuzzy_ahp.max_drawdown_pct) if fuzzy_ahp and not fuzzy_ahp.error else 999
@@ -136,6 +182,8 @@ def run_all_scenarios(coin: str) -> dict:
     else:
         meta_result = fuzzy_rules
         meta_source = "Rules"
+
+    print(f"    → Meta selected: {meta_source} (Rules DD={rules_dd:.1f}%, AHP DD={ahp_dd:.1f}%)")
 
     return {
         "coin": coin,
@@ -155,9 +203,8 @@ def generate_markdown_report(all_results: list) -> str:
         "# Multi-Coin Meta Test Report v2",
         f"**Generated:** {datetime.now(timezone.utc).isoformat()}",
         f"**Period:** {DAYS} days | **Timeframe:** {BASE_TF}",
-        "**Fixes Applied:** RR=2.5 | A+ Filter >=75 | Proportional Exit | TRX Blacklisted",
-        "",
-        "## Results Summary",
+        "**Baseline:** RR=2.0, SL=2.5ATR, SL_FIRST, Opp>=50",
+        "**Fuzzy:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=75",
         "",
         "| Coin | Baseline Net | Rules Net | AHPv2 Net | Meta Net | Meta Source |",
         "|------|-------------|-----------|-----------|----------|-------------|",
@@ -195,7 +242,8 @@ def main():
     print("Arsan — Multi-Coin Meta Test v2 (Profitability Fix)")
     print(f"Date: {datetime.now(timezone.utc).isoformat()}")
     print(f"Coins: {', '.join(c['symbol'] for c in COINS)}")
-    print("Fixes: RR=2.5 | A+ Filter >=75 | Proportional Exit | TRX Blacklist")
+    print("Baseline: RR=2.0 | SL=2.5ATR | SL_FIRST | Opp>=50")
+    print("Fuzzy:    RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>=75")
     print("="*70)
 
     all_results = []
@@ -212,7 +260,8 @@ def main():
             "meta": {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "coins": [c["id"] for c in COINS],
-                "fixes": ["RR=2.5", "A+_Filter_75", "Proportional_Exit", "TRX_Blacklist"],
+                "baseline_params": {"RR": OLD_RR, "SL": OLD_SL_MULT, "EXIT": OLD_EXIT, "OPP": OLD_OPP},
+                "fuzzy_params": {"RR": NEW_RR, "SL": NEW_SL_MULT, "EXIT": NEW_EXIT, "OPP": NEW_OPP},
             },
             "results": all_results,
         }, f, ensure_ascii=False, indent=2)
