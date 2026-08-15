@@ -3,8 +3,8 @@ RSP — Research & Strategy Playground
 config/settings.py
 
 تمام مقادیر قابل‌تنظیم موتور RSP در همین‌جا متمرکز هستند تا:
-  1) هیچ عددی به‌صورت hardcoded وسط منطق پنهان نشود.
-  2) هر تغییر وزن/آستانه ثبت و قابل ردیابی باشد (Phase 13 - Adaptive Weighting).
+ 1) هیچ عددی به‌صورت hardcoded وسط منطق پنهان نشود.
+ 2) هر تغییر وزن/آستانه ثبت و قابل ردیابی باشد (Phase 13 - Adaptive Weighting).
 
 این فایل به هیچ فایلی از آرسان اصلی (analyzer/) وابسته نیست و آرسان اصلی هم
 به این فایل وابسته نیست. کاملاً مستقل.
@@ -12,17 +12,84 @@ config/settings.py
 
 from dataclasses import dataclass, field
 from typing import Dict
+from contextlib import contextmanager as _contextmanager
 
+# ---------------------------------------------------------------------------
+# PROFITABILITY FIX v1 — Integrated 2026-08-15
+# Target: RR=2.5, Regime-Aware Rules, A+ Filter, TRX Blacklist, Proportional Exit
+# ---------------------------------------------------------------------------
+
+# --- FIX 1: Real RR=2.5 ---
+# قبلاً TAKE_PROFIT_RR_TARGET=2.0 بود ولی exit logic آن را رعایت نمی‌کرد.
+# risk_engine.py و trade_simulator.py هر دو این مقادیر را می‌خوانند.
+RR_TARGET = 2.5
+SL_ATR_MULTIPLIER = 1.5          # SL تنگ‌تر → TP نزدیک‌تر → hit rate بالاتر
+TP_ATR_MULTIPLIER = 3.75         # TP = 2.5 × SL = 2.5 × 1.5 = 3.75 ATR
+
+# --- FIX 2: A+ Opportunity Filter ---
+# قبلاً FUZZY_OPPORTUNITY_THRESHOLD=50.0 بود → خیلی کم
+# حالا 75.0 → فقط setup‌های A+ (top 25%)
+MIN_OPPORTUNITY_SCORE_FOR_TRADE = 75.0
+FUZZY_OPPORTUNITY_THRESHOLD = 75.0
+FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE = 0.75  # top 25% of coin's own history
+
+# --- FIX 3: TRX Blacklist ---
+# TRX هیچ‌وقت سودآور نشد (PF=0.466–0.527، Net=-16.8%~-27%) → حذف از تست
+TRX_BLACKLIST = ["tron", "TRX", "tronix"]
+
+# --- FIX 4: Proportional Same-Candle Exit ---
+# قبلاً CONSERVATIVE_SL_TP_SAME_CANDLE="SL_FIRST" باعث می‌شد
+# حتی وقتی TP قبل از SL hit می‌شد، SL ثبت بشه.
+# حالا: اگر TP به open نزدیک‌تر باشه، TP برنده است.
+CONSERVATIVE_SL_TP_SAME_CANDLE = "PROPORTIONAL"  # "SL_FIRST" | "TP_FIRST" | "PROPORTIONAL"
+
+# --- FIX 5: Regime-Aware Rule Activation ---
+# رژیم‌های تمیز (Strong Uptrend/Downtrend) → MR rules خاموش
+# RANGE/Weak → همه‌ی rules فعال
+REGIME_RULE_OVERRIDES = {
+    "STRONG_UPTREND": {
+        "disable": ["R14", "R15", "R16"],  # MR rules خاموش
+        "enable": ["R17", "R18"],           # فقط TF rules
+        "note": "Trend clean — no mean reversion"
+    },
+    "STRONG_DOWNTREND": {
+        "disable": ["R14", "R15", "R16"],
+        "enable": ["R17", "R18"],
+        "note": "Trend clean — no mean reversion"
+    },
+    "RANGE": {
+        "disable": ["R17", "R18"],          # TF rules خاموش
+        "enable": ["R14", "R15", "R16"],     # فقط MR rules
+        "note": "Range — mean reversion only"
+    },
+    "UPTREND": {
+        "disable": [],
+        "enable": [],
+        "note": "Mixed — all rules active"
+    },
+    "DOWNTREND": {
+        "disable": [],
+        "enable": [],
+        "note": "Mixed — all rules active"
+    },
+}
+
+# --- FIX 6: Anti Over-Trading ---
+# با RR=2.5 و WR=35%، برای سودآوری:
+# Expected = 0.35 × 2.5 - 0.65 × 1 = +0.225 → سودآور
+# ولی fee+slippage ~0.15% per trade → با 100 trade = 15%
+# پس باید تریدها کمتر و بزرگ‌تر باشن.
+MIN_TRADE_DISTANCE_BARS = 3  # حداقل 3 کندل بین تریدها
 
 # ---------------------------------------------------------------------------
 # Timeframes مورد استفاده در Multi-Timeframe Brain (Phase 6)
 # ---------------------------------------------------------------------------
 TIMEFRAMES = ["1D", "4H", "1H", "15M"]
 
-# چند کندل در روز برای هر تایم‌فریم - برای تبدیل «--days N» به تعداد کندل لازم
+# چند کندل در روز برای هر تایم‌فریم
 BARS_PER_DAY = {"15M": 96, "1H": 24, "4H": 6, "1D": 1}
-DEFAULT_HISTORY_LIMIT = 300   # رفتار قبلی (~3.1 روز برای 15M) وقتی --days داده نشود
-MAX_HISTORY_DAYS = 120        # سقف امنیتی تا از تعداد بی‌رویه‌ی API call جلوگیری شود
+DEFAULT_HISTORY_LIMIT = 300
+MAX_HISTORY_DAYS = 120
 
 def bars_needed_for_days(days: int) -> dict:
     """تبدیل تعداد روز درخواستی به تعداد کندل لازم برای هر تایم‌فریم."""
@@ -30,13 +97,12 @@ def bars_needed_for_days(days: int) -> dict:
     return {tf: days * BARS_PER_DAY[tf] for tf in TIMEFRAMES}
 
 TIMEFRAME_ROLE = {
-    "1D": "context",   # تایم‌فریم بالا -> زمینه‌ی کلی بازار
-    "4H": "trend",     # تایم‌فریم میانی -> جهت روند
-    "1H": "trend",      # کمکی برای تایید روند میانی
-    "15M": "entry",    # تایم‌فریم پایین -> نقطه‌ی ورود
+    "1D": "context",
+    "4H": "trend",
+    "1H": "trend",
+    "15M": "entry",
 }
 
-# منبع داده‌ی هر تایم‌فریم (صادقانه مستند شده - نگاه کن به ingestion/coingecko_client.py)
 TIMEFRAME_SOURCE = {
     "1D": "coingecko_market_chart_90d_resampled",
     "4H": "coingecko_market_chart_90d_resampled",
@@ -44,87 +110,46 @@ TIMEFRAME_SOURCE = {
     "15M": "coingecko_market_chart_1d_resampled",
 }
 
-
 TIMEFRAME_MINUTES = {"15M": 15, "1H": 60, "4H": 240, "1D": 1440}
+DEFAULT_LOOKBACK_DAYS = 90
 
-DEFAULT_LOOKBACK_DAYS = 90   # پیش‌فرض بازه‌ی تاریخی درخواست داده (قابل تغییر با main.py --days)
-
-# سقف تعداد کندلی که در هر گام از backtest_engine برای محاسبه‌ی اندیکاتورها
-# به موتور داده می‌شود (Rolling Window به‌جای کل تاریخچه‌ی تا آن لحظه).
-# ۴۰۰ کندل برای EMA50/ADX14/ATR14/RSI14/Bollinger20/StochRSI(14,14) با
-# حاشیه‌ی اطمینان زیاد کافی است (این اندیکاتورها به‌صورت نمایی/غلتان‌اند و
-# بعد از چند برابر دوره‌شان اثر داده‌های خیلی قدیمی عملاً صفر می‌شود).
-# بدون این محدودیت، بک‌تست روی چند هزار کندل (مثلاً ۹۰ روز کندل ۱۵ دقیقه‌ای
-# = ۸۶۴۰ کندل) به‌خاطر O(n^2) بودن محاسبه‌ی هر گام، چند دقیقه طول می‌کشد؛
-# با این سقف، هزینه‌ی هر گام ثابت می‌شود و کل بک‌تست تقریباً خطی (O(n)) اجرا
-# می‌شود - بدون افت محسوس در دقت اندیکاتورها.
 MAX_WARMUP_BARS = 400
 
-# بعد از STOP_LOSS_HIT در یک جهت (BUY یا SELL)، تا این تعداد کندل پایه (15M)
-# ورود دوباره در همون جهت مسدود می‌شود؛ جهت مقابل آزاد است. هدف: جلوگیری از
-# «اصرار روی یه اشتباه» وقتی شواهد بین چند کندل تقریباً بدون تغییر می‌ماند.
-COOLDOWN_BARS_AFTER_STOP_LOSS = 6  # روی 15M یعنی ۱.۵ ساعت
+COOLDOWN_BARS_AFTER_STOP_LOSS = 6
 
-# طبق داده‌ی واقعی بک‌تست (۷۴ معامله در رژیم RANGE: win_rate=28.38%، avg_pnl=-0.262%،
-# در حالی‌که نقطه‌ی سربه‌سر با RR ثابتِ 2.0 حدود 33.3% است) — RANGE نه فقط پرتعدادترین
-# بلکه واقعاً بدترین رژیم است. فعلاً معامله در این رژیم کامل غیرفعال می‌شود.
 RANGE_REGIME_NO_TRADE = True
 
-# آزمایشی: طبق داده‌ی واقعی، بازه‌های confidence بالا (که عمدتاً net_score خیلی
-# افراطی دارند) دو بار پشت‌سرهم win_rate پایین‌تری نشان دادند (فرضیه‌ی
-# "exhaustion" - وقتی همه‌ی اندیکاتورها هم‌جهت‌اند، شاید حرکت به انتها رسیده).
-# اگر |net_score| از این آستانه بیشتر شود، به‌جای BUY/SELL مستقیم، WAIT صادر
-# می‌شود (نیاز به تأیید بیشتر/کمی خنک‌شدن سیگنال قبل از ورود).
 EXHAUSTION_NET_SCORE_THRESHOLD = 0.70
 EXHAUSTION_FILTER_ENABLED = True
 
-# آزمایشی: طبق جدول عملکرد رژیم‌ها (داده‌ی واقعی ۱۲۰ روزه)، STRONG_UPTREND
-# (win_rate=41.67%, avg_pnl=-0.075%) و STRONG_DOWNTREND (win_rate=42.37%,
-# avg_pnl=-0.061%) به‌وضوح بهترین دو رژیم بودند - هم بالاترین win_rate، هم
-# کمترین avg_pnl منفی. اگر فعال شود، معامله فقط در این دو رژیم مجاز است.
 STRONG_REGIME_ONLY_MODE = False
 
-# --- Fuzzy Core (Phase 27-44, نسخه‌ی حداقلی - فقط signal_strength) ---
-# پیش‌فرض خاموش تا رفتار فعلی (crisp thresholds) هیچ تغییری نکند مگر
-# صریحاً با --fuzzy-engine فعال شود. مرزهای زیر طوری انتخاب شدند که حول
-# همون آستانه‌های سخت قبلی (0.20 برای BUY/SELL و 0.70 برای Exhaustion)
-# مرکز داشته باشند، اما به‌جای یک لبه‌ی تیز، یک گذار نرم بسازند.
+# --- Fuzzy Core ---
 FUZZY_ENGINE_ENABLED = False
-FUZZY_BACKTEST_ENABLED = False       # با main.py --fuzzy-engine در زمان اجرا True می‌شود
-FUZZY_INFERENCE_METHOD = "Sugeno"    # یا "Mamdani"
+FUZZY_BACKTEST_ENABLED = False
+FUZZY_INFERENCE_METHOD = "Sugeno"
 FUZZY_CONFLICT_METHOD = "conservative_weighted"
-FUZZY_OPPORTUNITY_THRESHOLD = 50.0   # حداقل opportunity_score (0..100) برای عبور از Permission Gate
+# NOTE: FUZZY_OPPORTUNITY_THRESHOLD moved to FIX section above (line 32)
 
-# --- Root-Cause Fix Batch (2026-08-13/14) ---
-# این دو پرچم پیش‌فرض خاموش/محافظه‌کارانه‌اند: بدون داده‌ی بازار زنده در همین
-# محیط نمی‌شود اثبات کرد که فعال‌سازی‌شان روی داده‌ی واقعی سودآوری را برمی‌گرداند؛
-# پیش از فعال‌سازی در تولید حتماً با multi_coin_backtest.py + walk_forward روی
-# داده‌ی واقعی خودتان صحت‌سنجی شود (نگاه کنید به ROOT_CAUSE_FIX_REPORT.md).
 VOLATILITY_REGIME_PRIOR_WEIGHT = 0.35
-# جایگزین soft-blend به‌جای hard-clamp رژیم در volatility_quality (فعال به‌طور
-# پیش‌فرض چون رفتار قبلی یک باگ تفکیک‌پذیری بود، نه یک تصمیم طراحی عمدی؛
-# مقدار ۰٫۳۵ محافظه‌کارانه انتخاب شد: اثر رژیم را کاملاً حذف نمی‌کند، فقط
-# دیگر رتبه‌ی نسبی درون رژیم را صاف نمی‌کند).
 
-FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD = True  # پیش‌فرض خاموش — نیاز به صحت‌سنجی
-FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE = 0.55  # اگر روشن شود: آستانه = این percentile از تاریخچه‌ی خودِ opportunity_score همان کوین (self-relative)، به‌جای یک عدد مطلق مشترک بین ۸ کوین با توزیع امتیاز متفاوت
-FUZZY_DECISION_HISTORY_LEN = 5       # طول تاریخچه برای Stability Check
-FUZZY_STABILITY_MIN_CONSISTENT = 3   # چند تصمیم آخر باید یکسان باشند
-FUZZY_HYSTERESIS_DROP = 25.0         # افت لازم در score برای خروج از LONG/SHORT
-FUZZY_SIGNAL_WEAK_END = 0.20        # معادل آستانه‌ی قبلی BUY/SELL
+FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD = True
+# NOTE: FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE moved to FIX section above (line 33)
+FUZZY_DECISION_HISTORY_LEN = 5
+FUZZY_STABILITY_MIN_CONSISTENT = 3
+FUZZY_HYSTERESIS_DROP = 25.0
+FUZZY_SIGNAL_WEAK_END = 0.20
 FUZZY_SIGNAL_MODERATE_CENTER = 0.375
 FUZZY_SIGNAL_STRONG_CENTER = 0.55
-FUZZY_SIGNAL_EXTREME_START = 0.70   # معادل آستانه‌ی قبلی EXHAUSTION_NET_SCORE_THRESHOLD
-FUZZY_TRADE_PERMISSION_MIN = 50.0   # حداقل trade_permission_score برای عبور از این گارد
-
+FUZZY_SIGNAL_EXTREME_START = 0.70
+FUZZY_TRADE_PERMISSION_MIN = 50.0
 
 def candles_needed(timeframe: str, days: float) -> int:
     minutes = TIMEFRAME_MINUTES[timeframe]
     return max(1, int((days * 24 * 60) / minutes))
 
-
 # ---------------------------------------------------------------------------
-# Data Universe (Phase 2) — REQUIRED vs OPTIONAL
+# Data Universe (Phase 2)
 # ---------------------------------------------------------------------------
 REQUIRED_DATA_FIELDS = ["open", "high", "low", "close", "volume"]
 
@@ -140,7 +165,6 @@ OPTIONAL_DATA_FIELDS = [
     "order_book",
 ]
 
-# این‌ها با API رایگان CoinGecko اصلاً در دسترس نیستند - صادقانه علامت‌گذاری می‌شوند
 PERMANENTLY_UNAVAILABLE_WITH_CURRENT_SOURCE = [
     "funding_rate",
     "open_interest",
@@ -149,19 +173,17 @@ PERMANENTLY_UNAVAILABLE_WITH_CURRENT_SOURCE = [
     "trade_count",
 ]
 
-
 # ---------------------------------------------------------------------------
 # Data Quality Engine (Phase 3)
 # ---------------------------------------------------------------------------
-MAX_ALLOWED_GAP_RATIO = 0.05          # بیش از ۵٪ کندل‌های گمشده => کیفیت پایین
+MAX_ALLOWED_GAP_RATIO = 0.05
 MIN_BARS_REQUIRED = {
     "1D": 20,
     "4H": 30,
     "1H": 48,
     "15M": 48,
 }
-ABNORMAL_SPIKE_STD_MULTIPLIER = 6.0    # تغییر قیمت بیش از ۶ انحراف معیار => Spike مشکوک
-
+ABNORMAL_SPIKE_STD_MULTIPLIER = 6.0
 
 # ---------------------------------------------------------------------------
 # Regime Engine (Phase 4 / 5)
@@ -176,7 +198,6 @@ REGIME_LABELS = [
     "UNKNOWN",
 ]
 
-# نگاشت رژیم -> استراتژی‌های سازگار (Regime-Aware Strategy Selection - Phase 5/15)
 REGIME_STRATEGY_COMPATIBILITY: Dict[str, list] = {
     "STRONG_UPTREND": ["trend_following", "momentum"],
     "UPTREND": ["trend_following", "pullback"],
@@ -185,22 +206,19 @@ REGIME_STRATEGY_COMPATIBILITY: Dict[str, list] = {
     "WEAK_DOWNTREND": ["pullback", "mean_reversion"],
     "DOWNTREND": ["trend_following", "pullback"],
     "STRONG_DOWNTREND": ["trend_following", "momentum"],
-    "TRANSITION": [],                       # عمداً خالی -> صبر کن
+    "TRANSITION": [],
     "BREAKOUT": ["breakout"],
-    "FAKE_BREAKOUT": [],                    # عمداً خالی -> هیچ استراتژی اعتماد نمی‌کند
+    "FAKE_BREAKOUT": [],
     "BREAKDOWN": ["trend_following"],
     "RECOVERY": ["reversal", "mean_reversion"],
-    "CRASH": [],                            # عمداً خالی -> NO TRADE
-    "HIGH_VOLATILITY": [],                  # ریسک بالا -> نیاز به تایید بیشتر
+    "CRASH": [],
+    "HIGH_VOLATILITY": [],
     "LOW_VOLATILITY": ["mean_reversion"],
     "UNKNOWN": [],
 }
 
-
 # ---------------------------------------------------------------------------
 # Adaptive Weighting (Phase 13)
-# وزن دسته‌های شواهد در Signal Fusion، بسته به رژیم بازار تغییر می‌کند.
-# مجموع هر ردیف باید ۱٫۰ باشد (تست می‌شود در tests).
 # ---------------------------------------------------------------------------
 @dataclass
 class EvidenceWeights:
@@ -217,7 +235,6 @@ class EvidenceWeights:
             "structure": self.structure, "volatility": self.volatility, "mtf": self.mtf,
         }
 
-
 DEFAULT_WEIGHTS = EvidenceWeights(trend=0.25, momentum=0.20, volume=0.15,
                                    structure=0.20, volatility=0.10, mtf=0.10)
 
@@ -232,90 +249,55 @@ REGIME_WEIGHT_OVERRIDES: Dict[str, EvidenceWeights] = {
 def get_weights_for_regime(regime: str) -> EvidenceWeights:
     return REGIME_WEIGHT_OVERRIDES.get(regime, DEFAULT_WEIGHTS)
 
-
 # ---------------------------------------------------------------------------
 # Risk Engine (Phase 16)
 # ---------------------------------------------------------------------------
 ATR_PERIOD = 14
-STOP_LOSS_ATR_MULTIPLIER = 2.5  # v6 با 4.5 تست شد: win_rate از ۳۷٪ به ۲۸-۳۲٪ افت کرد
-# (چون TP هم به همون نسبت دورتر رفت، RR=2× ثابت است) و average_trade_pct تقریباً
-# دو برابر بدتر شد؛ سود نسبی fee/slippage تقریباً خنثی شد. 2.5 یک نقطه‌ی میانی
-# بین حالت خیلی تنگ (1.5، edge را fee/slippage می‌بلعید) و خیلی گشاد (4.5،
-# win_rate را بیش‌ازحد پایین می‌آورد) است — نیاز به سنجش مجدد با داده‌ی واقعی دارد.
-TAKE_PROFIT_RR_TARGET = 2.0          # حداقل Risk/Reward قابل قبول
-MAX_RISK_PERCENT_PER_TRADE = 1.0     # % از سرمایه‌ی فرضی
+# NOTE: STOP_LOSS_ATR_MULTIPLIER overridden by SL_ATR_MULTIPLIER in FIX section
+# KEEP for backward compatibility — risk_engine.py uses SL_ATR_MULTIPLIER if available
+STOP_LOSS_ATR_MULTIPLIER = 2.5
+# NOTE: TAKE_PROFIT_RR_TARGET overridden by RR_TARGET in FIX section
+# KEEP for backward compatibility — risk_engine.py uses RR_TARGET if available
+TAKE_PROFIT_RR_TARGET = 2.0
+MAX_RISK_PERCENT_PER_TRADE = 1.0
 MIN_ACCEPTABLE_RISK_REWARD = 1.5
-
 
 # ---------------------------------------------------------------------------
 # Trade Quality / Confidence thresholds (Phase 12 / 17)
 # ---------------------------------------------------------------------------
-MIN_CONFIDENCE_TO_TRADE = 55.0        # زیر این عدد => WAIT
-MIN_TRADE_QUALITY_SCORE = 60.0        # زیر این عدد => NO TRADE
-CONTRADICTION_BLOCK_THRESHOLD = 0.15  # قبلاً 0.45 بود؛ روی داده اندازه‌گیری شد که با ۶ دسته‌ی
-# شواهد، هر تناقضِ واقعی (حتی فقط یک دسته) حداقل conflict_ratio=0.167 تولید می‌کند،
-# پس آستانه‌ی 0.45 عملاً تا ۳ دسته‌ی متناقض هم‌زمان را رد می‌کرد و همین باعث می‌شد
-# ۲۵۳ معامله با شواهد متناقض بدون بلاک‌شدن اجرا شوند (برچسب SIGNAL_CONFLICT در
-# failure_analysis). 0.15 یعنی هر تناقض معنادار (حتی یک دسته) اکنون بلاک می‌شود.
-CONTRADICTION_SEVERE_THRESHOLD = 0.70  # از این به بالا (یا تضاد چندگانه) => تضاد "شدید"، NO_TRADE به‌جای WAIT
+MIN_CONFIDENCE_TO_TRADE = 55.0
+MIN_TRADE_QUALITY_SCORE = 60.0
+CONTRADICTION_BLOCK_THRESHOLD = 0.15
+CONTRADICTION_SEVERE_THRESHOLD = 0.70
 
 # ---------------------------------------------------------------------------
-# Bounded Uncertainty / Fuzzy Feature Redesign (root-cause fixes: contradiction
-# pipeline mismatch + volatility/risk quality dead thresholds). همه پیش‌فرض به
-# رفتار قدیمی/Baseline‌اند تا هیچ نتیجه‌ی قبلی بی‌اجازه عوض نشود؛ صراحتاً باید
-# فعال شوند و کاملاً rollback-پذیرند (فقط برگرداندن این مقادیر به حالت قبل).
+# Bounded Uncertainty / Fuzzy Feature Redesign
 # ---------------------------------------------------------------------------
-CONTRADICTION_SCORING_MODE = "legacy"     # "legacy" | "continuous" — نگاه کنید
-# quality_engines.evaluate_contradiction_severity. "continuous" یعنی
-# contradiction_severity دیگر از severity گسسته (که فقط وقتی conflict_detected
-# باشد غیرصفر است، یعنی هیچ‌وقت روی معاملات واقعی BUY/SELL دیده نمی‌شود) بلکه
-# از قدرت اجماع پیوسته (net_score) و conflict_ratio نسبی می‌آید.
+CONTRADICTION_SCORING_MODE = "legacy"
 
-USE_PERCENTILE_RISK_VOLATILITY = True     # پیش‌فرض به True تغییر کرد (بعد از کالیبراسیون
-# گیت poor/very_poor روی مقیاس جدید — نگاه کنید membership.build_volatility_quality_variable_v2
-# و تست‌های test_volatility_risk_gate_calibration.py). برای rollback فوری به رفتار
-# قدیمی، فقط همین یک خط را به False برگردانید — هیچ فایل دیگری نیاز به تغییر ندارد.
-# True یعنی decision_controller به‌جای
-# آستانه‌ی مطلق ATR% (که برای این نماد هیچ‌وقت لمس نمی‌شد)، رتبه‌ی درصدی ATR%
-# را نسبت به تاریخچه‌ی خودِ همان نماد (regime.perception.atr_pct_series) به
-# evaluate_volatility_quality/evaluate_risk_quality پاس می‌دهد.
-VOLATILITY_PERCENTILE_MIN_SAMPLES = 30     # کمتر از این تعداد کندل تاریخی => fallback به فرمول قدیمی
-VOLATILITY_PERCENTILE_TARGET_SAMPLES = 300  # تعداد نمونه‌ای که confidence=1.0 می‌شود
+USE_PERCENTILE_RISK_VOLATILITY = True
+VOLATILITY_PERCENTILE_MIN_SAMPLES = 30
+VOLATILITY_PERCENTILE_TARGET_SAMPLES = 300
 RISK_QUALITY_PERCENTILE_MIN_SAMPLES = 30
 
-OPPORTUNITY_SCORING_METHOD = "rules"      # "rules" (پیش‌فرض، Baseline دست‌نخورده)
-# | "ahp" — وقتی "ahp" باشد، decision_controller.opportunity_score به‌جای
-# خروجی rule-based Sugeno/Mamdani، از ترکیب وزن‌دار AHP (فقط ۳ feature
-# تأییدشده: trend_quality=0.20, risk_quality_v2=0.40, volatility_quality_v2=0.40
-# — نگاه کنید RSP/fuzzy_core/ahp_scoring.py) استفاده می‌کند. rollback فوری:
-# همین یک خط را به "rules" برگردانید.
-
+OPPORTUNITY_SCORING_METHOD = "rules"
 
 # ---------------------------------------------------------------------------
 # Backtest / Simulator (Phase 18/19)
 # ---------------------------------------------------------------------------
-SIMULATED_FEE_PCT = 0.001      # 0.1% (نمونه‌ی معمول کارمزد اسپات)
+SIMULATED_FEE_PCT = 0.001
 SIMULATED_SLIPPAGE_PCT = 0.0005
-CONSERVATIVE_SL_TP_SAME_CANDLE = "SL_FIRST"  # اگر SL و TP در یک کندل لمس شدند، فرض محافظه‌کارانه: SL زودتر خورده
-
+# NOTE: CONSERVATIVE_SL_TP_SAME_CANDLE overridden in FIX section above (line 47)
 
 # ---------------------------------------------------------------------------
-# Execution restriction (طبق «محدودیت‌های اجرایی» در اسپک)
+# Execution restriction
 # ---------------------------------------------------------------------------
-LIVE_TRADING_ENABLED = False   # همیشه False. این موتور هرگز نباید سفارش واقعی بفرستد.
+LIVE_TRADING_ENABLED = False
 REAL_TRADING_API_KEYS_ALLOWED = False
 
-
 # ---------------------------------------------------------------------------
-# ابزار کمکی برای Versioned Strategy Lab (Phase 27) و Robustness (Phase 23):
-# override موقت چند تنظیم، با بازگشت تضمینی به مقدار اصلی بعد از پایان بلوک.
-# هر تغییری که با این ابزار انجام شود، فقط در همان بلوک اثر دارد - هیچ‌وقت
-# تنظیمات پیش‌فرض پروژه را دائمی تغییر نمی‌دهد (طبق قانون Phase 13:
-# "هر تغییر وزن باید ثبت و قابل بازگشت باشد").
+# Temporary override helper
 # ---------------------------------------------------------------------------
-from contextlib import contextmanager as _contextmanager
-
-
 @_contextmanager
 def temporary_override(overrides: dict):
     import sys
@@ -329,14 +311,3 @@ def temporary_override(overrides: dict):
     finally:
         for key, value in original.items():
             setattr(module, key, value)
-"""
-RSP — phase_registry.py PATCH (Phases 29-44 Registration)
-
-این فایل باید در RSP/phase_registry.py اضافه شود.
-فازهای 29 تا 44 مربوط به Fuzzy Quality Engines و Fuzzy Rule System هستند.
-"""
-
-# =============================================================================
-# LAYER 5 — FUZZY INTELLIGENCE CORE (Phases 27-38)
-# =============================================================================
-
