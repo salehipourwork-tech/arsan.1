@@ -18,11 +18,13 @@ import sys
 import json
 import time
 from datetime import datetime, timezone
+from dataclasses import dataclass, field, asdict
+from typing import Dict, List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from RSP.config import settings
-from RSP.ingestion.coingecko_client import fetch_ohlc
+from RSP.ingestion.data_universe import build_data_universe
 from RSP.backtest_engine.backtest_engine import run_backtest
 from RSP.meta_controller.meta_controller import MetaController
 
@@ -43,93 +45,130 @@ BASE_TF = "15M"
 RATE_LIMIT_SECONDS = 2
 
 
-def fetch_and_backtest(coin: dict, use_fuzzy: bool = False, use_ahp: bool = False) -> dict:
-    """Fetch data and run backtest for a single coin."""
-    print(f"\n>>> [{coin['symbol']}] Fetching {DAYS} days of {BASE_TF} data...")
+@dataclass
+class TestResult:
+    coin: str
+    scenario: str
+    total_trades: int = 0
+    win_rate: float = 0.0
+    net_return_pct: float = 0.0
+    profit_factor: float = 0.0
+    max_drawdown_pct: float = 0.0
+    avg_trade_pct: float = 0.0
+    fuzzy_steps: int = 0
+    fuzzy_overrides: int = 0
+    opportunity_score_avg: float = None
+    opportunity_score_min: float = None
+    opportunity_score_max: float = None
+    current_threshold: float = None
+    rejection_reasons: Dict = field(default_factory=dict)
+    rejected_trade_outcomes: Dict = field(default_factory=dict)
+    error: str = ""
+
+
+def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) -> TestResult:
+    """Run a single backtest scenario for one coin."""
+    result = TestResult(coin=coin, scenario=scenario_name)
+
+    # Save original settings
+    orig_fuzzy_enabled = settings.FUZZY_BACKTEST_ENABLED
+    orig_opportunity_method = getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules")
 
     try:
-        df = fetch_ohlc(coin["id"], days=DAYS)
-        if df is None or df.empty:
-            print(f"    [!] No data for {coin['symbol']}")
-            return None
+        # Apply scenario settings
+        settings.FUZZY_BACKTEST_ENABLED = use_fuzzy
+        if use_fuzzy:
+            settings.OPPORTUNITY_SCORING_METHOD = "ahp" if use_ahp else "rules"
+        else:
+            settings.OPPORTUNITY_SCORING_METHOD = "rules"
+
+        print(f"\n>>> [{coin}] {scenario_name} — fuzzy={use_fuzzy}, ahp={use_ahp}")
+
+        # Build data universe
+        universe = build_data_universe(coin, lookback_days=DAYS)
+        base_bars = universe.bars.get(BASE_TF)
+        if base_bars is None or base_bars.empty:
+            result.error = "No data available"
+            return result
+
+        # Run backtest with coin_id for blacklist check
+        summary = run_backtest(universe.bars, base_tf=BASE_TF, coin_id=coin)
+
+        # Fill result
+        result.total_trades = summary.total_trades
+        result.win_rate = summary.win_rate
+        result.net_return_pct = summary.net_return_pct
+        result.profit_factor = summary.profit_factor
+        result.max_drawdown_pct = summary.max_drawdown_pct
+        result.avg_trade_pct = summary.average_trade_pct
+
+        if summary.fuzzy_diagnostics:
+            d = summary.fuzzy_diagnostics
+            result.fuzzy_steps = d.get("fuzzy_steps", 0)
+            result.fuzzy_overrides = d.get("fuzzy_overrides", 0)
+            result.opportunity_score_avg = d.get("opportunity_score_avg")
+            result.opportunity_score_min = d.get("opportunity_score_min")
+            result.opportunity_score_max = d.get("opportunity_score_max")
+            result.current_threshold = d.get("current_threshold")
+            result.rejection_reasons = d.get("rejection_reasons", {})
+            result.rejected_trade_outcomes = d.get("rejected_trade_outcomes", {})
+
+        print(f" trades={result.total_trades} win_rate={result.win_rate}% "
+              f"net={result.net_return_pct}% PF={result.profit_factor} "
+              f"maxDD={result.max_drawdown_pct}%")
+
     except Exception as e:
-        print(f"    [!] Fetch error: {e}")
-        return None
+        result.error = str(e)
+        print(f" ERROR: {e}")
 
-    # FIX v1: Pass coin_id for blacklist check
-    bars_by_tf = {BASE_TF: df}
-
-    # Temporarily override fuzzy setting
-    original_fuzzy = settings.FUZZY_BACKTEST_ENABLED
-    settings.FUZZY_BACKTEST_ENABLED = use_fuzzy
-
-    try:
-        summary = run_backtest(bars_by_tf, base_tf=BASE_TF, coin_id=coin["id"])
     finally:
-        settings.FUZZY_BACKTEST_ENABLED = original_fuzzy
+        # Restore original settings
+        settings.FUZZY_BACKTEST_ENABLED = orig_fuzzy_enabled
+        settings.OPPORTUNITY_SCORING_METHOD = orig_opportunity_method
 
-    return {
-        "coin": coin["id"],
-        "symbol": coin["symbol"],
-        "total_trades": summary.total_trades,
-        "win_rate": summary.win_rate,
-        "net_return_pct": summary.net_return_pct,
-        "profit_factor": summary.profit_factor,
-        "max_drawdown_pct": summary.max_drawdown_pct,
-        "average_trade_pct": summary.average_trade_pct,
-        "fuzzy_steps": summary.fuzzy_diagnostics.get("fuzzy_steps", 0),
-        "fuzzy_overrides": summary.fuzzy_diagnostics.get("fuzzy_overrides", 0),
-        "opportunity_score_avg": summary.fuzzy_diagnostics.get("opportunity_score_avg", 0),
-    }
+    return result
 
 
-def run_all_scenarios(coin: dict) -> dict:
+def run_all_scenarios(coin: str) -> dict:
     """Run all 4 scenarios for a single coin."""
-    print(f"\n{'='*60}")
-    print(f"Coin: {coin['symbol']} ({coin['id']})")
-    print(f"{'='*60}")
+    print(f"\n{'='*70}")
+    print(f"Coin: {coin.upper()}")
+    print(f"{'='*70}")
 
-    # Scenario 1: Baseline (no fuzzy)
-    print(f"\n>>> [{coin['symbol']}] Scenario 1: Baseline")
-    baseline = fetch_and_backtest(coin, use_fuzzy=False)
+    # 1. Baseline (no fuzzy)
+    baseline = run_scenario(coin, "Baseline", use_fuzzy=False, use_ahp=False)
     time.sleep(RATE_LIMIT_SECONDS)
 
-    # Scenario 2: Fuzzy + Rules
-    print(f"\n>>> [{coin['symbol']}] Scenario 2: Fuzzy + Rules")
-    fuzzy_rules = fetch_and_backtest(coin, use_fuzzy=True)
+    # 2. Fuzzy + Rules
+    fuzzy_rules = run_scenario(coin, "Fuzzy+Rules", use_fuzzy=True, use_ahp=False)
     time.sleep(RATE_LIMIT_SECONDS)
 
-    # Scenario 3: Fuzzy + AHPv2
-    print(f"\n>>> [{coin['symbol']}] Scenario 3: Fuzzy + AHPv2")
-    # AHPv2 is controlled by OPPORTUNITY_SCORING_METHOD
-    original_method = getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules")
-    settings.OPPORTUNITY_SCORING_METHOD = "ahp"
-    fuzzy_ahp = fetch_and_backtest(coin, use_fuzzy=True)
-    settings.OPPORTUNITY_SCORING_METHOD = original_method
+    # 3. Fuzzy + AHPv2
+    fuzzy_ahp = run_scenario(coin, "Fuzzy+AHPv2", use_fuzzy=True, use_ahp=True)
     time.sleep(RATE_LIMIT_SECONDS)
 
-    # Scenario 4: Meta-Controller
-    print(f"\n>>> [{coin['symbol']}] Scenario 4: Meta-Controller")
-    meta = MetaController()
-    # Meta selects best of Rules vs AHP based on MaxDD
-    rules_dd = abs(fuzzy_rules.get("max_drawdown_pct", 0)) if fuzzy_rules else 999
-    ahp_dd = abs(fuzzy_ahp.get("max_drawdown_pct", 0)) if fuzzy_ahp else 999
+    # 4. Meta-Controller
+    print(f"\n>>> [{coin}] Meta-Controller")
+    rules_dd = abs(fuzzy_rules.max_drawdown_pct) if fuzzy_rules and not fuzzy_rules.error else 999
+    ahp_dd = abs(fuzzy_ahp.max_drawdown_pct) if fuzzy_ahp and not fuzzy_ahp.error else 999
 
     if ahp_dd < rules_dd and (rules_dd - ahp_dd) > 30:
-        meta_result = fuzzy_ahp.copy() if fuzzy_ahp else baseline.copy()
-        meta_result["meta_source"] = "AHPv2"
+        meta_result = fuzzy_ahp
+        meta_source = "AHPv2"
     else:
-        meta_result = fuzzy_rules.copy() if fuzzy_rules else baseline.copy()
-        meta_result["meta_source"] = "Rules"
-    meta_result["meta_selected"] = True
+        meta_result = fuzzy_rules
+        meta_source = "Rules"
 
     return {
-        "coin": coin["id"],
-        "symbol": coin["symbol"],
-        "baseline": baseline,
-        "fuzzy_rules": fuzzy_rules,
-        "fuzzy_ahp": fuzzy_ahp,
-        "meta_controller": meta_result,
+        "coin": coin,
+        "baseline": asdict(baseline) if baseline else None,
+        "fuzzy_rules": asdict(fuzzy_rules) if fuzzy_rules else None,
+        "fuzzy_ahp": asdict(fuzzy_ahp) if fuzzy_ahp else None,
+        "meta_controller": {
+            **asdict(meta_result),
+            "meta_source": meta_source,
+            "meta_selected": True,
+        } if meta_result else None,
     }
 
 
@@ -148,21 +187,27 @@ def generate_markdown_report(all_results: list) -> str:
     ]
 
     for r in all_results:
-        coin = r["symbol"]
-        b = r["baseline"]["net_return_pct"] if r["baseline"] else 0
-        fr = r["fuzzy_rules"]["net_return_pct"] if r["fuzzy_rules"] else 0
-        fa = r["fuzzy_ahp"]["net_return_pct"] if r["fuzzy_ahp"] else 0
+        coin = r["coin"].upper()
+        b = r["baseline"]["net_return_pct"] if r["baseline"] and not r["baseline"].get("error") else 0
+        fr = r["fuzzy_rules"]["net_return_pct"] if r["fuzzy_rules"] and not r["fuzzy_rules"].get("error") else 0
+        fa = r["fuzzy_ahp"]["net_return_pct"] if r["fuzzy_ahp"] and not r["fuzzy_ahp"].get("error") else 0
         m = r["meta_controller"]["net_return_pct"] if r["meta_controller"] else 0
         src = r["meta_controller"].get("meta_source", "-") if r["meta_controller"] else "-"
         lines.append(f"| {coin} | {b:+.2f}% | {fr:+.2f}% | {fa:+.2f}% | {m:+.2f}% | {src} |")
 
     lines.extend(["", "## Detailed Results", ""])
     for r in all_results:
-        lines.append(f"### {r['symbol']}")
+        lines.append(f"### {r['coin'].upper()}")
         for scenario in ["baseline", "fuzzy_rules", "fuzzy_ahp", "meta_controller"]:
             s = r[scenario]
-            if s:
-                lines.append(f"- **{scenario}:** Trades={s.get('total_trades',0)}, WR={s.get('win_rate',0)}%, Net={s.get('net_return_pct',0):+.2f}%, PF={s.get('profit_factor',0):.3f}, MaxDD={s.get('max_drawdown_pct',0):.2f}%")
+            if s and not s.get("error"):
+                lines.append(
+                    f"- **{scenario}:** Trades={s.get('total_trades',0)}, "
+                    f"WR={s.get('win_rate',0)}%, Net={s.get('net_return_pct',0):+.2f}%, "
+                    f"PF={s.get('profit_factor',0):.3f}, MaxDD={s.get('max_drawdown_pct',0):.2f}%"
+                )
+            elif s and s.get("error"):
+                lines.append(f"- **{scenario}:** ERROR: {s.get('error')}")
         lines.append("")
 
     return "\n".join(lines)
@@ -177,8 +222,8 @@ def main():
     print("="*70)
 
     all_results = []
-    for coin in COINS:
-        result = run_all_scenarios(coin)
+    for coin_dict in COINS:
+        result = run_all_scenarios(coin_dict["id"])
         all_results.append(result)
 
     # Save JSON
@@ -210,10 +255,10 @@ def main():
     print(f"{'Coin':<8} {'Baseline':>10} {'Rules':>10} {'AHPv2':>10} {'Meta':>10} {'Source':>10}")
     print("-"*70)
     for r in all_results:
-        coin = r["symbol"]
-        b = r["baseline"]["net_return_pct"] if r["baseline"] else 0
-        fr = r["fuzzy_rules"]["net_return_pct"] if r["fuzzy_rules"] else 0
-        fa = r["fuzzy_ahp"]["net_return_pct"] if r["fuzzy_ahp"] else 0
+        coin = r["coin"].upper()
+        b = r["baseline"]["net_return_pct"] if r["baseline"] and not r["baseline"].get("error") else 0
+        fr = r["fuzzy_rules"]["net_return_pct"] if r["fuzzy_rules"] and not r["fuzzy_rules"].get("error") else 0
+        fa = r["fuzzy_ahp"]["net_return_pct"] if r["fuzzy_ahp"] and not r["fuzzy_ahp"].get("error") else 0
         m = r["meta_controller"]["net_return_pct"] if r["meta_controller"] else 0
         src = r["meta_controller"].get("meta_source", "-") if r["meta_controller"] else "-"
         print(f"{coin:<8} {b:>+9.2f}% {fr:>+9.2f}% {fa:>+9.2f}% {m:>+9.2f}% {src:>10}")
