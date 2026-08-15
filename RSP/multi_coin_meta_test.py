@@ -3,8 +3,8 @@
 """
 RSP — Multi-Coin Meta Test v2 (Profitability Fix)
 
-Baseline uses OLD params (RR=2.0, SL=2.5ATR, SL_FIRST)
-Fuzzy uses NEW params (RR=2.5, SL=1.5ATR, PROPORTIONAL)
+Baseline uses OLD params (RR=2.0, SL=2.5ATR, SL_FIRST, Opp>=50)
+Fuzzy uses NEW params (RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=75)
 
 Run: python RSP/multi_coin_meta_test.py
 """
@@ -183,6 +183,7 @@ def run_all_scenarios(coin: str) -> dict:
         meta_result = fuzzy_rules
         meta_source = "Rules"
 
+    # ✅ این خط اضافه شد
     print(f"    → Meta selected: {meta_source} (Rules DD={rules_dd:.1f}%, AHP DD={ahp_dd:.1f}%)")
 
     return {
