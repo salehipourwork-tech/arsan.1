@@ -1,10 +1,10 @@
 """
-RSP — risk_engine/risk_engine.py  (Phase 16: RISK ENGINE)
+RSP — risk_engine/risk_engine.py (Phase 16: RISK ENGINE)
 
 هدف: نه فقط پیدا کردن معامله، بلکه پیدا کردن معامله با ریسک کنترل‌شده.
-Entry, Stop Loss, Take Profit, Risk/Reward, Position Size, Risk%, Max
-Exposure. حد ضرر با ATR و ساختار بازار (نزدیک‌ترین Support/Resistance)
-تطبیق دارد.
+Entry, Stop Loss, Take Profit, Risk/Reward, Position Size, Risk%, Max Exposure.
+
+FIX v1: RR_TARGET=2.5 (was 2.0), SL_ATR_MULTIPLIER override support
 """
 
 from dataclasses import dataclass
@@ -23,7 +23,7 @@ class RiskPlan:
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
     risk_reward: Optional[float] = None
-    position_size_pct: Optional[float] = None   # درصدی از سرمایه‌ی فرضی
+    position_size_pct: Optional[float] = None
     risk_percent: float = settings.MAX_RISK_PERCENT_PER_TRADE
     valid: bool = False
     reason: str = ""
@@ -51,25 +51,25 @@ def plan_risk(action: str, df_15m: pd.DataFrame, regime: RegimeReport) -> RiskPl
         structural_stop = min(r for r in regime.structure.resistance_levels if r > entry_price) \
             if any(r > entry_price for r in regime.structure.resistance_levels) else None
 
-    atr_stop_distance = settings.STOP_LOSS_ATR_MULTIPLIER * atr_val
+    # FIX v1: Use SL_ATR_MULTIPLIER from settings_patch if available
+    sl_mult = getattr(settings, "SL_ATR_MULTIPLIER", settings.STOP_LOSS_ATR_MULTIPLIER)
+    atr_stop_distance = sl_mult * atr_val
 
     if action == "BUY":
         atr_stop = entry_price - atr_stop_distance
-        # هر دو (atr_stop و structural_stop) زیر entry_price هستند، پس نزدیک‌ترین
-        # به entry_price = بزرگ‌ترین عدد. قبلاً اینجا min() بود که همیشه
-        # دورترین/گشادترین حد ضرر را انتخاب می‌کرد (باگ) — با max() اصلاح شد.
         stop_loss = max(atr_stop, structural_stop) if structural_stop else atr_stop
-        stop_loss = min(stop_loss, entry_price * 0.999)  # اطمینان از پایین‌تر بودن
+        stop_loss = min(stop_loss, entry_price * 0.999)
         risk_per_unit = entry_price - stop_loss
-        take_profit = entry_price + risk_per_unit * settings.TAKE_PROFIT_RR_TARGET
+        # FIX v1: RR_TARGET from settings_patch (default 2.5)
+        rr_target = getattr(settings, "RR_TARGET", settings.TAKE_PROFIT_RR_TARGET)
+        take_profit = entry_price + risk_per_unit * rr_target
     else:  # SELL
         atr_stop = entry_price + atr_stop_distance
-        # هر دو بالای entry_price هستند، پس نزدیک‌ترین = کوچک‌ترین عدد.
-        # قبلاً max() بود (همیشه دورترین را انتخاب می‌کرد) — با min() اصلاح شد.
         stop_loss = min(atr_stop, structural_stop) if structural_stop else atr_stop
         stop_loss = max(stop_loss, entry_price * 1.001)
         risk_per_unit = stop_loss - entry_price
-        take_profit = entry_price - risk_per_unit * settings.TAKE_PROFIT_RR_TARGET
+        rr_target = getattr(settings, "RR_TARGET", settings.TAKE_PROFIT_RR_TARGET)
+        take_profit = entry_price - risk_per_unit * rr_target
 
     if risk_per_unit <= 0:
         return RiskPlan(action=action, valid=False, reason="فاصله‌ی Stop Loss نامعتبر است")
@@ -77,11 +77,12 @@ def plan_risk(action: str, df_15m: pd.DataFrame, regime: RegimeReport) -> RiskPl
     reward_per_unit = abs(take_profit - entry_price)
     rr = round(reward_per_unit / risk_per_unit, 2)
 
-    # Position sizing ساده: risk_percent از سرمایه‌ی فرضی تقسیم بر فاصله‌ی ریسک (٪ نسبت به قیمت)
     risk_distance_pct = risk_per_unit / entry_price
     position_size_pct = round(min(100.0, settings.MAX_RISK_PERCENT_PER_TRADE / risk_distance_pct), 2) \
         if risk_distance_pct > 0 else 0.0
 
+    # FIX v1: MIN_ACCEPTABLE_RISK_REWARD also uses RR_TARGET
+    min_rr = getattr(settings, "RR_TARGET", settings.MIN_ACCEPTABLE_RISK_REWARD)
     plan = RiskPlan(
         action=action,
         entry=round(entry_price, 6),
@@ -90,8 +91,8 @@ def plan_risk(action: str, df_15m: pd.DataFrame, regime: RegimeReport) -> RiskPl
         risk_reward=rr,
         position_size_pct=position_size_pct,
         risk_percent=settings.MAX_RISK_PERCENT_PER_TRADE,
-        valid=rr >= settings.MIN_ACCEPTABLE_RISK_REWARD,
-        reason="OK" if rr >= settings.MIN_ACCEPTABLE_RISK_REWARD else
-               f"Risk/Reward={rr} کمتر از حداقل قابل‌قبول {settings.MIN_ACCEPTABLE_RISK_REWARD}",
+        valid=rr >= min_rr,
+        reason="OK" if rr >= min_rr else
+               f"Risk/Reward={rr} کمتر از حداقل قابل‌قبول {min_rr}",
     )
     return plan
