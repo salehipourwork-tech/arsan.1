@@ -3,13 +3,6 @@
 """
 RSP — Multi-Coin Meta Test v2 (Profitability Fix)
 
-تغییرات نسبت به v1:
-1. TRX blacklisted (removed from COINS)
-2. A+ filter (score >= 75) integrated in backtest_engine
-3. RR=2.5 enforced via risk_engine
-4. Proportional same-candle exit in trade_simulator
-5. Regime-aware rule filtering ready (backtest_engine supports it)
-
 Run: python RSP/multi_coin_meta_test.py
 """
 
@@ -26,9 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from RSP.config import settings
 from RSP.ingestion.data_universe import build_data_universe
 from RSP.backtest_engine.backtest_engine import run_backtest
-from RSP.meta_controller.meta_controller import MetaController
 
-# FIX v1: TRX removed from list
 COINS = [
     {"id": "bitcoin", "symbol": "BTC"},
     {"id": "ethereum", "symbol": "ETH"},
@@ -37,7 +28,6 @@ COINS = [
     {"id": "solana", "symbol": "SOL"},
     {"id": "dogecoin", "symbol": "DOGE"},
     {"id": "cardano", "symbol": "ADA"},
-    # {"id": "tron", "symbol": "TRX"},  # BLACKLISTED
 ]
 
 DAYS = 90
@@ -67,15 +57,11 @@ class TestResult:
 
 
 def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) -> TestResult:
-    """Run a single backtest scenario for one coin."""
     result = TestResult(coin=coin, scenario=scenario_name)
-
-    # Save original settings
     orig_fuzzy_enabled = settings.FUZZY_BACKTEST_ENABLED
     orig_opportunity_method = getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules")
 
     try:
-        # Apply scenario settings
         settings.FUZZY_BACKTEST_ENABLED = use_fuzzy
         if use_fuzzy:
             settings.OPPORTUNITY_SCORING_METHOD = "ahp" if use_ahp else "rules"
@@ -84,17 +70,14 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
 
         print(f"\n>>> [{coin}] {scenario_name} — fuzzy={use_fuzzy}, ahp={use_ahp}")
 
-        # Build data universe
         universe = build_data_universe(coin, lookback_days=DAYS)
         base_bars = universe.bars.get(BASE_TF)
         if base_bars is None or base_bars.empty:
             result.error = "No data available"
             return result
 
-        # Run backtest with coin_id for blacklist check
         summary = run_backtest(universe.bars, base_tf=BASE_TF, coin_id=coin)
 
-        # Fill result
         result.total_trades = summary.total_trades
         result.win_rate = summary.win_rate
         result.net_return_pct = summary.net_return_pct
@@ -122,7 +105,6 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
         print(f" ERROR: {e}")
 
     finally:
-        # Restore original settings
         settings.FUZZY_BACKTEST_ENABLED = orig_fuzzy_enabled
         settings.OPPORTUNITY_SCORING_METHOD = orig_opportunity_method
 
@@ -130,24 +112,20 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
 
 
 def run_all_scenarios(coin: str) -> dict:
-    """Run all 4 scenarios for a single coin."""
     print(f"\n{'='*70}")
     print(f"Coin: {coin.upper()}")
     print(f"{'='*70}")
 
-    # 1. Baseline (no fuzzy)
     baseline = run_scenario(coin, "Baseline", use_fuzzy=False, use_ahp=False)
     time.sleep(RATE_LIMIT_SECONDS)
 
-    # 2. Fuzzy + Rules
     fuzzy_rules = run_scenario(coin, "Fuzzy+Rules", use_fuzzy=True, use_ahp=False)
     time.sleep(RATE_LIMIT_SECONDS)
 
-    # 3. Fuzzy + AHPv2
     fuzzy_ahp = run_scenario(coin, "Fuzzy+AHPv2", use_fuzzy=True, use_ahp=True)
     time.sleep(RATE_LIMIT_SECONDS)
 
-    # 4. Meta-Controller
+    # Meta-Controller (simple selection based on MaxDD)
     print(f"\n>>> [{coin}] Meta-Controller")
     rules_dd = abs(fuzzy_rules.max_drawdown_pct) if fuzzy_rules and not fuzzy_rules.error else 999
     ahp_dd = abs(fuzzy_ahp.max_drawdown_pct) if fuzzy_ahp and not fuzzy_ahp.error else 999
@@ -173,7 +151,6 @@ def run_all_scenarios(coin: str) -> dict:
 
 
 def generate_markdown_report(all_results: list) -> str:
-    """Generate markdown report."""
     lines = [
         "# Multi-Coin Meta Test Report v2",
         f"**Generated:** {datetime.now(timezone.utc).isoformat()}",
@@ -226,7 +203,6 @@ def main():
         result = run_all_scenarios(coin_dict["id"])
         all_results.append(result)
 
-    # Save JSON
     report_dir = os.path.join("RSP", "baseline_reports", "multi_coin_meta_v2")
     os.makedirs(report_dir, exist_ok=True)
 
@@ -242,13 +218,11 @@ def main():
         }, f, ensure_ascii=False, indent=2)
     print(f"\n[OK] JSON saved: {json_path}")
 
-    # Save Markdown
     md_path = os.path.join(report_dir, "multi_coin_meta_test_v2.md")
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(generate_markdown_report(all_results))
     print(f"[OK] Markdown saved: {md_path}")
 
-    # Print summary
     print("\n" + "="*70)
     print("SUMMARY")
     print("="*70)
