@@ -1,4 +1,7 @@
-#!/usr/bin/env python3
+# install_risk_engine.py
+import os
+
+CONTENT = r'''#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 RSP Risk Engine v2.0
@@ -246,3 +249,21 @@ if __name__ == "__main__":
             print(f"  Size: {res['position']['size']:.4f} | Notional: {res['position']['notional']}")
 
     print("\n[OK] Self-test completed.")
+'''
+
+TARGET = os.path.join("RSP", "risk_engine", "risk_engine.py")
+INIT = os.path.join("RSP", "risk_engine", "__init__.py")
+
+def main():
+    os.makedirs(os.path.dirname(TARGET), exist_ok=True)
+    with open(TARGET, "w", encoding="utf-8") as f:
+        f.write(CONTENT)
+    with open(INIT, "w", encoding="utf-8") as f:
+        f.write("")
+    print(f"[OK] Created: {TARGET}")
+    print(f"[OK] Created: {INIT}")
+    print(f"[OK] Size: {os.path.getsize(TARGET)} bytes")
+    print("Now run: python -m RSP.risk_engine.risk_engine")
+
+if __name__ == "__main__":
+    main()
