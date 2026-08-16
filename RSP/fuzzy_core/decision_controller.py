@@ -88,10 +88,17 @@ class DecisionHistory:
 
 _decision_histories: Dict[str, DecisionHistory] = {}
 
-def get_history(coin: str) -> DecisionHistory:
-    if coin not in _decision_histories:
-        _decision_histories[coin] = DecisionHistory(max_len=settings.FUZZY_DECISION_HISTORY_LEN)
-    return _decision_histories[coin]
+def get_history(coin: str, method: str = "rules") -> DecisionHistory:
+    """
+    نسخه‌ی ۲: کلید بر اساس (coin, method) نه فقط coin.
+    قبلاً چون کلید فقط coin بود، وقتی چند سناریو (Rules سپس AHPv2) پشت‌سرهم
+    روی یک کوین اجرا می‌شدند، تاریخچه‌ی امتیازهای Rules بدون ریست به سناریوی
+    بعدی (AHP) نشت می‌کرد و adaptive threshold را منحرف می‌کرد.
+    """
+    key = f"{coin}:{method}"
+    if key not in _decision_histories:
+        _decision_histories[key] = DecisionHistory(max_len=settings.FUZZY_DECISION_HISTORY_LEN)
+    return _decision_histories[key]
 
 
 def _permission_gate(
@@ -197,7 +204,8 @@ def run_fuzzy_decision(
     report.opportunity_score = inference.defuzzified_score
 
     # AHP Opportunity Scoring — نسخه‌ی ۲
-    if getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules") == "ahp":
+    scoring_method = getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules")
+    if scoring_method == "ahp":
         from RSP.fuzzy_core.ahp_scoring import ahp_opportunity_score
         from RSP.fuzzy_core.quality_engines import (
             _raw_trend_quality, _raw_risk_quality, _raw_volatility_quality,
@@ -222,14 +230,22 @@ def run_fuzzy_decision(
     report.confidence = round(raw_conf, 4)
 
     # Phase 50: Permission Gate
-    history = get_history(coin)
+    # هر روش امتیازدهی مقیاس خودش را دارد (Rules vs AHP) پس threshold هم
+    # باید مخصوص همون روش باشد، وگرنه یک عدد ثابت مشترک یکی از دو روش را
+    # عملاً غیرفعال می‌کند.
+    threshold_by_method = getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD", {})
+    base_threshold = threshold_by_method.get(scoring_method, settings.FUZZY_OPPORTUNITY_THRESHOLD)
+
+    history = get_history(coin, scoring_method)
     eff_threshold = None
     if getattr(settings, "FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD", False):
         eff_threshold = history.adaptive_threshold(
-            fallback=settings.FUZZY_OPPORTUNITY_THRESHOLD,
+            fallback=base_threshold,
             percentile=settings.FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE,
         )
-        notes.append(f"ADAPTIVE_THRESHOLD={eff_threshold:.1f} (self-relative, coin={coin})")
+        notes.append(f"ADAPTIVE_THRESHOLD={eff_threshold:.1f} (self-relative, coin={coin}, method={scoring_method})")
+    else:
+        eff_threshold = base_threshold
 
     allowed, gate_reason = _permission_gate(
         report.opportunity_score,
