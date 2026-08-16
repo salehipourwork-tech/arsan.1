@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RSP Risk Engine v2.0
-- True ATR (Wilder)
-- Dynamic SL/TP per regime
+RSP Risk Engine v2.1
+- True ATR (Wilder's True Range)
+- Dynamic SL/TP per regime (RR >= 1.5 guaranteed)
 - Hard filters: RANGE / HIGH_VOLATILITY
 - Daily circuit breaker + portfolio heat fuse
 - Fixed fractional position sizing
@@ -15,42 +15,65 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-# --- Global Constants ---
+# ───────────────────────────────────────────────
+# Global Constants
+# ───────────────────────────────────────────────
 MAX_DAILY_LOSS_PCT = 5.0
 MAX_PORTFOLIO_HEAT = 60.0
 MAX_SINGLE_EXPOSURE = 20.0
 MIN_RISK_REWARD_RATIO = 1.5
 
 # SL/TP multipliers per regime (x ATR14)
+# RR calculated as tp_mult / sl_mult
 REGIME_SL_TP_MULTS = {
-    "STRONG_UPTREND":   {"sl": 2.5, "tp": 3.5},
-    "UPTREND":          {"sl": 2.0, "tp": 3.0},
-    "RANGE":            {"sl": 1.2, "tp": 1.8},
-    "DOWNTREND":        {"sl": 2.0, "tp": 3.0},
-    "STRONG_DOWNTREND": {"sl": 2.5, "tp": 3.5},
-    "HIGH_VOLATILITY":  {"sl": 0.0, "tp": 0.0},
+    "STRONG_UPTREND":   {"sl": 2.0, "tp": 3.5},   # RR = 1.75
+    "UPTREND":          {"sl": 2.0, "tp": 3.0},   # RR = 1.50
+    "RANGE":            {"sl": 1.2, "tp": 2.0},   # RR = 1.67
+    "DOWNTREND":        {"sl": 2.0, "tp": 3.0},   # RR = 1.50
+    "STRONG_DOWNTREND": {"sl": 2.0, "tp": 3.5},   # RR = 1.75
+    "HIGH_VOLATILITY":  {"sl": 0.0, "tp": 0.0},   # blocked
 }
 
-# --- 1. True ATR ---
+
+# ───────────────────────────────────────────────
+# 1. True ATR (Wilder)
+# ───────────────────────────────────────────────
 def calculate_atr(df, period=14):
-    """Wilder's ATR."""
+    """
+    Average True Range using Wilder's smoothing.
+    TR = max(high-low, |high-prev_close|, |low-prev_close|)
+    """
     if len(df) < period + 2:
         return None
-    high, low, close = df['high'], df['low'], df['close']
+
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
+
     tr1 = high - low
     tr2 = (high - close.shift(1)).abs()
     tr3 = (low - close.shift(1)).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.ewm(alpha=1.0/period, min_periods=period, adjust=False).mean()
+
+    atr = tr.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
     return float(atr.iloc[-1])
 
-# --- 2. Dynamic SL/TP ---
+
+# ───────────────────────────────────────────────
+# 2. Dynamic SL / TP
+# ───────────────────────────────────────────────
 def get_stop_loss_take_profit(entry_price, direction, atr14, regime):
+    """
+    Returns: (sl_price, tp_price, rr_ratio, error_or_None)
+    """
     mults = REGIME_SL_TP_MULTS.get(regime, {"sl": 2.0, "tp": 3.0})
+
     if mults["sl"] == 0 or not atr14 or atr14 <= 0 or entry_price <= 0:
         return None, None, 0.0, "HIGH_VOLATILITY or invalid ATR/entry"
+
     sl_dist = mults["sl"] * atr14
     tp_dist = mults["tp"] * atr14
+
     if direction == "BUY":
         sl = entry_price - sl_dist
         tp = entry_price + tp_dist
@@ -59,20 +82,43 @@ def get_stop_loss_take_profit(entry_price, direction, atr14, regime):
         tp = entry_price - tp_dist
     else:
         return None, None, 0.0, "Invalid direction"
+
     rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0.0
     return round(sl, 8), round(tp, 8), rr, None
 
-# --- 3. Position Size (Fixed Fractional) ---
+
+# ───────────────────────────────────────────────
+# 3. Position Size (Fixed Fractional)
+# ───────────────────────────────────────────────
 def calculate_position_size(equity, risk_per_trade_pct, entry, stop, max_leverage=1.0):
+    """
+    Returns dict with: size, notional, risk_amount, leverage_used, error
+    """
     if stop is None or entry is None or entry == stop:
-        return {"size": 0, "notional": 0, "risk_amount": 0, "leverage_used": 0, "error": "No valid stop"}
+        return {
+            "size": 0,
+            "notional": 0,
+            "risk_amount": 0,
+            "leverage_used": 0,
+            "error": "No valid stop",
+        }
+
     risk_amount = equity * (risk_per_trade_pct / 100.0)
     risk_per_unit = abs(entry - stop)
+
     if risk_per_unit == 0:
-        return {"size": 0, "notional": 0, "risk_amount": 0, "leverage_used": 0, "error": "Zero risk distance"}
+        return {
+            "size": 0,
+            "notional": 0,
+            "risk_amount": 0,
+            "leverage_used": 0,
+            "error": "Zero risk distance",
+        }
+
     raw_size = risk_amount / risk_per_unit
     notional = raw_size * entry
     max_notional = equity * (MAX_SINGLE_EXPOSURE / 100.0)
+
     leverage_used = 1.0
     if notional > max_notional and max_leverage > 1.0:
         leverage_used = min(notional / max_notional, max_leverage)
@@ -82,6 +128,7 @@ def calculate_position_size(equity, risk_per_trade_pct, entry, stop, max_leverag
         raw_size = max_notional / entry
         notional = max_notional
         leverage_used = 1.0
+
     return {
         "size": round(raw_size, 8),
         "notional": round(notional, 2),
@@ -91,13 +138,17 @@ def calculate_position_size(equity, risk_per_trade_pct, entry, stop, max_leverag
         "error": None,
     }
 
-# --- 4. Regime & Risk Filters ---
+
+# ───────────────────────────────────────────────
+# 4. Risk Filters
+# ───────────────────────────────────────────────
 def check_regime_risk(regime, confidence, max_range_dd_percent=15.0):
     if regime == "HIGH_VOLATILITY":
         return False, "RiskEngine: High volatility regime — mandatory block"
     if regime == "RANGE" and confidence < 0.35:
         return False, f"RiskEngine: RANGE confidence {confidence:.3f} below 0.35"
     return True, None
+
 
 def check_daily_limits(equity, daily_pnl_log, today=None):
     if today is None:
@@ -107,8 +158,12 @@ def check_daily_limits(equity, daily_pnl_log, today=None):
         return True, None
     total_pnl_pct = sum(t.get("pnl_pct", 0) for t in today_trades)
     if total_pnl_pct <= -MAX_DAILY_LOSS_PCT:
-        return False, f"Daily circuit breaker: {total_pnl_pct:.2f}% loss (limit: -{MAX_DAILY_LOSS_PCT}%)"
+        return (
+            False,
+            f"Daily circuit breaker: {total_pnl_pct:.2f}% loss (limit: -{MAX_DAILY_LOSS_PCT}%)",
+        )
     return True, None
+
 
 def check_portfolio_heat(current_exposures_usd, equity):
     total_exposure = sum(current_exposures_usd)
@@ -117,15 +172,28 @@ def check_portfolio_heat(current_exposures_usd, equity):
         return False, f"Portfolio heat {heat_pct:.1f}% exceeds {MAX_PORTFOLIO_HEAT}%"
     return True, None
 
+
 def check_min_risk_reward(rr_ratio):
     if rr_ratio is None or rr_ratio < MIN_RISK_REWARD_RATIO:
         return False, f"RR {rr_ratio} below min {MIN_RISK_REWARD_RATIO}"
     return True, None
 
-# --- 5. Main Risk Evaluator ---
-def evaluate_trade_risk(df, entry_price, direction, equity, regime, confidence,
-                    daily_pnl_log=None, current_exposures_usd=None,
-                    risk_per_trade_pct=2.0, max_leverage=1.0):
+
+# ───────────────────────────────────────────────
+# 5. Main Risk Evaluator
+# ───────────────────────────────────────────────
+def evaluate_trade_risk(
+    df,
+    entry_price,
+    direction,
+    equity,
+    regime,
+    confidence,
+    daily_pnl_log=None,
+    current_exposures_usd=None,
+    risk_per_trade_pct=2.0,
+    max_leverage=1.0,
+):
     result = {
         "timestamp": datetime.now().isoformat(),
         "allowed": False,
@@ -139,48 +207,69 @@ def evaluate_trade_risk(df, entry_price, direction, equity, regime, confidence,
         "position": None,
         "checks": {},
     }
+
+    # Check 1: regime
     ok, reason = check_regime_risk(regime, confidence)
     result["checks"]["regime"] = {"ok": ok, "reason": reason}
     if not ok:
         result["reason"] = reason
         return result
+
+    # Check 2: ATR & SL/TP
     atr14 = calculate_atr(df, period=14)
     sl, tp, rr, err = get_stop_loss_take_profit(entry_price, direction, atr14, regime)
-    result["checks"]["atr_sl_tp"] = {"ok": err is None, "atr14": round(atr14, 6) if atr14 else None, "reason": err}
+    result["checks"]["atr_sl_tp"] = {
+        "ok": err is None,
+        "atr14": round(atr14, 6) if atr14 else None,
+        "reason": err,
+    }
     if err:
         result["reason"] = err
         return result
+
     result["sl"] = sl
     result["tp"] = tp
     result["rr_ratio"] = rr
+
+    # Check 3: minimum RR
     ok, reason = check_min_risk_reward(rr)
     result["checks"]["min_rr"] = {"ok": ok, "reason": reason}
     if not ok:
         result["reason"] = reason
         return result
+
+    # Check 4: daily limit
     if daily_pnl_log is not None:
         ok, reason = check_daily_limits(equity, daily_pnl_log)
         result["checks"]["daily_limit"] = {"ok": ok, "reason": reason}
         if not ok:
             result["reason"] = reason
             return result
+
+    # Check 5: portfolio heat
     if current_exposures_usd is not None:
         ok, reason = check_portfolio_heat(current_exposures_usd, equity)
         result["checks"]["portfolio_heat"] = {"ok": ok, "reason": reason}
         if not ok:
             result["reason"] = reason
             return result
+
+    # Check 6: position size
     pos = calculate_position_size(equity, risk_per_trade_pct, entry_price, sl, max_leverage)
     result["checks"]["position_size"] = {"ok": pos.get("error") is None, "reason": pos.get("error")}
     if pos.get("error"):
         result["reason"] = pos["error"]
         return result
+
     result["position"] = pos
     result["allowed"] = True
     result["reason"] = "All risk checks passed"
     return result
 
-# --- 6. Daily PNL Logger ---
+
+# ───────────────────────────────────────────────
+# 6. Daily PNL Logger
+# ───────────────────────────────────────────────
 def log_daily_trade(daily_log_path, date_iso, pnl_usd, pnl_pct, coin, direction):
     os.makedirs(os.path.dirname(daily_log_path), exist_ok=True)
     entry = {
@@ -193,6 +282,7 @@ def log_daily_trade(daily_log_path, date_iso, pnl_usd, pnl_pct, coin, direction)
     }
     with open(daily_log_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
 
 def load_daily_log(daily_log_path):
     if not os.path.exists(daily_log_path):
@@ -208,18 +298,23 @@ def load_daily_log(daily_log_path):
                     continue
     return logs
 
-# --- 7. Self-test ---
+
+# ───────────────────────────────────────────────
+# 7. Self-Test
+# ───────────────────────────────────────────────
 if __name__ == "__main__":
     np.random.seed(42)
     n = 200
     base = 100 + np.cumsum(np.random.randn(n) * 0.5)
-    df_test = pd.DataFrame({
-        "open": base,
-        "close": base + np.random.randn(n) * 0.3,
-        "high": base + 1.0,
-        "low": base - 1.0,
-        "volume": 1000,
-    })
+    df_test = pd.DataFrame(
+        {
+            "open": base,
+            "close": base + np.random.randn(n) * 0.3,
+            "high": base + 1.0,
+            "low": base - 1.0,
+            "volume": 1000,
+        }
+    )
     df_test["high"] = df_test[["open", "close", "high"]].max(axis=1) + 0.5
     df_test["low"] = df_test[["open", "close", "low"]].min(axis=1) - 0.5
 
@@ -230,19 +325,23 @@ if __name__ == "__main__":
     print("RISK ENGINE SELF-TEST")
     print("=" * 50)
 
-    for regime in ["STRONG_UPTREND", "RANGE", "HIGH_VOLATILITY"]:
+    for regime in ["STRONG_UPTREND", "UPTREND", "RANGE", "HIGH_VOLATILITY"]:
         conf = 0.6 if regime != "RANGE" else 0.3
         res = evaluate_trade_risk(
-            df=df_test, entry_price=entry, direction="BUY",
-            equity=equity, regime=regime, confidence=conf,
+            df=df_test,
+            entry_price=entry,
+            direction="BUY",
+            equity=equity,
+            regime=regime,
+            confidence=conf,
             risk_per_trade_pct=2.0,
         )
         print(f"\nRegime: {regime}")
         print(f"  Allowed: {res['allowed']}")
         print(f"  Reason:  {res['reason']}")
-        if res['sl']:
+        if res["sl"]:
             print(f"  SL: {res['sl']} | TP: {res['tp']} | RR: {res['rr_ratio']}")
-        if res['position']:
+        if res["position"]:
             print(f"  Size: {res['position']['size']:.4f} | Notional: {res['position']['notional']}")
 
     print("\n[OK] Self-test completed.")
