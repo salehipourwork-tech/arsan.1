@@ -26,7 +26,7 @@ try:
     from RSP.signal_fusion.fusion_engine import FusionReport
     from RSP.contradiction_engine.contradiction_engine import ContradictionReport
     from RSP.confidence_engine.confidence_engine import ConfidenceReport
-    from RSP.decision_engine.decision_brain import DecisionReport
+    from RSP.decision_engine.decision_brain import Decision as DecisionReport
 except ImportError:
     RegimeReport = Any
     ConfluenceReport = Any
