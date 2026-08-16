@@ -119,9 +119,6 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
     fuzzy_overrides = 0
     fuzzy_steps = 0
 
-    # FIX v1: A+ Filter threshold
-    min_opp_score = getattr(settings, "MIN_OPPORTUNITY_SCORE_FOR_TRADE", 75.0)
-
     # FIX v1: Regime filter
     regime_filter = RegimeRuleFilter()
 
@@ -156,50 +153,54 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
                     if integrated.fuzzy_report is not None:
                         fr = integrated.fuzzy_report
 
-                        # FIX v1: A+ Filter — reject if score too low
-                        if fr.opportunity_score < min_opp_score:
-                            reason = f"A+_FILTER_REJECTED: score={fr.opportunity_score:.1f} < {min_opp_score}"
+                        # FIX v1 (2026-08-16): این بلاک قبلاً یک A+ Filter دومِ
+                        # مستقل و flat (بدون آگاهی از method) بود که فارغ از
+                        # نتیجه‌ی decision_controller.py دوباره score را با
+                        # MIN_OPPORTUNITY_SCORE_FOR_TRADE مقایسه می‌کرد. چون آن
+                        # آستانه ثابت بود (نه per-method)، همیشه سخت‌گیرتر از
+                        # threshold واقعیِ داخلی عمل می‌کرد و فیکس per-method را
+                        # دور می‌زد. حالا فقط از fr.rejected_trade (که خودش
+                        # همه‌ی گیت‌ها + adaptive threshold + method-aware
+                        # threshold را لحاظ کرده) استفاده می‌کنیم — یک منبع واحد
+                        # حقیقت، به‌جای دو آستانه‌ی ناهماهنگ.
+                        fuzzy_scores.append(fr.opportunity_score)
+                        if fr.rejected_trade:
+                            reason = f"GATE_REJECTED: {fr.primary_reason}" if fr.primary_reason \
+                                else (fr.notes[-1] if fr.notes else "UNKNOWN")
                             fuzzy_rejections[reason] = fuzzy_rejections.get(reason, 0) + 1
-                            decision.action = "NO_TRADE"
-                        else:
-                            fuzzy_scores.append(fr.opportunity_score)
-                            if fr.rejected_trade:
-                                reason = f"GATE_REJECTED: {fr.primary_reason}" if fr.primary_reason \
-                                    else (fr.notes[-1] if fr.notes else "UNKNOWN")
-                                fuzzy_rejections[reason] = fuzzy_rejections.get(reason, 0) + 1
-                                if pre_risk_plan is not None and pre_risk_plan.valid:
-                                    shadow_future_bars = base_df.iloc[i + 1:]
-                                    shadow_result = simulate_trade(
-                                        original_action, pre_risk_plan.entry,
-                                        pre_risk_plan.stop_loss, pre_risk_plan.take_profit,
-                                        shadow_future_bars,
-                                    )
-                                    if shadow_result.outcome in ("WIN", "LOSS"):
-                                        gate = _gate_name(reason)
-                                        bucket = rejected_trade_outcomes.setdefault(
-                                            gate, {"wins": 0, "losses": 0})
-                                        bucket["wins" if shadow_result.outcome == "WIN" else "losses"] += 1
-
-                            fuzzy_explain = {
-                                "rule_fired": fr.primary_reason,
-                                "active_rules": fr.active_rules,
-                                "opportunity_score": fr.opportunity_score,
-                                "fuzzy_confidence": fr.confidence,
-                                "risk_quality": fr.risk_quality,
-                                "entry_quality": fr.entry_quality,
-                                "volatility_quality": fr.volatility_quality,
-                                "contradiction_severity": fr.contradiction_severity,
-                                "rejected_trade": fr.rejected_trade,
-                                "notes": fr.notes,
-                            }
-                            new_action = _FUZZY_DIRECTION_TO_ACTION.get(integrated.final_direction, decision.action)
-                            if new_action != decision.action:
-                                fuzzy_overrides += 1
-                                decision.why.append(
-                                    f"FUZZY_OVERRIDE: crisp={decision.action} -> fuzzy={new_action}"
+                            if pre_risk_plan is not None and pre_risk_plan.valid:
+                                shadow_future_bars = base_df.iloc[i + 1:]
+                                shadow_result = simulate_trade(
+                                    original_action, pre_risk_plan.entry,
+                                    pre_risk_plan.stop_loss, pre_risk_plan.take_profit,
+                                    shadow_future_bars,
                                 )
-                                decision.action = new_action
-                            confidence.confidence = int(integrated.final_confidence * 100)
+                                if shadow_result.outcome in ("WIN", "LOSS"):
+                                    gate = _gate_name(reason)
+                                    bucket = rejected_trade_outcomes.setdefault(
+                                        gate, {"wins": 0, "losses": 0})
+                                    bucket["wins" if shadow_result.outcome == "WIN" else "losses"] += 1
+
+                        fuzzy_explain = {
+                            "rule_fired": fr.primary_reason,
+                            "active_rules": fr.active_rules,
+                            "opportunity_score": fr.opportunity_score,
+                            "fuzzy_confidence": fr.confidence,
+                            "risk_quality": fr.risk_quality,
+                            "entry_quality": fr.entry_quality,
+                            "volatility_quality": fr.volatility_quality,
+                            "contradiction_severity": fr.contradiction_severity,
+                            "rejected_trade": fr.rejected_trade,
+                            "notes": fr.notes,
+                        }
+                        new_action = _FUZZY_DIRECTION_TO_ACTION.get(integrated.final_direction, decision.action)
+                        if new_action != decision.action:
+                            fuzzy_overrides += 1
+                            decision.why.append(
+                                f"FUZZY_OVERRIDE: crisp={decision.action} -> fuzzy={new_action}"
+                            )
+                            decision.action = new_action
+                        confidence.confidence = int(integrated.final_confidence * 100)
             except Exception:
                 pass
 
@@ -280,7 +281,9 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
             "opportunity_score_min": round(min(fuzzy_scores), 2) if fuzzy_scores else None,
             "opportunity_score_max": round(max(fuzzy_scores), 2) if fuzzy_scores else None,
             "opportunity_score_avg": round(sum(fuzzy_scores) / len(fuzzy_scores), 2) if fuzzy_scores else None,
-            "current_threshold": getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD", 50.0),
+            "current_threshold": (getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD", {})
+                                   .get(getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules"),
+                                        getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD", 50.0))),
             "rejection_reasons": fuzzy_rejections,
             "rejected_trade_outcomes": rejected_trade_outcomes,
         }
