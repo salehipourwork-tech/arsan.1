@@ -4,7 +4,8 @@
 RSP — Multi-Coin Meta Test v2 (Profitability Fix)
 
 Baseline uses OLD params (RR=2.0, SL=2.5ATR, SL_FIRST, Opp>=50)
-Fuzzy uses NEW params (RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=75)
+Fuzzy uses NEW params (RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=50 for Rules / Opp>=75 for AHPv2 —
+scales differ between the two scoring methods, see settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD)
 
 Run: python RSP/multi_coin_meta_test.py
 """
@@ -47,7 +48,12 @@ OLD_OPP = 50.0
 NEW_RR = 2.5
 NEW_SL_MULT = 1.5
 NEW_EXIT = "PROPORTIONAL"
-NEW_OPP = 75.0
+# نکته (رفع اشکال ۲۰۲۶-۰۸-۱۶): ۷۵ روی مقیاس AHP کالیبره شده؛ اگر همین عدد
+# را برای Rules هم بگذاریم، Rules صفر ترید می‌دهد چون مقیاس Sugeno پایین‌تره.
+# به‌جای یک عدد ثابت، از settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD
+# می‌خوانیم که هرکدام threshold مخصوص خودشان را دارند.
+NEW_OPP_BY_METHOD = dict(getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD",
+                                  {"rules": 50.0, "ahp": 75.0}))
 
 
 @dataclass
@@ -71,13 +77,15 @@ class TestResult:
     error: str = ""
 
 
-def _apply_params(rr, sl_mult, exit_mode, opp_threshold):
+def _apply_params(rr, sl_mult, exit_mode, opp_threshold, opp_by_method=None):
     """Temporarily apply scenario-specific params."""
     settings.RR_TARGET = rr
     settings.SL_ATR_MULTIPLIER = sl_mult
     settings.CONSERVATIVE_SL_TP_SAME_CANDLE = exit_mode
     settings.MIN_OPPORTUNITY_SCORE_FOR_TRADE = opp_threshold
-    settings.FUZZY_OPPORTUNITY_THRESHOLD = opp_threshold
+    settings.FUZZY_OPPORTUNITY_THRESHOLD = opp_threshold  # fallback عمومی
+    if opp_by_method is not None:
+        settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = dict(opp_by_method)
 
 
 def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) -> TestResult:
@@ -91,24 +99,28 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
         "sl": getattr(settings, "SL_ATR_MULTIPLIER", 1.5),
         "exit": getattr(settings, "CONSERVATIVE_SL_TP_SAME_CANDLE", "PROPORTIONAL"),
         "opp": getattr(settings, "MIN_OPPORTUNITY_SCORE_FOR_TRADE", 75.0),
+        "opp_by_method": dict(getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD", {})),
     }
 
     try:
+        method = "ahp" if use_ahp else "rules"
+
         # Apply scenario params
         if scenario_name == "Baseline":
             _apply_params(OLD_RR, OLD_SL_MULT, OLD_EXIT, OLD_OPP)
         else:
-            _apply_params(NEW_RR, NEW_SL_MULT, NEW_EXIT, NEW_OPP)
+            _apply_params(NEW_RR, NEW_SL_MULT, NEW_EXIT,
+                           NEW_OPP_BY_METHOD.get(method, 75.0),
+                           opp_by_method=NEW_OPP_BY_METHOD)
 
         settings.FUZZY_BACKTEST_ENABLED = use_fuzzy
-        if use_fuzzy:
-            settings.OPPORTUNITY_SCORING_METHOD = "ahp" if use_ahp else "rules"
-        else:
-            settings.OPPORTUNITY_SCORING_METHOD = "rules"
+        settings.OPPORTUNITY_SCORING_METHOD = method if use_fuzzy else "rules"
 
+        effective_opp = (NEW_OPP_BY_METHOD.get(method, 75.0) if use_fuzzy
+                          else OLD_OPP)
         print(f"\n>>> [{coin}] {scenario_name} — fuzzy={use_fuzzy}, ahp={use_ahp}")
         print(f"    Params: RR={settings.RR_TARGET}, SL={settings.SL_ATR_MULTIPLIER}ATR, "
-              f"Exit={settings.CONSERVATIVE_SL_TP_SAME_CANDLE}, Opp>={settings.MIN_OPPORTUNITY_SCORE_FOR_TRADE}")
+              f"Exit={settings.CONSERVATIVE_SL_TP_SAME_CANDLE}, Opp>={effective_opp} (method={method})")
 
         universe = build_data_universe(coin, lookback_days=DAYS)
         base_bars = universe.bars.get(BASE_TF)
@@ -153,6 +165,8 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
         settings.CONSERVATIVE_SL_TP_SAME_CANDLE = orig["exit"]
         settings.MIN_OPPORTUNITY_SCORE_FOR_TRADE = orig["opp"]
         settings.FUZZY_OPPORTUNITY_THRESHOLD = orig["opp"]
+        if orig["opp_by_method"]:
+            settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = orig["opp_by_method"]
 
     return result
 
@@ -205,7 +219,8 @@ def generate_markdown_report(all_results: list) -> str:
         f"**Generated:** {datetime.now(timezone.utc).isoformat()}",
         f"**Period:** {DAYS} days | **Timeframe:** {BASE_TF}",
         "**Baseline:** RR=2.0, SL=2.5ATR, SL_FIRST, Opp>=50",
-        "**Fuzzy:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=75",
+        f"**Fuzzy+Rules:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>={NEW_OPP_BY_METHOD.get('rules', 50.0)}",
+        f"**Fuzzy+AHPv2:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>={NEW_OPP_BY_METHOD.get('ahp', 75.0)}",
         "",
         "| Coin | Baseline Net | Rules Net | AHPv2 Net | Meta Net | Meta Source |",
         "|------|-------------|-----------|-----------|----------|-------------|",
@@ -243,8 +258,9 @@ def main():
     print("Arsan — Multi-Coin Meta Test v2 (Profitability Fix)")
     print(f"Date: {datetime.now(timezone.utc).isoformat()}")
     print(f"Coins: {', '.join(c['symbol'] for c in COINS)}")
-    print("Baseline: RR=2.0 | SL=2.5ATR | SL_FIRST | Opp>=50")
-    print("Fuzzy:    RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>=75")
+    print("Baseline:    RR=2.0 | SL=2.5ATR | SL_FIRST     | Opp>=50")
+    print(f"Fuzzy+Rules: RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>={NEW_OPP_BY_METHOD.get('rules', 50.0)}")
+    print(f"Fuzzy+AHPv2: RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>={NEW_OPP_BY_METHOD.get('ahp', 75.0)}")
     print("="*70)
 
     all_results = []
