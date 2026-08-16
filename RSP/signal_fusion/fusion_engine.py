@@ -2,17 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 RSP Fusion Engine v2.0
-وزن‌دهی پویا بر اساس رژیم + حذف اندیکاتورهای مرده
+Dynamic weights per regime.
 """
 
 from RSP.regime_switch.regime_switch import get_regime_weights, REGIME_BASE_CONFIDENCE
 
+THRESHOLD_BUY = 0.35
+THRESHOLD_SELL = -0.35
 
 def compute_fusion_score(confluence_result, volume_conf=1.0, momentum_score=0.0):
-    """
-    confluence_result: خروجی generate_confluence()
-    خروجی: dict با fusion_score, final_direction, meta
-    """
     regime = confluence_result["regime"]
     filtered = confluence_result["filtered_signals"]
     direction = confluence_result["direction"]
@@ -25,10 +23,7 @@ def compute_fusion_score(confluence_result, volume_conf=1.0, momentum_score=0.0)
             "meta": {"reason": "No confluence or blocked"}
         }
     
-    # ── وزن‌های پویا بر اساس رژیم ──
     dynamic_weights = get_regime_weights(regime)
-    
-    # اگر اندیکاتوری در filtered هست ولی در dynamic_weights نیست، وزن صفر
     scored = {}
     for ind, sig in filtered.items():
         w = dynamic_weights.get(ind, 0.0)
@@ -36,12 +31,9 @@ def compute_fusion_score(confluence_result, volume_conf=1.0, momentum_score=0.0)
         scored[ind] = val * w
     
     weighted_sum = sum(scored.values())
-    
-    # ── اعمال confidence رژیم + حجم + مومنتوم ──
     base_conf = REGIME_BASE_CONFIDENCE.get(regime, 0.5)
-    volume_confidence = min(max(volume_conf, 0.3), 1.0)  # کلیپ ۰.۳-۱.۰
+    volume_confidence = min(max(volume_conf, 0.3), 1.0)
     
-    # مومنتوم فقط در روند قوی تأثیرگذار است
     momentum_boost = 0.0
     if "UPTREND" in regime and momentum_score > 0:
         momentum_boost = momentum_score * 0.15
@@ -51,10 +43,6 @@ def compute_fusion_score(confluence_result, volume_conf=1.0, momentum_score=0.0)
     final_score = weighted_sum * base_conf * volume_confidence
     final_score += momentum_boost if direction == "BUY" else -momentum_boost
     final_score = round(final_score, 4)
-    
-    # ── آستانه‌های ورود ──
-    THRESHOLD_BUY = 0.35
-    THRESHOLD_SELL = -0.35
     
     if final_score >= THRESHOLD_BUY:
         final_direction = "BUY"
