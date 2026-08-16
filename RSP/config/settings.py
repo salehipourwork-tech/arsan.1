@@ -29,8 +29,18 @@ TP_ATR_MULTIPLIER = 3.75         # TP = 2.5 × SL = 2.5 × 1.5 = 3.75 ATR
 # --- FIX 2: A+ Opportunity Filter ---
 # قبلاً FUZZY_OPPORTUNITY_THRESHOLD=50.0 بود → خیلی کم
 # حالا 75.0 → فقط setup‌های A+ (top 25%)
+#
+# نکته‌ی مهم (رفع اشکال ۲۰۲۶-۰۸-۱۶): این ۷۵.۰ روی مقیاس امتیاز AHP کالیبره
+# شده بود (که compensatory bonus داره و امتیازش راحت‌تر بالا می‌ره). امتیاز
+# Rules از دیفازی‌سازی Sugeno می‌آید و مقیاسش پایین‌تره؛ گذاشتن همون ۷۵ برای
+# Rules عملاً همه‌ی تریدها رو صفر می‌کرد. برای همین حالا هرکدوم threshold
+# مخصوص خودشون رو دارن (پایین‌تر → مقدار قبلی و امن‌تر برای Rules: 50.0).
 MIN_OPPORTUNITY_SCORE_FOR_TRADE = 75.0
-FUZZY_OPPORTUNITY_THRESHOLD = 75.0
+FUZZY_OPPORTUNITY_THRESHOLD = 75.0  # fallback عمومی / مقیاس AHP
+FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = {
+    "rules": 50.0,  # مقیاس Sugeno defuzzified score؛ به‌ندرت به ۷۵ می‌رسه
+    "ahp": 75.0,    # مقیاس AHP با compensatory bonus؛ ۷۵ دست‌یافتنیه
+}
 FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE = 0.75  # top 25% of coin's own history
 
 # --- FIX 3: TRX Blacklist ---
