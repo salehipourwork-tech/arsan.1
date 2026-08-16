@@ -5,7 +5,6 @@ RSP — Multi-Coin Meta Test v3.1
 - Meta-Controller multi-criteria (Net/PF/DD/WR)
 - Auto-calibrate threshold per-coin based on ATR%
 - Profitability bias
-- Source tagging
 """
 
 import os
@@ -102,7 +101,6 @@ def _apply_params(rr, sl_mult, exit_mode, opp_threshold, opp_by_method=None):
         settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = dict(opp_by_method)
 
 def _calibrate_threshold_for_coin(coin_id: str, bars: pd.DataFrame, method: str) -> float:
-    """Auto-calibrate threshold based on coin's ATR% volatility."""
     if bars is None or len(bars) < 40:
         return NEW_OPP_BY_METHOD.get(method, 75.0)
     high_14 = bars['high'].rolling(14).max()
