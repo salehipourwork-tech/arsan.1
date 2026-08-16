@@ -38,7 +38,7 @@ TP_ATR_MULTIPLIER = 3.75         # TP = 2.5 × SL = 2.5 × 1.5 = 3.75 ATR
 MIN_OPPORTUNITY_SCORE_FOR_TRADE = 75.0
 FUZZY_OPPORTUNITY_THRESHOLD = 75.0  # fallback عمومی / مقیاس AHP
 FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = {
-    "rules": 50.0,  # مقیاس Sugeno defuzzified score؛ به‌ندرت به ۷۵ می‌رسه
+    "rules": 75.0,  # مقیاس Sugeno defuzzified score؛ به‌ندرت به ۷۵ می‌رسه
     "ahp": 75.0,    # مقیاس AHP با compensatory bonus؛ ۷۵ دست‌یافتنیه
 }
 FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE = 0.75  # top 25% of coin's own history
