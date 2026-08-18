@@ -47,6 +47,15 @@ class FusionReport:
     weights_used: Dict[str, float] = field(default_factory=dict)
 
 
+# FIX v2.1: _trend_score/_momentum_score/_volume_score were written against
+# an imagined ConfluenceReport shape (a `.readings` list of named indicator
+# readings, `.momentum_state`) that analyze_confluence() never produced —
+# every call crashed with AttributeError. Rewritten to use the fields
+# ConfluenceReport actually has: signal/strength, ema_alignment/trend_strength,
+# rsi/rsi_divergence, volume_trend/volume_strength. Same intent (regime +
+# indicator alignment => trend score; RSI positioning/divergence => momentum;
+# volume trend => volume score), just wired to the real data.
+
 def _trend_score(regime: RegimeReport, confluence: ConfluenceReport) -> EvidenceScore:
     bullish_regimes = {"STRONG_UPTREND": 1.0, "UPTREND": 0.7, "WEAK_UPTREND": 0.35,
                         "RECOVERY": 0.3, "BREAKOUT": 0.5}
@@ -54,38 +63,43 @@ def _trend_score(regime: RegimeReport, confluence: ConfluenceReport) -> Evidence
                         "BREAKDOWN": -0.5, "CRASH": -1.0}
     base = bullish_regimes.get(regime.regime, bearish_regimes.get(regime.regime, 0.0))
 
-    ema_reading = next((r for r in confluence.readings if r.name == "EMA_CROSS"), None)
-    sma_reading = next((r for r in confluence.readings if r.name == "SMA_TREND"), None)
-    adx_reading = next((r for r in confluence.readings if r.name == "ADX"), None)
-    align = sum(1 for r in [ema_reading, sma_reading, adx_reading] if r and
-                ((r.direction == "BULLISH" and base > 0) or (r.direction == "BEARISH" and base < 0)))
+    ema_aligned = ((confluence.ema_alignment == "BULLISH" and base > 0)
+                   or (confluence.ema_alignment == "BEARISH" and base < 0))
+    strength_aligned = confluence.trend_strength > 50 and base != 0
+    align = int(ema_aligned) + int(strength_aligned)
     adjustment = 0.15 * align if base != 0 else 0.0
     score = max(-1.0, min(1.0, base + (adjustment if base >= 0 else -adjustment)))
-    return EvidenceScore("trend", score, 0.0, 0.0, detail=f"regime={regime.regime}, aligned_indicators={align}/3")
+    return EvidenceScore("trend", score, 0.0, 0.0, detail=f"regime={regime.regime}, aligned_indicators={align}/2")
 
 
 def _momentum_score(confluence: ConfluenceReport) -> EvidenceScore:
-    rsi_r = next((r for r in confluence.readings if r.name == "RSI"), None)
-    macd_r = next((r for r in confluence.readings if r.name == "MACD"), None)
-    stoch_r = next((r for r in confluence.readings if r.name == "STOCH_RSI"), None)
-    dirs = [r.direction for r in [rsi_r, macd_r, stoch_r] if r]
-    bull = dirs.count("BULLISH")
-    bear = dirs.count("BEARISH")
-    score = (bull - bear) / max(1, len(dirs))
-    momentum_bonus = 0.15 if confluence.momentum_state == "ACCELERATION" else \
-                      (-0.15 if confluence.momentum_state == "WEAKENING" else 0.0)
-    score = max(-1.0, min(1.0, score + (momentum_bonus if score >= 0 else -momentum_bonus)))
-    return EvidenceScore("momentum", score, 0.0, 0.0, detail=f"momentum_state={confluence.momentum_state}")
+    rsi = confluence.rsi
+    rsi_score = 0.0
+    if rsi >= 70:
+        rsi_score = 1.0
+    elif rsi >= 55:
+        rsi_score = 0.5
+    elif rsi <= 30:
+        rsi_score = -1.0
+    elif rsi <= 45:
+        rsi_score = -0.5
+
+    div_bonus = 0.2 if confluence.rsi_divergence == "BULLISH" else \
+                (-0.2 if confluence.rsi_divergence == "BEARISH" else 0.0)
+    score = max(-1.0, min(1.0, rsi_score + div_bonus))
+    return EvidenceScore("momentum", score, 0.0, 0.0,
+                          detail=f"rsi={rsi:.1f}, rsi_divergence={confluence.rsi_divergence}")
 
 
 def _volume_score(confluence: ConfluenceReport) -> EvidenceScore:
-    obv_r = next((r for r in confluence.readings if r.name == "OBV"), None)
-    vol_r = next((r for r in confluence.readings if r.name == "VOLUME_TREND"), None)
-    dirs = [r.direction for r in [obv_r, vol_r] if r]
-    bull = dirs.count("BULLISH")
-    bear = dirs.count("BEARISH")
-    score = (bull - bear) / max(1, len(dirs))
-    return EvidenceScore("volume", score, 0.0, 0.0, detail="OBV+VolumeTrend")
+    if "LOW_VOLUME_SKIP" in confluence.tags:
+        return EvidenceScore("volume", 0.0, 0.0, 0.0, detail="LOW_VOLUME_SKIP")
+    direction = 1.0 if confluence.signal == "BUY" else (-1.0 if confluence.signal == "SELL" else 0.0)
+    magnitude = 1.0 if confluence.volume_trend == "INCREASING" else \
+                (0.4 if confluence.volume_trend == "NEUTRAL" else 0.15)
+    score = max(-1.0, min(1.0, direction * magnitude))
+    return EvidenceScore("volume", score, 0.0, 0.0,
+                          detail=f"volume_trend={confluence.volume_trend}, signal={confluence.signal}")
 
 
 def _structure_score(regime: RegimeReport) -> EvidenceScore:
@@ -155,7 +169,9 @@ def fuse_signals(regime: RegimeReport, confluence: ConfluenceReport, mtf: MTFRep
         elif report.net_score < -0.1 and ev.score > 0.15:
             report.conflicting_evidence.append(f"{ev.category.upper()} خلاف جهت نتیجه‌ی کلی (score={ev.score:+.2f})")
 
-    if confluence.divergences:
-        report.conflicting_evidence.extend(confluence.divergences)
+    # FIX v2.1: ConfluenceReport has no .divergences list — divergence info
+    # lives in .rsi_divergence / .tags.
+    if confluence.rsi_divergence != "NONE":
+        report.conflicting_evidence.append(f"RSI_DIVERGENCE_{confluence.rsi_divergence}")
 
     return report
