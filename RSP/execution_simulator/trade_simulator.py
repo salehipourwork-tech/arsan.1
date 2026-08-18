@@ -21,6 +21,7 @@ class TradeResult:
     take_profit: float = 0.0
     outcome: str = "OPEN"
     pnl_pct: float = 0.0
+    pnl_pct_gross: float = 0.0  # FIX v2.1: before fees/slippage — backtest_engine.py reads this
     bars_held: int = 0
     exit_reason: str = ""
 
@@ -86,9 +87,14 @@ def simulate_trade(action: str, entry_price: float, stop_loss: float, take_profi
             if action == "BUY" else \
             ((entry_price_with_slippage - exit_price_with_costs) / entry_price_with_slippage * 100)
 
+        pnl_pct_gross = ((exit_price - entry_price) / entry_price * 100) \
+            if action == "BUY" else \
+            ((entry_price - exit_price) / entry_price * 100)
+
         result.exit_price = round(exit_price_with_costs, 6)
         result.outcome = outcome
         result.pnl_pct = round(pnl_pct, 4)
+        result.pnl_pct_gross = round(pnl_pct_gross, 4)
         result.bars_held = i
         result.exit_reason = reason
         return result
