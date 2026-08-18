@@ -16,8 +16,9 @@ def select_strategy(fusion, regime, mtf) -> Optional[str]:
     if not candidate_names:
         return None
 
-    # FIX v2.0: Use direct regime strength instead of lagged fusion.net_score
-    regime_strength = getattr(regime, 'adx', 20.0)
+    # FIX v2.1: RegimeReport has no top-level .adx — it lives on
+    # regime.perception.adx.
+    regime_strength = getattr(regime.perception, 'adx', 20.0) if regime.perception else 20.0
 
     if regime_strength >= 45 and "momentum" in candidate_names:
         preferred = "momentum"
