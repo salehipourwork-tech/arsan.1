@@ -7,7 +7,7 @@ Entry, Stop Loss, Take Profit, Risk/Reward, Position Size, Risk%, Max Exposure.
 FIX v1: RR_TARGET=2.5 (was 2.0), SL_ATR_MULTIPLIER override support
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from RSP.config import settings
@@ -27,6 +27,9 @@ class RiskPlan:
     risk_percent: float = settings.MAX_RISK_PERCENT_PER_TRADE
     valid: bool = False
     reason: str = ""
+    # FIX v2.1: backtest_engine.py reads risk_plan.notes into TradeRecord —
+    # field never existed here.
+    notes: list = field(default_factory=list)
 
 
 def plan_risk(action: str, df_15m: pd.DataFrame, regime: RegimeReport) -> RiskPlan:
