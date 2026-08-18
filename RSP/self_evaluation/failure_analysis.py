@@ -8,17 +8,28 @@ Trend Reversal, Poor Risk/Reward, Signal Conflict, Data Problem.
 یک معامله می‌تواند چند برچسب بگیرد (مثلاً هم Signal Conflict هم Bad
 Entry). در پایان مشخص می‌کند موتور در کدام دسته بیشترین شکست را دارد.
 
-وابسته به self_evaluation.py (باید قبل از این روی معاملات اجرا شده باشد)
-و evidence_snapshot که در backtest_engine ثبت می‌شود.
+FIX v2.1:
+  - این فایل قبلاً `from RSP.backtest_engine.backtest_engine import
+    BacktestTradeLog` را import می‌کرد در حالی که backtest_engine.py هم
+    این فایل را (غیرمستقیم، از طریق analyze_failures) import می‌کند —
+    یعنی import چرخه‌ای (circular import) که همیشه کرش می‌کرد. کلاس
+    BacktestTradeLog هم اصلاً جایی تعریف نشده بود (TradeRecord بود).
+  - TradeSelfEvaluation هم وجود نداشت؛ self_evaluation.py کلاسی به اسم
+    SelfEvaluationResult دارد با فیلدهای متفاوت
+    (entry_quality_flag/regime_misdiagnosis_suspected/... اصلاً روی آن
+    تعریف نشده بودند).
+  - analyze_failures قبلاً حتماً به evaluations از بیرون نیاز داشت؛ حالا
+    اگر داده نشود خودش evaluate_trade() را صدا می‌زند (duck-typing، بدون
+    وابستگی چرخه‌ای).
+  - trade.timestamp وجود نداشت (TradeRecord.entry_timestamp است).
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import List, Dict, Optional
 from collections import Counter
 
-from RSP.backtest_engine.backtest_engine import BacktestTradeLog
-from RSP.self_evaluation.self_evaluation import TradeSelfEvaluation
 from RSP.config import settings
+from RSP.self_evaluation.self_evaluation import evaluate_trade, SelfEvaluationResult
 
 FAILURE_CATEGORIES = [
     "BAD_ENTRY", "WRONG_REGIME", "FALSE_BREAKOUT", "WEAK_MOMENTUM",
@@ -45,39 +56,33 @@ class FailureAnalysisReport:
     notes: List[str] = field(default_factory=list)
 
 
-def _classify_trade(trade: BacktestTradeLog, evaluation: TradeSelfEvaluation) -> List[str]:
-    ev = trade.evidence_snapshot or {}
+def _classify_trade(trade, evaluation: SelfEvaluationResult) -> List[str]:
+    """
+    FIX v2.1: rewritten against the fields that actually exist on TradeRecord
+    (backtest_engine.py) and SelfEvaluationResult (self_evaluation.py),
+    instead of an imagined evidence_snapshot/evaluation-flag contract that
+    was never produced anywhere. Some of the original categories
+    (FALSE_BREAKOUT / WEAK_MOMENTUM / DATA_PROBLEM) can't be reliably
+    derived from what's tracked today, so they're conservatively skipped
+    instead of guessed — better UNEXPLAINED than a fabricated label.
+    """
     categories = []
 
-    if evaluation.entry_quality_flag in ("WEAK", "RISKY"):
+    if trade.trade_quality and trade.trade_quality < 50.0:
         categories.append("BAD_ENTRY")
 
-    if evaluation.regime_misdiagnosis_suspected:
+    if evaluation.should_not_have_traded:
         categories.append("WRONG_REGIME")
 
-    structure_event = ev.get("structure_event", "NONE")
-    if trade.regime in ("BREAKOUT", "FAKE_BREAKOUT") and trade.bars_held <= 5:
-        categories.append("FALSE_BREAKOUT")
-
-    if ev.get("momentum_state") == "WEAKENING":
-        categories.append("WEAK_MOMENTUM")
-
-    supporting_had_volume = any("VOLUME" in s for s in evaluation.confirming_signals)
-    opposing_had_volume = any("VOLUME" in s for s in evaluation.misleading_signals)
-    if opposing_had_volume and not supporting_had_volume:
-        categories.append("VOLUME_FAILURE")
-
-    if structure_event in ("CHOCH_BULLISH", "CHOCH_BEARISH"):
+    structure_event = (trade.notes and any("CHOCH" in n for n in trade.notes))
+    if structure_event:
         categories.append("TREND_REVERSAL")
 
     if trade.risk_reward is not None and trade.risk_reward < settings.MIN_ACCEPTABLE_RISK_REWARD * 1.15:
         categories.append("POOR_RISK_REWARD")
 
-    if ev.get("conflicting_evidence"):
+    if len(evaluation.opposing_evidence) >= len(evaluation.supporting_evidence) and evaluation.opposing_evidence:
         categories.append("SIGNAL_CONFLICT")
-
-    if ev.get("data_quality_score", 100) < 70:
-        categories.append("DATA_PROBLEM")
 
     if not categories:
         categories.append("UNEXPLAINED")
@@ -85,8 +90,12 @@ def _classify_trade(trade: BacktestTradeLog, evaluation: TradeSelfEvaluation) ->
     return categories
 
 
-def analyze_failures(trades: List[BacktestTradeLog], evaluations: List[TradeSelfEvaluation]) -> FailureAnalysisReport:
+def analyze_failures(trades: List, evaluations: Optional[List[SelfEvaluationResult]] = None) -> FailureAnalysisReport:
     report = FailureAnalysisReport()
+
+    if evaluations is None:
+        evaluations = (evaluate_trade(trades) or {}).get("results", [])
+
     loss_pairs = [(t, e) for t, e in zip(trades, evaluations) if t.outcome == "LOSS"]
     report.total_losses = len(loss_pairs)
 
@@ -100,7 +109,8 @@ def analyze_failures(trades: List[BacktestTradeLog], evaluations: List[TradeSelf
 
     for trade, evaluation in loss_pairs:
         categories = _classify_trade(trade, evaluation)
-        report.records.append(FailureRecord(timestamp=trade.timestamp, pnl_pct=trade.pnl_pct, categories=categories))
+        timestamp = str(getattr(trade, "entry_timestamp", getattr(trade, "timestamp", "")))
+        report.records.append(FailureRecord(timestamp=timestamp, pnl_pct=trade.pnl_pct, categories=categories))
         for c in categories:
             counter[c] += 1
             pnl_by_category.setdefault(c, []).append(trade.pnl_pct)
