@@ -203,37 +203,43 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
             settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = orig["opp_by_method"]
     return result
 
-def _select_meta(rules: TestResult, ahp: TestResult) -> tuple:
-    rules_valid = rules.is_valid()
-    ahp_valid = ahp.is_valid()
-    if ahp_valid and not rules_valid:
-        return ahp, "AHPv2", "AHP valid, Rules invalid (<10 trades)"
-    if rules_valid and not ahp_valid:
-        return rules, "Rules", "Rules valid, AHP invalid (<10 trades)"
-    if not rules_valid and not ahp_valid:
-        return rules, "Rules", "Both invalid, default Rules"
-    rules_score = rules.composite_score()
-    ahp_score = ahp.composite_score()
-    rules_prof = rules.is_profitable()
-    ahp_prof = ahp.is_profitable()
-    if ahp_prof and not rules_prof:
-        reason = (f"AHP profitable (Net={ahp.net_return_pct:+.2f}%, PF={ahp.profit_factor:.2f}) "
-                  f"vs Rules unprofitable (Net={rules.net_return_pct:+.2f}%, PF={rules.profit_factor:.2f})")
-        return ahp, "AHPv2", reason
-    if rules_prof and not ahp_prof:
-        reason = (f"Rules profitable (Net={rules.net_return_pct:+.2f}%, PF={rules.profit_factor:.2f}) "
-                  f"vs AHP unprofitable (Net={ahp.net_return_pct:+.2f}%, PF={ahp.profit_factor:.2f})")
-        return rules, "Rules", reason
-    if ahp_score > rules_score:
-        diff = ahp_score - rules_score
-        reason = (f"AHP score={ahp_score:.1f} > Rules score={rules_score:.1f} "
-                  f"(diff={diff:.1f}, Net/DD/PF/WR weighted)")
-        return ahp, "AHPv2", reason
-    else:
-        diff = rules_score - ahp_score
-        reason = (f"Rules score={rules_score:.1f} >= AHP score={ahp_score:.1f} "
-                  f"(diff={diff:.1f}, Net/DD/PF/WR weighted)")
-        return rules, "Rules", reason
+def _select_meta(baseline: TestResult, rules: TestResult, ahp: TestResult) -> tuple:
+    """
+    FIX v2.1: this used to only ever choose between the two FUZZY variants
+    (Rules vs AHPv2) — Baseline (fuzzy OFF) was run and reported but never
+    actually a candidate the meta-controller could pick. That means it
+    could never conclude "fuzzy shouldn't be on for this coin/period" even
+    when Baseline clearly outperformed both fuzzy variants. Now genuinely
+    compares all three on the same Net/PF/DD/WR composite score, and can
+    select Baseline (i.e. fuzzy OFF) as the winner.
+
+    Selection order (unchanged philosophy, just extended to 3 candidates):
+      1. Only candidates with >= MIN_TRADES_FOR_VALID trades are eligible.
+      2. Among eligible candidates, prefer the ones that are profitable
+         (net_return_pct > 0 or profit_factor >= 1.0) over ones that aren't.
+      3. Within whichever pool that leaves, pick the highest composite_score.
+      4. If nothing is eligible, fall back to Baseline (the simplest, best-
+         understood scenario) rather than an untested fuzzy variant.
+    """
+    candidates = [(baseline, "Baseline"), (rules, "Rules"), (ahp, "AHPv2")]
+    eligible = [(r, name) for r, name in candidates if r.is_valid()]
+
+    summary_line = (f"[Baseline: Net={baseline.net_return_pct:+.2f}%,PF={baseline.profit_factor:.2f},"
+                     f"trades={baseline.total_trades}] [Rules: Net={rules.net_return_pct:+.2f}%,"
+                     f"PF={rules.profit_factor:.2f},trades={rules.total_trades}] [AHPv2: Net="
+                     f"{ahp.net_return_pct:+.2f}%,PF={ahp.profit_factor:.2f},trades={ahp.total_trades}]")
+
+    if not eligible:
+        return baseline, "Baseline", f"هیچ سناریویی به حداقل {MIN_TRADES_FOR_VALID} معامله نرسید؛ پیش‌فرض Baseline. {summary_line}"
+
+    profitable = [(r, name) for r, name in eligible if r.is_profitable()]
+    pool = profitable if profitable else eligible
+
+    winner, winner_name = max(pool, key=lambda rn: rn[0].composite_score())
+    pool_desc = "profitable" if profitable else "valid (none profitable)"
+    reason = (f"{winner_name} انتخاب شد — بالاترین composite_score در بین سناریوهای {pool_desc} "
+              f"(score={winner.composite_score():.1f}). {summary_line}")
+    return winner, winner_name, reason
 
 def run_all_scenarios(coin: str) -> dict:
     print(f"\n{'='*70}")
@@ -245,8 +251,8 @@ def run_all_scenarios(coin: str) -> dict:
     time.sleep(RATE_LIMIT_SECONDS)
     fuzzy_ahp = run_scenario(coin, "Fuzzy+AHPv2", use_fuzzy=True, use_ahp=True)
     time.sleep(RATE_LIMIT_SECONDS)
-    print(f"\n>>> [{coin}] Meta-Controller v3")
-    meta_result, meta_source, meta_reason = _select_meta(fuzzy_rules, fuzzy_ahp)
+    print(f"\n>>> [{coin}] Meta-Controller v3.1 (Baseline vs Rules vs AHPv2)")
+    meta_result, meta_source, meta_reason = _select_meta(baseline, fuzzy_rules, fuzzy_ahp)
     print(f"    → Meta selected: {meta_source}")
     print(f"    → Reason: {meta_reason}")
     print(f"    → Meta Net={meta_result.net_return_pct:+.2f}% "
