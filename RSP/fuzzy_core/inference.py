@@ -202,17 +202,32 @@ def evaluate_signal_strength(net_score: float) -> FuzzySignalReport:
     report.membership_degrees = degrees
     report.dominant_term = var.dominant_term(degrees)
 
-    # Simple 4-rule base from v1
+    # FIX v2.1: evaluate_rules()/FuzzyRule.evaluate() expect the nested
+    # {variable_name: {term: degree}} shape (see FuzzyRule.evaluate's own
+    # docstring) — this was passing the flat {term: degree} `degrees` dict
+    # directly, so `fuzzified_inputs.get("signal_strength", {})` always
+    # returned {} and every rule fired at exactly 0.0. That left
+    # trade_permission_score stuck at its dataclass default (0.0) on every
+    # single call, regardless of actual signal strength — confirmed via
+    # RSP/diagnose_pipeline.py: with FUZZY_ENGINE_ENABLED (decide()'s
+    # separate flag, on by default) on, 100% of otherwise-valid BUY/SELL
+    # candidates were rejected with trade_permission=0.0 <
+    # FUZZY_TRADE_PERMISSION_MIN, i.e. the entire hybrid decision path could
+    # never produce a trade.
     from RSP.fuzzy_core.rule_base import SIGNAL_PERMISSION_RULES, evaluate_rules as _eval_legacy
-    firing = _eval_legacy(degrees, SIGNAL_PERMISSION_RULES)
+    firing = _eval_legacy({"signal_strength": degrees}, SIGNAL_PERMISSION_RULES)
     report.rule_firing_strengths = firing
     report.active_rules = [rid for rid, s in firing.items() if s > 0.0]
 
     total = sum(firing.values())
     if total > 0:
-        weighted = sum(
-            firing[r.rule_id] * r.output_singleton
-            for r in SIGNAL_PERMISSION_RULES
-        )
+        # FIX v2.1: was iterating ALL SIGNAL_PERMISSION_RULES and indexing
+        # firing[r.rule_id] directly — firing only contains rules that
+        # actually fired (see evaluate_rules), so this would KeyError on
+        # any rule that didn't fire (the normal case, since fuzzy terms
+        # only overlap 1-2 at a time). Now sums only over what actually
+        # fired.
+        rule_by_id = {r.rule_id: r for r in SIGNAL_PERMISSION_RULES}
+        weighted = sum(strength * rule_by_id[rid].output_singleton for rid, strength in firing.items())
         report.trade_permission_score = round(weighted / total, 2)
     return report
