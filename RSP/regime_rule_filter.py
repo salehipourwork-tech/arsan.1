@@ -3,7 +3,7 @@ RSP — Regime Rule Filter v2.0
 NEW FILE: Wires REGIME_RULE_OVERRIDES to fuzzy rule evaluation
 """
 
-from ..config import settings
+from .config import settings
 
 
 class RegimeRuleFilter:
