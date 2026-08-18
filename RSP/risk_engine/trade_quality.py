@@ -25,11 +25,13 @@ def assess_trade_quality(risk_plan, data_quality, regime, confluence) -> TradeQu
     rr = risk_plan.risk_reward if risk_plan else 0.0
     rr_score = min(100, rr * 30)
 
-    dq = data_quality.overall_score if data_quality else 50.0
+    # FIX v2.1: QualityReport's field is quality_score, not overall_score;
+    # volatility_quality lives on regime.perception, not regime itself.
+    dq = data_quality.quality_score if data_quality else 50.0
 
     rq = 80.0 if regime and regime.regime in settings.ALLOWED_REGIMES_FOR_TRADING else 30.0
-    if regime and hasattr(regime, 'volatility_quality'):
-        rq = (rq + regime.volatility_quality) / 2
+    if regime and regime.perception is not None:
+        rq = (rq + regime.perception.volatility_quality) / 2
 
     vol_usd = confluence.volume_usd if confluence else 0.0
     if vol_usd >= settings.MIN_VOLUME_USD * 2:
