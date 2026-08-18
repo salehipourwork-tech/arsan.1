@@ -31,10 +31,10 @@ from RSP.signal_engine.confluence import analyze_confluence
 from RSP.multi_timeframe.mtf_brain import analyze_mtf
 from RSP.signal_fusion.fusion_engine import fuse_signals
 from RSP.contradiction_engine.contradiction_engine import detect_contradictions
-from RSP.confidence_engine.confidence_engine import compute_confidence
+from RSP.confidence_engine.confidence_engine import calculate_confidence
 from RSP.decision_engine.decision_brain import decide
 from RSP.risk_engine.risk_engine import plan_risk
-from RSP.risk_engine.trade_quality import evaluate_trade_quality
+from RSP.risk_engine.trade_quality import assess_trade_quality
 from RSP.strategy_lab.selector import select_strategy
 from RSP.reporting.explainability import build_report
 from RSP.backtest_engine.backtest_engine import run_backtest
@@ -64,15 +64,17 @@ def run_analysis(coin, timeframe="1h", lookback_days=None):
 
     base_quality = check_quality(base_df, "15M")
     regime = determine_regime(base_df)
-    confluence = analyze_confluence(base_df)
+    # FIX v2.1: analyze_confluence(df, regime) requires regime too — was
+    # called with 1 arg and crashed. calculate_confidence's real signature
+    # is (fusion, mtf, data_quality, risk_plan, contradiction, regime) —
+    # was called under the wrong name (compute_confidence) with the wrong
+    # args entirely. risk_plan isn't known yet at this point in the flow,
+    # so None is passed (calculate_confidence treats that as neutral 50.0).
+    confluence = analyze_confluence(base_df, regime)
     mtf = analyze_mtf(universe.bars)
     fusion = fuse_signals(regime, confluence, mtf)
     contradiction = detect_contradictions(fusion, mtf)
-    confidence = compute_confidence(
-        fusion, mtf, contradiction,
-        base_quality.quality_score if base_quality else 0.0,
-        regime.perception.atr_pct if regime else 0.0
-    )
+    confidence = calculate_confidence(fusion, mtf, base_quality, None, contradiction, regime)
 
     decision = decide(regime, fusion, mtf, contradiction, confidence,
                        base_quality.quality_ok if base_quality else False)
@@ -101,21 +103,23 @@ def run_analysis(coin, timeframe="1h", lookback_days=None):
 
     risk_plan = None
     trade_quality = None
-    selection = select_strategy(regime, fusion) if regime else None
+    # FIX v2.1: select_strategy's real signature is (fusion, regime, mtf),
+    # not (regime, fusion) — and it returns a plain strategy-name string
+    # (or None), not an object with a .selected attribute.
+    selection = select_strategy(fusion, regime, mtf) if regime else None
 
     if decision.action in ("BUY", "SELL"):
         risk_plan = plan_risk(decision.action, base_df, regime)
-        trade_quality = evaluate_trade_quality(
-            confidence.confidence,
-            base_quality.quality_score if base_quality else 0.0,
-            risk_plan.risk_reward if risk_plan else 0.0,
-            selection.selected is not None if selection else False
-        )
-        if not (risk_plan.valid and trade_quality.passed):
+        # FIX v2.1: assess_trade_quality's real signature is (risk_plan,
+        # data_quality, regime, confluence), and TradeQualityReport has
+        # .overall_score, not .passed.
+        trade_quality = assess_trade_quality(risk_plan, base_quality, regime, confluence)
+        quality_ok = trade_quality.overall_score >= settings.MIN_TRADE_QUALITY_SCORE
+        if not (risk_plan.valid and quality_ok):
             decision.action = "NO_TRADE"
             decision.why.append(
                 "Trade Quality/Risk Gate: risk_ok=" + str(risk_plan.valid) +
-                ", quality_ok=" + str(trade_quality.passed)
+                ", quality_ok=" + str(quality_ok)
             )
 
     report = build_report(
