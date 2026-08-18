@@ -27,19 +27,26 @@ def calculate_confidence(fusion, mtf, data_quality, risk_plan, contradiction, re
         "contradiction_penalty": 0.10,  # NEW
     }
 
+    # FIX v2.1: fusion.stability, regime.volatility_quality, and
+    # risk_plan.risk_reward_pct never existed on their respective dataclasses
+    # (crashed every call). contradiction.severity is a string category
+    # ("NONE"/"MODERATE"/"SEVERE"), not a number, so comparing it against a
+    # float threshold also crashed — switched to contradiction.conflict_ratio,
+    # which is the numeric signal ContradictionReport actually exposes for
+    # this purpose (see its docstring).
     signal_agreement = min(abs(fusion.net_score) * 100, 100) if fusion else 50.0
     mtf_agreement = 100.0 if mtf and mtf.agreement else 50.0
-    stability = 100.0 if fusion and fusion.stability else 50.0
-    data_quality_score = data_quality.overall_score if data_quality else 50.0
-    vol_quality = regime.volatility_quality if regime else 50.0
-    rr_score = min(risk_plan.risk_reward_pct, 100) if risk_plan else 50.0
+    stability = round(max(0.0, 100.0 - len(fusion.conflicting_evidence) * 20.0), 2) if fusion else 50.0
+    data_quality_score = data_quality.quality_score if data_quality else 50.0
+    vol_quality = regime.perception.volatility_quality if regime and regime.perception else 50.0
+    rr_score = min(risk_plan.risk_reward * 20, 100) if risk_plan and risk_plan.risk_reward else 50.0
 
     contradiction_score = 100.0
-    if contradiction and contradiction.severity > settings.CONTRADICTION_SEVERE_THRESHOLD:
-        contradiction_score = max(0, 100 - contradiction.severity * 100)
-        notes.append(f"severe_contradiction_penalty:{contradiction.severity:.2f}")
-    elif contradiction and contradiction.severity > settings.CONTRADICTION_BLOCK_THRESHOLD:
-        contradiction_score = max(50, 100 - contradiction.severity * 50)
+    if contradiction and contradiction.conflict_ratio > settings.CONTRADICTION_SEVERE_THRESHOLD:
+        contradiction_score = max(0, 100 - contradiction.conflict_ratio * 100)
+        notes.append(f"severe_contradiction_penalty:{contradiction.conflict_ratio:.2f}")
+    elif contradiction and contradiction.conflict_ratio > settings.CONTRADICTION_BLOCK_THRESHOLD:
+        contradiction_score = max(50, 100 - contradiction.conflict_ratio * 50)
 
     components = {
         "signal_agreement": signal_agreement, "mtf_agreement": mtf_agreement,
