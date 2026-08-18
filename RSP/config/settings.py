@@ -183,6 +183,17 @@ TAKE_PROFIT_RR_TARGET = 2.0
 MAX_RISK_PERCENT_PER_TRADE = 1.0
 MIN_ACCEPTABLE_RISK_REWARD = 1.5
 
+# FIX v2.1: mtf_brain.py's tf_trend() used to require 3 strictly monotonic
+# consecutive closes to call a trend — on noisy 15M candles that's nearly
+# always NEUTRAL, which meant MTF agreement almost never happened and the
+# backtest produced ~0 trades regardless of market conditions (confirmed via
+# RSP/diagnose_pipeline.py: 100% of rejections were CONFLICT DETECTED at the
+# decision gate, not a risk/fuzzy/volume gate). Replaced with a fast/slow SMA
+# cross + noise threshold, tunable here.
+MTF_TREND_SMA_FAST = 10
+MTF_TREND_SMA_SLOW = 20
+MTF_TREND_THRESHOLD_PCT = 0.001  # 0.1% separation between fast/slow SMA to call UP/DOWN
+
 MIN_CONFIDENCE_TO_TRADE = 55.0
 MIN_TRADE_QUALITY_SCORE = 60.0
 CONTRADICTION_BLOCK_THRESHOLD = 0.15
