@@ -44,7 +44,22 @@ def detect_contradictions(fusion: FusionReport, mtf: MTFReport) -> Contradiction
             report.reasons.append(
                 f"شواهد صعودی ({len(fusion.bullish_evidence)}) و نزولی ({len(fusion.bearish_evidence)}) هر دو قابل توجه‌اند")
 
-    if not mtf.aligned:
+    # FIX v2.1: was `not mtf.aligned`, which requires an EXACT 3-way match
+    # of trend labels across 1D/4H/15M — statistically close to impossible
+    # given the timeframes move at very different speeds (a 15M pullback
+    # inside a genuine 1D/4H uptrend is normal market behavior, not a
+    # contradiction). This made mtf_disagreement true on ~every single bar
+    # (confirmed via RSP/diagnose_pipeline.py: 100% of decisions were
+    # rejected here, 0 ever reached the BUY/SELL logic, on 90 days of data
+    # across three distinct trend/range/downtrend regimes). The module's
+    # own docstring says this should be threshold-based ("اگر تضاد از یک
+    # آستانه بیشتر شود"), and mtf_brain.py already computes a graduated
+    # divergence_score for exactly this (0.8 for a direct 1D vs 15M
+    # opposite-direction conflict, 0.5 for a 1D vs 4H conflict, 0 when
+    # there's no genuine directional conflict) — using that instead of
+    # exact-equality preserves the intended "real disagreement" signal
+    # without firing on ordinary NEUTRAL/lag noise between timeframes.
+    if mtf.divergence_score > 0:
         report.mtf_disagreement = True
         report.reasons.append(f"عدم اجماع بین تایم‌فریم‌ها: {mtf.summary}")
 
