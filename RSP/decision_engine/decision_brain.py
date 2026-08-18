@@ -12,11 +12,13 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from RSP.config import settings
-from RSP.regime_engine.regime_engine import RegimeReport
-from RSP.signal_fusion.fusion_engine import FusionReport
-from RSP.multi_timeframe.mtf_brain import MTFReport
-from RSP.contradiction_engine.contradiction_engine import ContradictionReport
-from RSP.confidence_engine.confidence_engine import ConfidenceReport
+from RSP.regime_engine.regime_engine import RegimeReport, detect_regime
+from RSP.signal_fusion.fusion_engine import FusionReport, fuse_signals
+from RSP.multi_timeframe.mtf_brain import MTFReport, analyze_mtf
+from RSP.signal_engine.confluence import ConfluenceReport, analyze_confluence
+from RSP.contradiction_engine.contradiction_engine import ContradictionReport, detect_contradictions
+from RSP.confidence_engine.confidence_engine import ConfidenceReport, calculate_confidence
+from RSP.preprocessing.quality_engine import check_quality
 from RSP.fuzzy_core.inference import evaluate_signal_strength, FuzzySignalReport
 
 
@@ -28,6 +30,16 @@ class Decision:
     invalidation: List[str] = field(default_factory=list)
     missing_confirmation: List[str] = field(default_factory=list)
     fuzzy_report: Optional[FuzzySignalReport] = None
+    # FIX v2.1: added so callers (backtest_engine.py) don't need to
+    # recompute the same reports twice, and so trade records can carry a
+    # confidence/quality figure — these were being read off Decision before
+    # anything ever set them.
+    confidence: float = 0.0
+    trade_quality: float = 0.0
+    fusion: Optional[FusionReport] = None
+    mtf: Optional[MTFReport] = None
+    contradiction: Optional[ContradictionReport] = None
+    confidence_report: Optional[ConfidenceReport] = None
 
 
 def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
@@ -105,9 +117,9 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
         fuzzy = evaluate_signal_strength(net)
         d.fuzzy_report = fuzzy
 
-        if net > 0 and mtf.entry_bias != "BEARISH":
+        if net > 0 and mtf.entry_bias != "DOWN":
             candidate = "BUY"
-        elif net < 0 and mtf.entry_bias != "BULLISH":
+        elif net < 0 and mtf.entry_bias != "UP":
             candidate = "SELL"
         elif abs(net) < 1e-9:
             candidate = "HOLD"
@@ -141,14 +153,14 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
         return d
 
     # --- مسیر Crisp (پیش‌فرض، رفتار قدیمی - وقتی FUZZY_ENGINE_ENABLED=False) ---
-    if net > 0.2 and mtf.entry_bias != "BEARISH":
+    if net > 0.2 and mtf.entry_bias != "DOWN":
         d.action = "BUY"
         d.why.append(f"net_score={net:+.2f} صعودی، تایم‌فریم ورود ({mtf.entry_bias}) در تضاد نیست")
         d.why.extend(fusion.bullish_evidence[:3])
         d.why_not_opposite.append("شواهد نزولی به‌اندازه‌ی کافی قوی/هم‌جهت نبودند تا SELL توجیه شود")
         if fusion.bearish_evidence:
             d.why_not_opposite.append("شواهد نزولی باقیمانده: " + "؛ ".join(fusion.bearish_evidence[:2]))
-    elif net < -0.2 and mtf.entry_bias != "BULLISH":
+    elif net < -0.2 and mtf.entry_bias != "UP":
         d.action = "SELL"
         d.why.append(f"net_score={net:+.2f} نزولی، تایم‌فریم ورود ({mtf.entry_bias}) در تضاد نیست")
         d.why.extend(fusion.bearish_evidence[:3])
@@ -191,4 +203,44 @@ def decide(regime: RegimeReport, fusion: FusionReport, mtf: MTFReport,
     if not fusion.bearish_evidence and d.action == "SELL":
         d.missing_confirmation.append("شواهد نزولی مستقل بیشتر")
 
+    return d
+
+
+# ---------------------------------------------------------------------------
+# FIX v2.1 — NEW: make_decision() orchestrator
+# ---------------------------------------------------------------------------
+# backtest_engine.py (and, implicitly, the documented main.py flow) called
+# `make_decision(known_bars, regime)` as if it already existed. It never
+# did — only decide() existed, with a completely different signature
+# (regime, fusion, mtf, contradiction, confidence, data_quality_ok). Nothing
+# in the codebase ever built those five reports and called decide() for the
+# backtest loop. This wires them together in the same order RSP/main.py's
+# run_analysis() uses for its live one-shot analysis:
+#   check_quality -> analyze_confluence -> analyze_mtf -> fuse_signals
+#   -> detect_contradictions -> calculate_confidence -> decide
+def make_decision(known_bars: dict, regime: RegimeReport) -> Decision:
+    base_df = known_bars.get("15M") if known_bars else None
+    if base_df is None or base_df.empty or regime is None:
+        d = Decision()
+        d.action = "NO_TRADE"
+        d.why.append("داده‌ی 15M یا رژیم در دسترس نیست")
+        return d
+
+    data_quality = check_quality(base_df, "15M")
+    confluence = analyze_confluence(base_df, regime)
+    mtf = analyze_mtf(known_bars)
+    fusion = fuse_signals(regime, confluence, mtf)
+    contradiction = detect_contradictions(fusion, mtf)
+    # risk_plan isn't known yet at this point in the pipeline (it depends on
+    # the action this very call is about to decide) — calculate_confidence
+    # already treats a missing risk_plan as a neutral 50.0 component, so we
+    # pass None here, matching RSP/main.py's own ordering.
+    confidence = calculate_confidence(fusion, mtf, data_quality, None, contradiction, regime)
+
+    d = decide(regime, fusion, mtf, contradiction, confidence, data_quality.quality_ok)
+    d.confidence = confidence.confidence
+    d.fusion = fusion
+    d.mtf = mtf
+    d.contradiction = contradiction
+    d.confidence_report = confidence
     return d
