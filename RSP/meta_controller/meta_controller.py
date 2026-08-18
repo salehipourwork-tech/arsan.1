@@ -118,7 +118,13 @@ def analyze_context(regime, atr_pct: float, atr_pct_series=None, adx_value=25.0,
     ctx.is_range_market = ctx.regime == "RANGE"
     
     if contradiction_report:
-        ctx.contradiction_severity = getattr(contradiction_report, "severity_score", 0.0)
+        # FIX v2.1: ContradictionReport has no `severity_score` field (it
+        # has `severity`, a string category NONE/MODERATE/SEVERE, and
+        # `conflict_ratio`, the numeric 0..1 signal meant for exactly this
+        # kind of feature consumption). getattr(...,"severity_score",0.0)
+        # was silently always falling back to 0.0, so contradiction level
+        # never actually affected mode selection below.
+        ctx.contradiction_severity = getattr(contradiction_report, "conflict_ratio", 0.0)
     
     ctx.notes.append(f"regime={ctx.regime}, vol_pct={ctx.volatility_percentile:.0f}, "
                      f"trend_clarity={ctx.trend_clarity:.2f}")
@@ -227,8 +233,8 @@ def generate_meta_report(meta: MetaDecision, coin: str) -> str:
         f"Weights: Rules={meta.rules_weight:.0%} AHP={meta.ahp_weight:.0%} NO_TRADE={meta.no_trade_weight:.0%}",
         "Context:",
         f"  Regime: {meta.context.regime if meta.context else 'N/A'}",
-        f"  Vol%ile: {meta.context.volatility_percentile:.0f if meta.context else 'N/A'}",
-        f"  TrendClarity: {meta.context.trend_clarity:.2f if meta.context else 'N/A'}",
+        f"  Vol%ile: {(f'{meta.context.volatility_percentile:.0f}' if meta.context else 'N/A')}",
+        f"  TrendClarity: {(f'{meta.context.trend_clarity:.2f}' if meta.context else 'N/A')}",
         "Notes:",
     ]
     for note in meta.fusion_notes: lines.append(f"  • {note}")
