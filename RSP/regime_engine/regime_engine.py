@@ -53,3 +53,7 @@ def determine_regime(df: pd.DataFrame) -> RegimeReport:
     if not report.compatible_strategies:
         report.notes.append("هیچ استراتژی سازگاری برای این رژیم تعریف نشده -> احتیاط/WAIT")
     return report
+
+
+# Backward-compat alias — backtest_engine.py imports this name.
+detect_regime = determine_regime
