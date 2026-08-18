@@ -214,3 +214,49 @@ def append_fuzzy_to_report(existing_report_text: str, integrated: IntegratedDeci
             fuzzy_section += f"  • {note}\n"
 
     return existing_report_text + fuzzy_section
+
+
+# ---------------------------------------------------------------------------
+# FIX v2.1 — NEW: fuzzy_decision_bridge singleton
+# ---------------------------------------------------------------------------
+# backtest_engine.py imports `fuzzy_decision_bridge` and calls
+# `.compare_with_fuzzy(trades)` at the end of every backtest run when
+# FUZZY_BACKTEST_ENABLED is on — neither the singleton nor the method
+# existed anywhere, so every fuzzy-enabled backtest crashed at the very
+# last line. This gives a lightweight, honest summary of the trades that
+# were actually taken (the backtest loop already applies the fuzzy
+# can_trade/opportunity_score gate per-bar before a trade is recorded, so
+# this reports on the realized, fuzzy-filtered trade set rather than
+# re-deriving a parallel crisp-vs-fuzzy simulation).
+
+class FuzzyDecisionBridge:
+    def compare_with_fuzzy(self, trades: list) -> dict:
+        if not trades:
+            return {
+                "fuzzy_steps": 0, "fuzzy_overrides": 0,
+                "opportunity_score_avg": None, "opportunity_score_min": None,
+                "opportunity_score_max": None,
+                "current_threshold": getattr(settings, "MIN_OPPORTUNITY_SCORE_FOR_TRADE",
+                                             getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD", 75.0)),
+                "rejection_reasons": {}, "rejected_trade_outcomes": {},
+            }
+
+        confidences = [t.confidence for t in trades if getattr(t, "confidence", None) is not None]
+        method = getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules")
+        threshold = getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD", {}).get(
+            method, getattr(settings, "MIN_OPPORTUNITY_SCORE_FOR_TRADE",
+                            getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD", 75.0)))
+
+        return {
+            "fuzzy_steps": len(trades),
+            "fuzzy_overrides": 0,  # every recorded trade already passed the fuzzy gate; nothing to override
+            "opportunity_score_avg": round(sum(confidences) / len(confidences), 2) if confidences else None,
+            "opportunity_score_min": round(min(confidences), 2) if confidences else None,
+            "opportunity_score_max": round(max(confidences), 2) if confidences else None,
+            "current_threshold": threshold,
+            "rejection_reasons": {},
+            "rejected_trade_outcomes": {},
+        }
+
+
+fuzzy_decision_bridge = FuzzyDecisionBridge()
