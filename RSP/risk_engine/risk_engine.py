@@ -27,6 +27,11 @@ class RiskPlan:
     risk_percent: float = settings.MAX_RISK_PERCENT_PER_TRADE
     valid: bool = False
     reason: str = ""
+    # NEW v2.1: exposes the ATR used to build this plan, so callers (the
+    # trailing-stop simulator) don't have to recompute it from stop_loss
+    # distance (which would be wrong once a structural_stop is chosen
+    # instead of the raw ATR distance).
+    atr: Optional[float] = None
     # FIX v2.1: backtest_engine.py reads risk_plan.notes into TradeRecord —
     # field never existed here.
     notes: list = field(default_factory=list)
@@ -84,8 +89,14 @@ def plan_risk(action: str, df_15m: pd.DataFrame, regime: RegimeReport) -> RiskPl
     position_size_pct = round(min(100.0, settings.MAX_RISK_PERCENT_PER_TRADE / risk_distance_pct), 2) \
         if risk_distance_pct > 0 else 0.0
 
-    # FIX v1: MIN_ACCEPTABLE_RISK_REWARD also uses RR_TARGET
-    min_rr = getattr(settings, "RR_TARGET", settings.MIN_ACCEPTABLE_RISK_REWARD)
+    # FIX v2.1: this always evaluated to settings.RR_TARGET (getattr's
+    # default never triggers since RR_TARGET always exists as an
+    # attribute), so settings.MIN_ACCEPTABLE_RISK_REWARD — the intended
+    # true floor — was silently dead; a plan was only ever "valid" if its
+    # rr matched the aspirational RR_TARGET almost exactly. Now uses the
+    # real minimum floor, which is <= RR_TARGET, so this can only make
+    # `valid` easier to satisfy, never harder.
+    min_rr = getattr(settings, "MIN_ACCEPTABLE_RISK_REWARD", rr_target)
     plan = RiskPlan(
         action=action,
         entry=round(entry_price, 6),
@@ -97,5 +108,6 @@ def plan_risk(action: str, df_15m: pd.DataFrame, regime: RegimeReport) -> RiskPl
         valid=rr >= min_rr,
         reason="OK" if rr >= min_rr else
                f"Risk/Reward={rr} کمتر از حداقل قابل‌قبول {min_rr}",
+        atr=round(atr_val, 6),
     )
     return plan
