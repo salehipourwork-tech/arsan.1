@@ -94,6 +94,15 @@ EXHAUSTION_FILTER_ENABLED = True
 
 FUZZY_ENGINE_ENABLED = True
 FUZZY_BACKTEST_ENABLED = True
+
+# NEW v2.2 — both default OFF: wiring in two previously-orphaned subsystems
+# (RSP/meta_controller/meta_controller.py and RSP/exit_manager.py) that
+# were fully built but never called from anywhere. Off by default so every
+# already-reported backtest number is unchanged unless explicitly enabled.
+META_CONTROLLER_ENABLED = False   # per-bar adaptive Rules/AHP blending by market context
+TRAILING_STOP_ENABLED = False     # ATR-based trailing stop instead of fixed SL/TP
+TRAILING_ACTIVATE_ATR = 1.0       # profit (in ATR multiples) before the trailing stop arms
+TRAILING_ATR = 1.0                # trailing distance behind price, in ATR multiples
 FUZZY_INFERENCE_METHOD = "Sugeno"
 FUZZY_CONFLICT_METHOD = "conservative_weighted"
 FUZZY_OPPORTUNITY_THRESHOLD = 75.0
