@@ -91,14 +91,28 @@ class TestResult:
             wr_score * META_WEIGHTS["wr"]
         )
 
-def _apply_params(rr, sl_mult, exit_mode, opp_threshold, opp_by_method=None):
+def _apply_params(rr, sl_mult, exit_mode, opp_threshold, opp_by_method=None, method=None):
     settings.RR_TARGET = rr
     settings.SL_ATR_MULTIPLIER = sl_mult
     settings.CONSERVATIVE_SL_TP_SAME_CANDLE = exit_mode
     settings.MIN_OPPORTUNITY_SCORE_FOR_TRADE = opp_threshold
     settings.FUZZY_OPPORTUNITY_THRESHOLD = opp_threshold
     if opp_by_method is not None:
-        settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = dict(opp_by_method)
+        # FIX v2.1: this used to overwrite the whole BY_METHOD dict with the
+        # static, uncalibrated NEW_OPP_BY_METHOD values. backtest_engine.py's
+        # threshold lookup checks BY_METHOD[method] *before* falling back to
+        # MIN_OPPORTUNITY_SCORE_FOR_TRADE, and BY_METHOD always has the
+        # active method's key present — so the per-coin calibrated threshold
+        # (opp_threshold, e.g. 70 for low-volatility BTC) was silently never
+        # applied; the gate always used the static 75 instead (confirmed by
+        # the real BTC run: [CALIBRATE] printed threshold=70, but the trade
+        # count matched a 75 gate). Now only the *active* method's entry is
+        # overridden with the calibrated value; the other method's static
+        # default is left alone.
+        by_method = dict(opp_by_method)
+        if method is not None:
+            by_method[method] = opp_threshold
+        settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = by_method
 
 def _calibrate_threshold_for_coin(coin_id: str, bars: pd.DataFrame, method: str) -> float:
     if bars is None or len(bars) < 40:
@@ -136,10 +150,11 @@ def _detect_data_source(universe) -> str:
             sources.append(f"{tf}:{source}")
     return " | ".join(sources) if sources else "unknown"
 
-def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) -> TestResult:
+def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool, use_meta: bool = False) -> TestResult:
     result = TestResult(coin=coin, scenario=scenario_name)
     orig = {
         "fuzzy": settings.FUZZY_BACKTEST_ENABLED,
+        "meta": getattr(settings, "META_CONTROLLER_ENABLED", False),
         "opp_method": getattr(settings, "OPPORTUNITY_SCORING_METHOD", "rules"),
         "rr": getattr(settings, "RR_TARGET", 2.5),
         "sl": getattr(settings, "SL_ATR_MULTIPLIER", 1.5),
@@ -157,9 +172,17 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
             calibrated_opp = _calibrate_threshold_for_coin(coin, base_preview, method)
             _apply_params(NEW_RR, NEW_SL_MULT, NEW_EXIT, calibrated_opp, opp_by_method=NEW_OPP_BY_METHOD)
         settings.FUZZY_BACKTEST_ENABLED = use_fuzzy
+        # NEW: Meta-Adaptive scenario — turns on the per-bar adaptive
+        # Rules/AHP blending (RSP/meta_controller) instead of a single
+        # static method+threshold. This is a genuinely distinct decision
+        # path (see decision_controller.py's _evaluate_via_meta_controller),
+        # run here as its own scenario so it's compared on equal footing
+        # against Baseline/Rules/AHPv2 rather than silently replacing any
+        # of them.
+        settings.META_CONTROLLER_ENABLED = use_meta
         settings.OPPORTUNITY_SCORING_METHOD = method if use_fuzzy else "rules"
         effective_opp = (NEW_OPP_BY_METHOD.get(method, 75.0) if use_fuzzy else OLD_OPP)
-        print(f"\n>>> [{coin}] {scenario_name} — fuzzy={use_fuzzy}, ahp={use_ahp}")
+        print(f"\n>>> [{coin}] {scenario_name} — fuzzy={use_fuzzy}, ahp={use_ahp}, meta={use_meta}")
         print(f"    Params: RR={settings.RR_TARGET}, SL={settings.SL_ATR_MULTIPLIER}ATR, "
               f"Exit={settings.CONSERVATIVE_SL_TP_SAME_CANDLE}, Opp>={effective_opp} (method={method})")
         universe = build_data_universe(coin, lookback_days=DAYS)
@@ -193,6 +216,7 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
         print(f"    ERROR: {e}")
     finally:
         settings.FUZZY_BACKTEST_ENABLED = orig["fuzzy"]
+        settings.META_CONTROLLER_ENABLED = orig["meta"]
         settings.OPPORTUNITY_SCORING_METHOD = orig["opp_method"]
         settings.RR_TARGET = orig["rr"]
         settings.SL_ATR_MULTIPLIER = orig["sl"]
@@ -203,17 +227,18 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool) 
             settings.FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = orig["opp_by_method"]
     return result
 
-def _select_meta(baseline: TestResult, rules: TestResult, ahp: TestResult) -> tuple:
+def _select_meta(baseline: TestResult, rules: TestResult, ahp: TestResult, meta_adaptive: TestResult) -> tuple:
     """
     FIX v2.1: this used to only ever choose between the two FUZZY variants
     (Rules vs AHPv2) — Baseline (fuzzy OFF) was run and reported but never
-    actually a candidate the meta-controller could pick. That means it
-    could never conclude "fuzzy shouldn't be on for this coin/period" even
-    when Baseline clearly outperformed both fuzzy variants. Now genuinely
-    compares all three on the same Net/PF/DD/WR composite score, and can
-    select Baseline (i.e. fuzzy OFF) as the winner.
+    actually a candidate the meta-controller could pick. Now genuinely
+    compares all candidates on the same Net/PF/DD/WR composite score, and
+    can select Baseline (i.e. fuzzy OFF) as the winner.
+    NEW: added Meta-Adaptive (the per-bar adaptive Rules/AHP blend via
+    RSP/meta_controller) as a fourth candidate, on equal footing with the
+    other three rather than silently replacing any of them.
 
-    Selection order (unchanged philosophy, just extended to 3 candidates):
+    Selection order (unchanged philosophy, just extended to 4 candidates):
       1. Only candidates with >= MIN_TRADES_FOR_VALID trades are eligible.
       2. Among eligible candidates, prefer the ones that are profitable
          (net_return_pct > 0 or profit_factor >= 1.0) over ones that aren't.
@@ -221,13 +246,15 @@ def _select_meta(baseline: TestResult, rules: TestResult, ahp: TestResult) -> tu
       4. If nothing is eligible, fall back to Baseline (the simplest, best-
          understood scenario) rather than an untested fuzzy variant.
     """
-    candidates = [(baseline, "Baseline"), (rules, "Rules"), (ahp, "AHPv2")]
+    candidates = [(baseline, "Baseline"), (rules, "Rules"), (ahp, "AHPv2"), (meta_adaptive, "Meta-Adaptive")]
     eligible = [(r, name) for r, name in candidates if r.is_valid()]
 
     summary_line = (f"[Baseline: Net={baseline.net_return_pct:+.2f}%,PF={baseline.profit_factor:.2f},"
                      f"trades={baseline.total_trades}] [Rules: Net={rules.net_return_pct:+.2f}%,"
                      f"PF={rules.profit_factor:.2f},trades={rules.total_trades}] [AHPv2: Net="
-                     f"{ahp.net_return_pct:+.2f}%,PF={ahp.profit_factor:.2f},trades={ahp.total_trades}]")
+                     f"{ahp.net_return_pct:+.2f}%,PF={ahp.profit_factor:.2f},trades={ahp.total_trades}] "
+                     f"[Meta-Adaptive: Net={meta_adaptive.net_return_pct:+.2f}%,PF={meta_adaptive.profit_factor:.2f},"
+                     f"trades={meta_adaptive.total_trades}]")
 
     if not eligible:
         return baseline, "Baseline", f"هیچ سناریویی به حداقل {MIN_TRADES_FOR_VALID} معامله نرسید؛ پیش‌فرض Baseline. {summary_line}"
@@ -251,8 +278,10 @@ def run_all_scenarios(coin: str) -> dict:
     time.sleep(RATE_LIMIT_SECONDS)
     fuzzy_ahp = run_scenario(coin, "Fuzzy+AHPv2", use_fuzzy=True, use_ahp=True)
     time.sleep(RATE_LIMIT_SECONDS)
-    print(f"\n>>> [{coin}] Meta-Controller v3.1 (Baseline vs Rules vs AHPv2)")
-    meta_result, meta_source, meta_reason = _select_meta(baseline, fuzzy_rules, fuzzy_ahp)
+    meta_adaptive = run_scenario(coin, "Meta-Adaptive", use_fuzzy=True, use_ahp=False, use_meta=True)
+    time.sleep(RATE_LIMIT_SECONDS)
+    print(f"\n>>> [{coin}] Meta-Controller v3.2 (Baseline vs Rules vs AHPv2 vs Meta-Adaptive)")
+    meta_result, meta_source, meta_reason = _select_meta(baseline, fuzzy_rules, fuzzy_ahp, meta_adaptive)
     print(f"    → Meta selected: {meta_source}")
     print(f"    → Reason: {meta_reason}")
     print(f"    → Meta Net={meta_result.net_return_pct:+.2f}% "
@@ -263,6 +292,7 @@ def run_all_scenarios(coin: str) -> dict:
         "baseline": asdict(baseline) if baseline else None,
         "fuzzy_rules": asdict(fuzzy_rules) if fuzzy_rules else None,
         "fuzzy_ahp": asdict(fuzzy_ahp) if fuzzy_ahp else None,
+        "meta_adaptive": asdict(meta_adaptive) if meta_adaptive else None,
         "meta_controller": {
             **asdict(meta_result),
             "meta_source": meta_source,
@@ -279,25 +309,28 @@ def generate_markdown_report(all_results: list) -> str:
         "**Baseline:** RR=2.0, SL=2.5ATR, SL_FIRST, Opp>=50",
         f"**Fuzzy+Rules:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=75 (auto-calibrated ±15)",
         f"**Fuzzy+AHPv2:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=75 (auto-calibrated ±15)",
+        "**Meta-Adaptive:** same as Fuzzy+Rules params, but decision routed through "
+        "RSP.meta_controller (per-bar adaptive Rules/AHP blend by market context)",
         f"**Meta Weights:** Net={META_WEIGHTS['net']*100:.0f}%, PF={META_WEIGHTS['pf']*100:.0f}%, "
         f"DD={META_WEIGHTS['dd']*100:.0f}%, WR={META_WEIGHTS['wr']*100:.0f}%",
         "",
-        "| Coin | Baseline | Rules | AHPv2 | Meta | Source | Meta Reason |",
-        "|------|----------|-------|-------|------|--------|-------------|",
+        "| Coin | Baseline | Rules | AHPv2 | Meta-Adaptive | Winner | Winner Reason |",
+        "|------|----------|-------|-------|----------------|--------|---------------|",
     ]
     for r in all_results:
         coin = r["coin"].upper()
         b = r["baseline"]["net_return_pct"] if r["baseline"] and not r["baseline"].get("error") else 0
         fr = r["fuzzy_rules"]["net_return_pct"] if r["fuzzy_rules"] and not r["fuzzy_rules"].get("error") else 0
         fa = r["fuzzy_ahp"]["net_return_pct"] if r["fuzzy_ahp"] and not r["fuzzy_ahp"].get("error") else 0
+        ma = r["meta_adaptive"]["net_return_pct"] if r.get("meta_adaptive") and not r["meta_adaptive"].get("error") else 0
         m = r["meta_controller"]["net_return_pct"] if r["meta_controller"] else 0
         src = r["meta_controller"].get("meta_source", "-") if r["meta_controller"] else "-"
         reason = r["meta_controller"].get("meta_reason", "-") if r["meta_controller"] else "-"
-        lines.append(f"| {coin} | {b:+.2f}% | {fr:+.2f}% | {fa:+.2f}% | {m:+.2f}% | {src} | {reason} |")
+        lines.append(f"| {coin} | {b:+.2f}% | {fr:+.2f}% | {fa:+.2f}% | {ma:+.2f}% | {src} | {reason} |")
     lines.extend(["", "## Detailed Results", ""])
     for r in all_results:
         lines.append(f"### {r['coin'].upper()}")
-        for scenario in ["baseline", "fuzzy_rules", "fuzzy_ahp", "meta_controller"]:
+        for scenario in ["baseline", "fuzzy_rules", "fuzzy_ahp", "meta_adaptive", "meta_controller"]:
             s = r[scenario]
             if s and not s.get("error"):
                 lines.append(
@@ -315,12 +348,14 @@ def generate_markdown_report(all_results: list) -> str:
 
 def main():
     print("="*70)
-    print("Arsan — Multi-Coin Meta Test v3.1 (Auto-Calibrate + Meta v3)")
+    print("Arsan — Multi-Coin Meta Test v3.2 (Auto-Calibrate + Meta-Adaptive)")
     print(f"Date: {datetime.now(timezone.utc).isoformat()}")
     print(f"Coins: {', '.join(c['symbol'] for c in COINS)}")
     print("Baseline: RR=2.0 | SL=2.5ATR | SL_FIRST | Opp>=50")
     print(f"Fuzzy+Rules: RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>=75 (auto ±15)")
     print(f"Fuzzy+AHPv2: RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>=75 (auto ±15)")
+    print(f"Meta-Adaptive: same params as Fuzzy+Rules, decision routed through "
+          f"RSP.meta_controller (per-bar adaptive Rules/AHP blend)")
     print(f"Meta Weights: Net={META_WEIGHTS['net']*100:.0f}% | PF={META_WEIGHTS['pf']*100:.0f}% | "
           f"DD={META_WEIGHTS['dd']*100:.0f}% | WR={META_WEIGHTS['wr']*100:.0f}%")
     print("="*70)
@@ -350,16 +385,17 @@ def main():
     print("\n" + "="*70)
     print("SUMMARY")
     print("="*70)
-    print(f"{'Coin':<8} {'Baseline':>10} {'Rules':>10} {'AHPv2':>10} {'Meta':>10} {'Source':>10}")
+    print(f"{'Coin':<8} {'Baseline':>10} {'Rules':>10} {'AHPv2':>10} {'MetaAdapt':>10} {'Winner':>10} {'Source':>10}")
     print("-"*70)
     for r in all_results:
         coin = r["coin"].upper()
         b = r["baseline"]["net_return_pct"] if r["baseline"] and not r["baseline"].get("error") else 0
         fr = r["fuzzy_rules"]["net_return_pct"] if r["fuzzy_rules"] and not r["fuzzy_rules"].get("error") else 0
         fa = r["fuzzy_ahp"]["net_return_pct"] if r["fuzzy_ahp"] and not r["fuzzy_ahp"].get("error") else 0
+        ma = r["meta_adaptive"]["net_return_pct"] if r.get("meta_adaptive") and not r["meta_adaptive"].get("error") else 0
         m = r["meta_controller"]["net_return_pct"] if r["meta_controller"] else 0
         src = r["meta_controller"].get("meta_source", "-") if r["meta_controller"] else "-"
-        print(f"{coin:<8} {b:>+9.2f}% {fr:>+9.2f}% {fa:>+9.2f}% {m:>+9.2f}% {src:>10}")
+        print(f"{coin:<8} {b:>+9.2f}% {fr:>+9.2f}% {fa:>+9.2f}% {ma:>+9.2f}% {m:>+9.2f}% {src:>10}")
     valid_metas = [r["meta_controller"] for r in all_results if r["meta_controller"]]
     if valid_metas:
         avg_meta = sum(m["net_return_pct"] for m in valid_metas) / len(valid_metas)
