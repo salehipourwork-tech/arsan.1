@@ -15,6 +15,7 @@ from ..regime_rule_filter import RegimeRuleFilter
 class FuzzyDecisionResult:
     can_trade: bool; opportunity_score: float; stability_score: float
     permission_score: float; overall_score: float; recommendation: str; notes: List[str]
+    meta_mode: str = ""  # NEW v2.2: populated when META_CONTROLLER_ENABLED
 
 
 @dataclass
@@ -23,12 +24,24 @@ class _InferenceScores:
     opportunity_score: float; stability_score: float; permission_score: float; overall_score: float
 
 
+@dataclass
+class _ComputedScores:
+    """NEW v2.2 — both scoring methods computed unconditionally (needed for
+    the meta-controller to blend/compare them), plus the single-method
+    result (`static`) that the pre-existing static threshold path uses."""
+    rules_score: float; ahp_score: float
+    rules_threshold: float; ahp_threshold: float
+    stability_score: float; permission_score: float
+    static: _InferenceScores
+
+
 class FuzzyDecisionController:
     def __init__(self):
         self.regime_filter = RegimeRuleFilter()
         self.history: Dict[str, List[float]] = {}
 
-    def evaluate(self, regime, signals, mtf, trade_quality, history) -> Optional[FuzzyDecisionResult]:
+    def evaluate(self, regime, signals, mtf, trade_quality, history,
+                coin: str = "", contradiction=None) -> Optional[FuzzyDecisionResult]:
         notes = []
 
         # FIX v2.0: Apply RegimeRuleFilter
@@ -39,10 +52,23 @@ class FuzzyDecisionController:
                 notes.append(f"regime_filter_applied:{regime_label}")
             signals = filtered_signals
 
-        fuzzy_result = self._run_inference(regime, signals, mtf)
-        if fuzzy_result is None:
+        computed = self._run_inference(regime, signals, mtf)
+        if computed is None:
             return None
 
+        # NEW v2.2: wire in the previously-orphaned adaptive per-bar
+        # RSP.meta_controller — opt-in via settings.META_CONTROLLER_ENABLED
+        # (default False, so existing static single-method threshold
+        # behavior — and every already-reported backtest number — is
+        # unchanged unless explicitly turned on). Unlike the static path,
+        # the meta-controller blends Rules/AHP by market context
+        # (volatility/contradiction/regime) and can hard-block into
+        # PRESERVATION mode on extreme conditions, or fall back to whichever
+        # engine has been performing better recently.
+        if getattr(settings, "META_CONTROLLER_ENABLED", False):
+            return self._evaluate_via_meta_controller(regime, signals, mtf, coin, contradiction, computed, notes)
+
+        fuzzy_result = computed.static
         quality = self._check_quality(fuzzy_result, trade_quality)
         scoring_method = settings.OPPORTUNITY_SCORING_METHOD
 
@@ -83,6 +109,48 @@ class FuzzyDecisionController:
             stability_score=round(stability, 2), permission_score=round(permission, 2),
             overall_score=round(overall, 2), recommendation=recommendation, notes=notes,
         )
+
+    def _evaluate_via_meta_controller(self, regime, signals, mtf, coin, contradiction, computed, notes):
+        from ..meta_controller.meta_controller import EngineDecision, run_meta_controller
+
+        direction = "LONG" if signals.net_score > 0 else ("SHORT" if signals.net_score < 0 else "HOLD")
+        # NEW v2.2: both engines currently derive direction identically from
+        # the same net_score (direction selection isn't the fuzzy layer's
+        # job — see decision_brain.decide()); they differ only in
+        # opportunity_score/confidence/rejected, which is where the
+        # meta-controller's blending actually has something to weigh.
+        rules_dec = EngineDecision(
+            engine="rules", direction=direction, confidence=computed.rules_score / 100.0,
+            opportunity_score=computed.rules_score,
+            rejected=computed.rules_score < computed.rules_threshold,
+        )
+        ahp_dec = EngineDecision(
+            engine="ahp", direction=direction, confidence=computed.ahp_score / 100.0,
+            opportunity_score=computed.ahp_score,
+            rejected=computed.ahp_score < computed.ahp_threshold,
+        )
+
+        atr_pct = regime.perception.atr_pct if regime and regime.perception else 2.0
+        atr_series = regime.perception.atr_pct_series if regime and regime.perception else None
+        adx_val = regime.perception.adx if regime and regime.perception else 25.0
+
+        meta = run_meta_controller(
+            coin=coin, rules_decision=rules_dec, ahp_decision=ahp_dec, regime=regime,
+            atr_pct=atr_pct, atr_pct_series=atr_series, adx_value=adx_val,
+            contradiction_report=contradiction, market_stability_score=computed.stability_score / 100.0,
+        )
+
+        can_trade = meta.final_direction in ("LONG", "SHORT") and meta.no_trade_weight < 1.0
+        notes = notes + [f"meta_mode:{meta.mode}", meta.mode_reason] + meta.fusion_notes
+
+        result = FuzzyDecisionResult(
+            can_trade=can_trade, opportunity_score=round(meta.final_confidence * 100, 2),
+            stability_score=computed.stability_score, permission_score=computed.permission_score,
+            overall_score=round(meta.final_confidence * 100, 2),
+            recommendation=("TRADE" if can_trade else "NO_TRADE"), notes=notes,
+            meta_mode=meta.mode,
+        )
+        return result
 
     def _run_inference(self, regime, signals, mtf):
         """
@@ -162,36 +230,45 @@ class FuzzyDecisionController:
 
         inference_report = run_fuzzy_inference(fuzzified_inputs)
 
-        # FIX v2.1 (round 3): OPPORTUNITY_SCORING_METHOD was only ever used
-        # to pick a threshold — ahp_opportunity_score() (a genuinely
+        # FIX v2.1 (round 3) / NEW v2.2: OPPORTUNITY_SCORING_METHOD used to
+        # only ever pick a threshold — ahp_opportunity_score() (a genuinely
         # different linear-weighted AHP formula, not the rule-based Sugeno
         # inference above) was never actually called anywhere in the repo.
-        # That meant multi_coin_meta_test.py's "Fuzzy+Rules" vs
-        # "Fuzzy+AHPv2" scenarios — and its Meta-Controller's choice between
-        # them — were comparing two runs of the *same* scoring math with a
-        # slightly different threshold, not two real methodologies. Wired
-        # in properly here using the same raw [0,1] inputs already derived
-        # above (risk_raw is still a volatility-based proxy, not a true R:R
-        # — no risk_plan exists yet at this point in the pipeline for
-        # either method, so this doesn't advantage one method over the
-        # other).
-        if settings.OPPORTUNITY_SCORING_METHOD == "ahp":
-            from ..fuzzy_core.ahp_scoring import ahp_opportunity_score
-            opportunity_score = ahp_opportunity_score(
-                trend_quality_raw=trend_raw, risk_quality_v2_raw=risk_raw,
-                volatility_quality_v2_badness_raw=volatility_raw, entry_quality_raw=entry_raw,
-            )
-        else:
-            opportunity_score = inference_report.defuzzified_score
+        # That meant "Fuzzy+Rules" vs "Fuzzy+AHPv2" — and any comparison
+        # between them — compared two runs of the *same* scoring math with
+        # a slightly different threshold, not two real methodologies.
+        # NEW v2.2: both scores are now always computed (not just the
+        # currently-configured one), since the meta-controller needs both
+        # simultaneously to blend/compare them; risk_raw is still a
+        # volatility-based proxy, not a true R:R — no risk_plan exists yet
+        # at this point in the pipeline for either method, so this doesn't
+        # advantage one method over the other.
+        from ..fuzzy_core.ahp_scoring import ahp_opportunity_score
+        rules_score = inference_report.defuzzified_score
+        ahp_score = ahp_opportunity_score(
+            trend_quality_raw=trend_raw, risk_quality_v2_raw=risk_raw,
+            volatility_quality_v2_badness_raw=volatility_raw, entry_quality_raw=entry_raw,
+        )
+
+        threshold_by_method = getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD", {})
+        rules_threshold = threshold_by_method.get("rules", settings.FUZZY_OPPORTUNITY_THRESHOLD)
+        ahp_threshold = threshold_by_method.get("ahp", settings.FUZZY_OPPORTUNITY_THRESHOLD) + 5.0
+
+        opportunity_score = ahp_score if settings.OPPORTUNITY_SCORING_METHOD == "ahp" else rules_score
 
         mtf_ok = mtf.agreement if mtf is not None else True
         stability_score = round(max(0.0, 100.0 - conflict_ratio * 100.0), 2)
         permission_score = 100.0 if mtf_ok else 60.0
         overall_score = round((opportunity_score + stability_score + permission_score) / 3.0, 2)
 
-        return _InferenceScores(
-            opportunity_score=opportunity_score, stability_score=stability_score,
-            permission_score=permission_score, overall_score=overall_score,
+        return _ComputedScores(
+            rules_score=rules_score, ahp_score=ahp_score,
+            rules_threshold=rules_threshold, ahp_threshold=ahp_threshold,
+            stability_score=stability_score, permission_score=permission_score,
+            static=_InferenceScores(
+                opportunity_score=opportunity_score, stability_score=stability_score,
+                permission_score=permission_score, overall_score=overall_score,
+            ),
         )
 
     def _check_quality(self, fuzzy_result, trade_quality):
@@ -291,7 +368,8 @@ def run_fuzzy_decision(coin: str, regime, confluence, mtf, structure, risk_plan,
     controller = FuzzyDecisionController()
     history = get_history(coin)
     fuzzy_result = controller.evaluate(regime=regime, signals=fusion, mtf=mtf,
-                                       trade_quality=None, history=history)
+                                       trade_quality=None, history=history,
+                                       coin=coin, contradiction=contradiction)
 
     if fuzzy_result is None:
         return FuzzyDecisionReport(decision="NO_TRADE", primary_reason="داده‌ی کافی برای ارزیابی فازی وجود ندارد",
