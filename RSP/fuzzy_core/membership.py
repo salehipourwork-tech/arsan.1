@@ -251,7 +251,23 @@ def build_contradiction_severity_variable() -> LinguisticVariable:
         domain=(0.0, 1.0),
         terms=[
             Term("none", lambda x: z_shaped(x, 0.05, 0.15), "z_shaped"),
-            Term("low", lambda x: trapezoidal(x, 0.0, 0.10, 0.20, 0.35), "trapezoidal"),
+            # FIX (diagnosed 2026-08-19): plateau used to start at b=0.10, so
+            # a genuinely zero conflict_ratio (x=0.0 exactly — the single most
+            # common state for a candidate that already passed decide()'s
+            # guard-3 contradiction filter, which only allows conflict_ratio <
+            # CONTRADICTION_BLOCK_THRESHOLD=0.15) fuzzified to low=0.0. Every
+            # OPPORTUNITY_RULE except R01 requires contradiction_severity="low"
+            # (not "none"), and R01 additionally requires all of trend/momentum/
+            # entry/risk="very_strong" AND volatility="excellent" simultaneously
+            # — a combination real market data essentially never produces at
+            # once. Net effect: any perfectly clean (zero-conflict) BUY/SELL
+            # candidate fired zero rules -> defuzzified_score=0.0, regardless
+            # of how good every other quality dimension was. Moving the
+            # plateau's start to b=0.0 makes "low" saturate at x=0 too (a
+            # signal with literally no conflicting evidence is at least as
+            # "low conflict" as one with a small nonzero ratio) without
+            # touching any threshold or gate value.
+            Term("low", lambda x: trapezoidal(x, 0.0, 0.0, 0.20, 0.35), "trapezoidal"),
             Term("moderate", lambda x: triangular(x, 0.20, 0.40, 0.60), "triangular"),
             Term("high", lambda x: triangular(x, 0.45, 0.65, 0.80), "triangular"),
             Term("severe", lambda x: s_shaped(x, 0.70, 0.90), "s_shaped"),
