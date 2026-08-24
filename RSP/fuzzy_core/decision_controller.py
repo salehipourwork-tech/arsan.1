@@ -52,7 +52,7 @@ class FuzzyDecisionController:
                 notes.append(f"regime_filter_applied:{regime_label}")
             signals = filtered_signals
 
-        computed = self._run_inference(regime, signals, mtf)
+        computed = self._run_inference(regime, signals, mtf, trade_quality)
         if computed is None:
             return None
 
@@ -152,7 +152,7 @@ class FuzzyDecisionController:
         )
         return result
 
-    def _run_inference(self, regime, signals, mtf):
+    def _run_inference(self, regime, signals, mtf, trade_quality=None):
         """
         FIX v2.1: this called run_fuzzy_inference(regime, signals, mtf) — but
         the real function takes a single `fuzzified_inputs` dict (var_name ->
@@ -210,8 +210,50 @@ class FuzzyDecisionController:
         #   signal_confidence  <- blend of |net_score| and MTF agreement
         #   signal_strength    <- |net_score|
         entry_raw = abs(mtf.consensus_score) if mtf is not None else 0.0
-        risk_raw = max(0.0, 1.0 - volatility_raw)
-        stability_raw = max(0.0, 1.0 - conflict_ratio)
+
+        # FIX (this session): risk_quality and market_stability used to be
+        # deterministic mirrors of volatility_quality and contradiction_
+        # severity respectively (risk_raw = 1-volatility_raw, stability_raw
+        # = 1-conflict_ratio) — i.e. they carried zero independent
+        # information, so any rule requiring a *different* tier on the
+        # mirrored variable than what the source variable already implied
+        # (e.g. R17 needs market_stability="strong" while a clean signal's
+        # conflict_ratio≈0 always forces market_stability="very_strong")
+        # was structurally unreachable. Rule Liveness Sweep on real BTC
+        # data confirmed R12/R17/R19 fire_count=0 for exactly this reason.
+        #
+        # risk_quality now comes from the real TradeQualityReport
+        # (risk:reward + data quality + regime quality + volume + setup —
+        # see risk_engine/trade_quality.py), which backtest_engine.py now
+        # computes BEFORE calling evaluate() and passes in as
+        # trade_quality. Falls back to the old volatility-derived proxy
+        # only when no trade_quality is available (e.g. risk_plan invalid,
+        # or a caller that hasn't been updated to pass it).
+        if trade_quality is not None and getattr(trade_quality, "overall_score", None) is not None:
+            risk_raw = max(0.0, min(1.0, trade_quality.overall_score / 100.0))
+        else:
+            risk_raw = max(0.0, 1.0 - volatility_raw)
+
+        # market_stability now comes from the coefficient of variation of
+        # recent ATR% (regime.perception.atr_pct_series) — how consistent
+        # recent volatility has been, a genuinely different signal from
+        # conflict_ratio (evidence agreement on the CURRENT bar). Falls
+        # back to the old conflict_ratio-derived proxy when too little ATR
+        # history is available to compute a meaningful variance.
+        atr_series = list(getattr(regime.perception, "atr_pct_series", []) or []) \
+            if regime and regime.perception else []
+        recent_atr = atr_series[-20:] if len(atr_series) >= 10 else []
+        if recent_atr:
+            mean_atr = sum(recent_atr) / len(recent_atr)
+            if mean_atr > 0:
+                variance = sum((v - mean_atr) ** 2 for v in recent_atr) / len(recent_atr)
+                coeff_of_variation = (variance ** 0.5) / mean_atr
+                stability_raw = max(0.0, min(1.0, 1.0 - coeff_of_variation))
+            else:
+                stability_raw = 0.5
+        else:
+            stability_raw = max(0.0, 1.0 - conflict_ratio)
+
         confidence_raw = (abs(signals.net_score) + (1.0 if (mtf and mtf.agreement) else 0.5)) / 2
         strength_raw = abs(signals.net_score)
 
