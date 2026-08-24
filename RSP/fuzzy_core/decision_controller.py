@@ -234,23 +234,23 @@ class FuzzyDecisionController:
         else:
             risk_raw = max(0.0, 1.0 - volatility_raw)
 
-        # market_stability now comes from the coefficient of variation of
-        # recent ATR% (regime.perception.atr_pct_series) — how consistent
-        # recent volatility has been, a genuinely different signal from
-        # conflict_ratio (evidence agreement on the CURRENT bar). Falls
-        # back to the old conflict_ratio-derived proxy when too little ATR
-        # history is available to compute a meaningful variance.
-        atr_series = list(getattr(regime.perception, "atr_pct_series", []) or []) \
-            if regime and regime.perception else []
-        recent_atr = atr_series[-20:] if len(atr_series) >= 10 else []
-        if recent_atr:
-            mean_atr = sum(recent_atr) / len(recent_atr)
-            if mean_atr > 0:
-                variance = sum((v - mean_atr) ** 2 for v in recent_atr) / len(recent_atr)
-                coeff_of_variation = (variance ** 0.5) / mean_atr
-                stability_raw = max(0.0, min(1.0, 1.0 - coeff_of_variation))
-            else:
-                stability_raw = 0.5
+        # market_stability now comes from raw ADX (regime.perception.adx),
+        # a genuinely independent AND genuinely varying signal — a first
+        # attempt using coefficient-of-variation of atr_pct_series (see
+        # git history) turned out to still saturate near 1.0 almost always,
+        # because ATR% is itself a smoothed rolling average that barely
+        # changes bar-to-bar; Rule Liveness Sweep on real BTC data
+        # confirmed R12/R17/R19 stayed at fire_count=0 even after that
+        # change. ADX fluctuates meaningfully bar-to-bar and is unrelated
+        # to conflict_ratio, so it actually decorrelates market_stability
+        # from contradiction_severity instead of just moving the same
+        # saturation problem to a different source variable. Normalized by
+        # /60.0 so this codebase's calibrated adx_strong threshold (45,
+        # see perception.py) lands around raw=0.75, near the strong/
+        # very_strong boundary rather than pinned to one extreme.
+        adx_val = getattr(regime.perception, "adx", None) if regime and regime.perception else None
+        if adx_val is not None:
+            stability_raw = max(0.0, min(1.0, adx_val / 60.0))
         else:
             stability_raw = max(0.0, 1.0 - conflict_ratio)
 
