@@ -122,12 +122,32 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
                 if latest_volume * latest_close < settings.MIN_VOLUME_USD:
                     continue
 
+        # FIX (this session): risk_plan/trade_quality used to be computed
+        # AFTER the fuzzy gate, so fuzzy_controller.evaluate() below always
+        # received trade_quality=None and _run_inference() had to fall back
+        # to a synthetic risk_raw = 1 - volatility_raw (a deterministic
+        # mirror of volatility_quality, carrying zero independent
+        # information). Computing them here, before the fuzzy gate, lets
+        # the fuzzy layer use the real, multi-factor TradeQualityReport
+        # (risk:reward, data quality, regime quality, volume, setup —
+        # see risk_engine/trade_quality.py) instead. The risk_plan validity
+        # and MIN_ACCEPTABLE_RISK_REWARD checks that used to gate trade
+        # entry right after this block are UNCHANGED and still applied
+        # below, in the same place, with the same threshold.
+        risk_plan = plan_risk(decision.action, known_base, regime)
+        trade_quality = None
+        if risk_plan.valid and risk_plan.risk_reward is not None:
+            try:
+                trade_quality = assess_trade_quality(risk_plan, quality, regime, decision.fusion)
+            except Exception:
+                trade_quality = None
+
         meta_mode = ""
         if settings.FUZZY_BACKTEST_ENABLED:
             fuzzy_candidates_seen += 1
             fuzzy_result = fuzzy_controller.evaluate(
                 regime=regime, signals=decision.fusion, mtf=decision.mtf,
-                trade_quality=None, history=None, coin=coin_label,
+                trade_quality=trade_quality, history=None, coin=coin_label,
                 contradiction=decision.contradiction,
             )
             if fuzzy_result is None:
@@ -152,17 +172,15 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
 
         entry_price = base_df["close"].iloc[i]
 
-        risk_plan = plan_risk(decision.action, known_base, regime)
         if not risk_plan.valid or risk_plan.risk_reward is None:
             continue
 
         if risk_plan.risk_reward < settings.MIN_ACCEPTABLE_RISK_REWARD:
             continue
 
-        try:
-            trade_quality = assess_trade_quality(risk_plan, quality, regime, decision.fusion)
+        if trade_quality is not None:
             decision.trade_quality = trade_quality.overall_score
-        except Exception:
+        else:
             decision.trade_quality = decision.trade_quality or 0.0
 
         future_bars = _future_bars(base_df, i)
