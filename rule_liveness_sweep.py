@@ -24,6 +24,9 @@ from RSP.fuzzy_core.quality_engines import (
     evaluate_signal_confidence, evaluate_signal_strength,
 )
 from RSP.fuzzy_core import membership as _mv
+from RSP.risk_engine.risk_engine import plan_risk
+from RSP.risk_engine.trade_quality import assess_trade_quality
+from RSP.preprocessing.quality_engine import check_quality
 
 TARGET_RULES = ["R01", "R02", "R04", "R06", "R10", "R12", "R13", "R14", "R17", "R19", "R20"]
 
@@ -34,34 +37,14 @@ def _known_slice(bars_by_tf, ts):
     return {tf: df[df.index < ts].copy() for tf, df in bars_by_tf.items()}
 
 
-def _rebuild_fuzzified(regime, signals, mtf):
-    """Mirrors decision_controller._run_inference's raw-value computation
-    EXACTLY (same lines, unmodified) purely to re-expose the fuzzified
-    dict for observation — evaluate_rules() itself is the real, unmodified
-    function. No value or formula here differs from decision_controller.py."""
-    trend_ev = next((e for e in signals.evidences if e.category == "trend"), None)
-    momentum_ev = next((e for e in signals.evidences if e.category == "momentum"), None)
-    trend_raw = abs(trend_ev.score) if trend_ev else abs(signals.net_score)
-    momentum_raw = abs(momentum_ev.score) if momentum_ev else abs(signals.net_score)
-    volatility_raw = (regime.perception.volatility_quality / 100.0) if regime and regime.perception else 0.5
-    conflict_ratio = (len(signals.conflicting_evidence) / max(1, len(signals.evidences)))
-    entry_raw = abs(mtf.consensus_score) if mtf is not None else 0.0
-    risk_raw = max(0.0, 1.0 - volatility_raw)
-    stability_raw = max(0.0, 1.0 - conflict_ratio)
-    confidence_raw = (abs(signals.net_score) + (1.0 if (mtf and mtf.agreement) else 0.5)) / 2
-    strength_raw = abs(signals.net_score)
-
-    return {
-        "trend_quality": evaluate_trend_quality(trend_raw).components,
-        "momentum_quality": evaluate_momentum_quality(momentum_raw).components,
-        "volatility_quality": evaluate_volatility_quality(volatility_raw).components,
-        "contradiction_severity": evaluate_contradiction_severity(conflict_ratio).components,
-        "entry_quality": evaluate_entry_quality(entry_raw).components,
-        "risk_quality": _mv.build_risk_quality_variable().fuzzify(max(0.0, min(1.0, risk_raw))),
-        "market_stability": evaluate_market_stability(stability_raw).components,
-        "signal_confidence": evaluate_signal_confidence(confidence_raw).components,
-        "signal_strength": evaluate_signal_strength(strength_raw).components,
-    }
+def _get_real_fuzzified(fuzzy_controller, regime, signals, mtf, trade_quality):
+    """Calls the REAL, current _run_inference() and returns the exact
+    fuzzified_inputs dict it used — no hand-copied formulas here, so this
+    can never drift out of sync with decision_controller.py again."""
+    computed = fuzzy_controller._run_inference(regime, signals, mtf, trade_quality)
+    if computed is None:
+        return None
+    return computed.fuzzified_inputs
 
 
 def main():
@@ -83,6 +66,7 @@ def main():
     base_tf = "15M"
     base_df = bars_by_tf.get(base_tf)
     min_history = 200
+    quality = check_quality(base_df, base_tf)
 
     fuzzy_controller = FuzzyDecisionController()
 
@@ -104,17 +88,33 @@ def main():
             continue
         n_candidates += 1
 
+        # Real risk_plan/trade_quality, computed BEFORE the fuzzy call —
+        # matches the now-fixed backtest_engine.py order. Previously this
+        # script passed trade_quality=None here (mirroring the pre-fix
+        # backtest_engine.py), which silently defeated the risk_quality
+        # fix even after decision_controller.py and backtest_engine.py
+        # were both updated.
+        risk_plan = plan_risk(decision.action, known_base, regime)
+        trade_quality = None
+        if risk_plan.valid and risk_plan.risk_reward is not None:
+            try:
+                trade_quality = assess_trade_quality(risk_plan, quality, regime, decision.fusion)
+            except Exception:
+                trade_quality = None
+
         # Real, unmodified pipeline call (for the actual opportunity_score)
         fuzzy_result = fuzzy_controller.evaluate(
             regime=regime, signals=decision.fusion, mtf=decision.mtf,
-            trade_quality=None, history=None, coin=args.coin,
+            trade_quality=trade_quality, history=None, coin=args.coin,
             contradiction=decision.contradiction,
         )
         if fuzzy_result:
             opportunity_scores.append(fuzzy_result.opportunity_score)
 
-        # Observation-only: same fuzzified inputs, real evaluate_rules()
-        fuzzified = _rebuild_fuzzified(regime, decision.fusion, decision.mtf)
+        # Observation-only: the REAL fuzzified inputs (no hand-copied formulas)
+        fuzzified = _get_real_fuzzified(fuzzy_controller, regime, decision.fusion, decision.mtf, trade_quality)
+        if fuzzified is None:
+            continue
         firing = evaluate_rules(fuzzified, OPPORTUNITY_RULES)
         for rid, strength in firing.items():
             if rid in fire_count:
