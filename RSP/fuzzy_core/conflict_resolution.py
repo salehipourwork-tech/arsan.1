@@ -121,13 +121,34 @@ def resolve_conflicts(
         report.winning_rule = winner
 
     elif method == "conservative_weighted":
-        # Cap the weighted average by the lowest singleton among active rules
-        min_singleton = min(
-            (_get_rule(rid).output_singleton if _get_rule(rid) else 100)
-            for rid in active.keys()
+        # FIX (this session): the previous version capped weighted_avg by
+        # the lowest singleton among ANY active rule, regardless of how
+        # small that rule's firing strength was relative to the rest (the
+        # 0.01 reporting threshold applied above meant a rule contributing
+        # e.g. 1% of total firing weight could still drag a near-perfect
+        # setup all the way down to its own low singleton). Confirmed via
+        # isolated test: R01 firing at 1.0 (singleton=100) alongside R07
+        # firing at just 0.0056 (singleton=40) produced resolved_score=40,
+        # not because R07's evidence was strong, but purely because it was
+        # present at all.
+        #
+        # Now the pull toward the lowest-singleton rule is scaled by that
+        # rule's actual share of total firing weight — a rule contributing
+        # negligible weight barely moves the score; a rule that dominates
+        # firing still pulls the score down hard, preserving the
+        # "conservative" intent without an all-or-nothing floor.
+        min_rid = min(
+            active.keys(),
+            key=lambda rid: (_get_rule(rid).output_singleton if _get_rule(rid) else 100),
         )
-        report.resolved_score = round(min(weighted_avg, min_singleton), 2)
-        report.notes.append(f"Conservative cap applied: min_singleton={min_singleton}")
+        min_singleton = _get_rule(min_rid).output_singleton if _get_rule(min_rid) else 100
+        min_rule_weight = active[min_rid] / total_firing  # 0..1 share of total firing
+        pulled = weighted_avg - min_rule_weight * (weighted_avg - min_singleton)
+        report.resolved_score = round(max(0.0, min(100.0, pulled)), 2)
+        report.notes.append(
+            f"Conservative weighted-cap applied: min_singleton={min_singleton}, "
+            f"its_relative_firing_weight={round(min_rule_weight, 4)}"
+        )
 
     elif method == "conservative_override":
         low_rules = [
