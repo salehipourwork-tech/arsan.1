@@ -3,7 +3,7 @@ RSP — Fuzzy Decision Controller v2.0
 PATCH: Per-method threshold, RegimeRuleFilter wired, adaptive threshold
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Dict, List
 from ..config import settings
 from ..fuzzy_core.inference import FuzzyInferenceReport as FuzzyInferenceResult
@@ -28,11 +28,19 @@ class _InferenceScores:
 class _ComputedScores:
     """NEW v2.2 — both scoring methods computed unconditionally (needed for
     the meta-controller to blend/compare them), plus the single-method
-    result (`static`) that the pre-existing static threshold path uses."""
+    result (`static`) that the pre-existing static threshold path uses.
+
+    fuzzified_inputs (added this session): the exact fuzzified dict used
+    for this evaluation. Diagnostic/observation scripts should read this
+    field instead of re-deriving raw-value formulas themselves — a prior
+    diagnostic script (rule_liveness_sweep.py) hand-copied the raw-value
+    formulas and silently went stale the moment decision_controller.py's
+    real formulas were fixed, making it look like the fix hadn't worked."""
     rules_score: float; ahp_score: float
     rules_threshold: float; ahp_threshold: float
     stability_score: float; permission_score: float
     static: _InferenceScores
+    fuzzified_inputs: dict = field(default_factory=dict)
 
 
 class FuzzyDecisionController:
@@ -311,6 +319,7 @@ class FuzzyDecisionController:
                 opportunity_score=opportunity_score, stability_score=stability_score,
                 permission_score=permission_score, overall_score=overall_score,
             ),
+            fuzzified_inputs=fuzzified_inputs,
         )
 
     def _check_quality(self, fuzzy_result, trade_quality):
