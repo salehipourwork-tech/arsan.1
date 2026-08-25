@@ -372,7 +372,7 @@ def main():
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "coins": [c["id"] for c in COINS],
                 "baseline_params": {"RR": OLD_RR, "SL": OLD_SL_MULT, "EXIT": OLD_EXIT, "OPP": OLD_OPP},
-                "fuzzy_params": {"RR": NEW_RR, "SL": NEW_SL_MULT, "EXIT": NEW_EXIT, "OPP": NEW_OPP},
+                "fuzzy_params": {"RR": NEW_RR, "SL": NEW_SL_MULT, "EXIT": NEW_EXIT, "OPP_BY_METHOD": NEW_OPP_BY_METHOD},
                 "meta_weights": META_WEIGHTS,
             },
             "results": all_results,
