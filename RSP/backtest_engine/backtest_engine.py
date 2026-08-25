@@ -35,7 +35,6 @@ from ..self_evaluation.self_evaluation import evaluate_trade
 from ..self_evaluation.failure_analysis import analyze_failures
 from ..fuzzy_integration_bridge import fuzzy_decision_bridge
 from ..fuzzy_core.decision_controller import FuzzyDecisionController
-from ..regime_rule_filter import RegimeRuleFilter
 from ..meta_controller.meta_controller import record_trade_result
 
 
@@ -80,7 +79,11 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
     coin_label = coin_id or "unknown"
 
     fuzzy_controller = FuzzyDecisionController()
-    regime_filter = RegimeRuleFilter()
+    # BUG FIX (this session): a second, unused RegimeRuleFilter() used to be
+    # instantiated here (`regime_filter = RegimeRuleFilter()`), never called.
+    # The real regime-based rule filtering already happens inside
+    # FuzzyDecisionController itself (fuzzy_core/decision_controller.py owns
+    # its own self.regime_filter); this was dead, misleading duplicate state.
 
     # NEW v2.2: real per-bar fuzzy gate diagnostics (only meaningful when
     # FUZZY_BACKTEST_ENABLED — left empty otherwise).
