@@ -170,7 +170,20 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool, 
             universe_preview = build_data_universe(coin, lookback_days=DAYS)
             base_preview = universe_preview.bars.get(BASE_TF)
             calibrated_opp = _calibrate_threshold_for_coin(coin, base_preview, method)
-            _apply_params(NEW_RR, NEW_SL_MULT, NEW_EXIT, calibrated_opp, opp_by_method=NEW_OPP_BY_METHOD)
+            # BUG FIX (this session): `method=method` was missing from this
+            # call. _apply_params()'s own docstring/comment above (FIX v2.1)
+            # explicitly describes overriding only the *active* method's
+            # entry in FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD with the
+            # per-coin calibrated_opp value — but without `method=method`
+            # here, `_apply_params`'s `if method is not None:` guard never
+            # fires, so that override never happened. The calibrated
+            # threshold (correctly computed and printed by [CALIBRATE]
+            # above) was silently discarded every single run, and
+            # FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD was always reset to the
+            # static default (75/75) instead — exactly the bug FIX v2.1
+            # already fixed once, reintroduced by this one missing kwarg.
+            _apply_params(NEW_RR, NEW_SL_MULT, NEW_EXIT, calibrated_opp,
+                          opp_by_method=NEW_OPP_BY_METHOD, method=method)
         settings.FUZZY_BACKTEST_ENABLED = use_fuzzy
         # NEW: Meta-Adaptive scenario — turns on the per-bar adaptive
         # Rules/AHP blending (RSP/meta_controller) instead of a single
@@ -211,6 +224,23 @@ def run_scenario(coin: str, scenario_name: str, use_fuzzy: bool, use_ahp: bool, 
         print(f"    → trades={result.total_trades} WR={result.win_rate:.1f}% "
               f"Net={result.net_return_pct:+.2f}% PF={result.profit_factor:.3f} "
               f"MaxDD={result.max_drawdown_pct:.2f}% | score={result.composite_score():.1f}")
+        # NEW (this session): opportunity_score_avg/min/max and
+        # rejection_reasons were already being computed above into `result`
+        # but never printed anywhere — only saved into the final JSON report
+        # at the very end of the whole run. That's exactly the data needed
+        # to tell "scores are just barely under threshold" (tunable) apart
+        # from "scores are far below threshold" (something upstream is
+        # broken) per scenario, and it was invisible on the console for the
+        # entire multi-hour run. Print it live, per scenario, when fuzzy was
+        # actually on for this run.
+        if use_fuzzy and result.opportunity_score_avg is not None:
+            print(f"    [FUZZY DIAG] opp_score avg={result.opportunity_score_avg:.1f} "
+                  f"min={result.opportunity_score_min:.1f} max={result.opportunity_score_max:.1f} "
+                  f"threshold={result.current_threshold} "
+                  f"steps={result.fuzzy_steps} overrides={result.fuzzy_overrides}")
+            if result.rejection_reasons:
+                top = sorted(result.rejection_reasons.items(), key=lambda kv: -kv[1])[:5]
+                print(f"    [FUZZY DIAG] top rejection reasons: {top}")
     except Exception as e:
         result.error = str(e)
         print(f"    ERROR: {e}")
