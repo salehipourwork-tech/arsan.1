@@ -77,7 +77,14 @@ class FuzzyDecisionController:
             return self._evaluate_via_meta_controller(regime, signals, mtf, coin, contradiction, computed, notes)
 
         fuzzy_result = computed.static
-        quality = self._check_quality(fuzzy_result, trade_quality)
+        # BUG FIX (this session): `quality = self._check_quality(...)` used
+        # to be computed here and never read anywhere below. `_check_quality`
+        # itself is a stub that always returns a fixed overall_score=70.0
+        # with empty components (see bottom of this class) — so even before
+        # removal this line had no effect on can_trade or on anything else;
+        # it looked like a real quality gate but wasn't wired to one.
+        # Removed the dead read rather than wiring the stub in, since a
+        # constant 70.0 gate would be a no-op gate, not a real fix.
         scoring_method = settings.OPPORTUNITY_SCORING_METHOD
 
         # FIX v2.0: Per-method threshold
