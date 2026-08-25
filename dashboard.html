@@ -353,6 +353,124 @@
   .cursor-ring-outline.active{ opacity:1; }
   .cursor-ring-outline.expanded{ border-color:var(--brass-glow); }
   @media (hover:none), (pointer:coarse){ .cursor-ring-outline{ display:none !important; } }
+  .motion-off .ticker-track{ animation:none !important; }
+  .motion-off .cursor-ring-outline{ display:none !important; }
+  .motion-off .brand-mark .letter-inner{ animation:none !important; opacity:1 !important; transform:none !important; filter:none !important; }
+
+  /* =========================================================
+     SURÉNA — سیستم ۳-صفحه (داشبورد / میزکار معاملاتی / تنظیمات و گزارش‌ها)
+     همون زبان بصری «پنل ابزار دقیق» بالا رو نگه می‌داریم؛ فقط چیدمان
+     عوض می‌شه: یک قاب برنامه با نوار کناری ناوبری + سه صفحه‌ی داخلی.
+     ========================================================= */
+  .app-shell{
+    position:relative; z-index:1; max-width:1280px; margin:18px auto 0; padding:0 20px 80px;
+    display:flex; gap:16px; align-items:flex-start;
+  }
+  @media (max-width:860px){ .app-shell{ flex-direction:column; padding:0 14px 90px; margin-top:14px; } }
+
+  /* ---------------- Sidebar ---------------- */
+  .sidebar{
+    flex:none; width:216px; position:sticky; top:16px;
+    background:var(--panel); border:1px solid var(--grid); border-radius:var(--radius-lg);
+    padding:14px; display:flex; flex-direction:column; gap:4px;
+  }
+  @media (max-width:860px){
+    .sidebar{ position:static; width:100%; flex-direction:row; overflow-x:auto; padding:8px; gap:6px; }
+  }
+  .side-link{
+    display:flex; align-items:center; gap:10px; width:100%; text-align:right;
+    font-family:var(--font-body); font-size:13.5px; font-weight:600; color:var(--ink-dim);
+    background:transparent; border:1px solid transparent; border-radius:var(--radius);
+    padding:11px 12px; cursor:pointer; transition:background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .side-link svg{ flex:none; width:17px; height:17px; stroke:currentColor; }
+  .side-link:hover{ color:var(--ink); background:var(--panel-2); }
+  .side-link.active{ color:var(--ink); background:var(--panel-2); border-color:var(--brass-dim); box-shadow:2px 0 0 var(--brass) inset; }
+  @media (max-width:860px){
+    .side-link{ width:auto; white-space:nowrap; flex:none; box-shadow:none !important; border-bottom:2px solid transparent; border-radius:var(--radius) var(--radius) 0 0; }
+    .side-link.active{ border-color:var(--grid); border-bottom-color:var(--brass); }
+  }
+  .sidebar-hr{ height:1px; background:var(--grid); margin:6px 2px; }
+  @media (max-width:860px){ .sidebar-hr{ display:none; } }
+  .sidebar-note{ font-family:var(--font-mono); font-size:10px; color:var(--ink-faint); padding:8px 10px 2px; line-height:1.7; }
+  @media (max-width:860px){ .sidebar-note{ display:none; } }
+
+  /* ---------------- Main app area ---------------- */
+  .app-main{ flex:1; min-width:0; }
+  .screen{ display:none; }
+  .screen.active{ display:block; }
+  .screen-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .screen-title{ font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--ink); margin:0; }
+  .screen-sub{ font-size:12px; color:var(--ink-faint); font-family:var(--font-mono); }
+
+  /* ---------------- Dashboard grid (screen 1) ---------------- */
+  .dash-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:12px; }
+  .card{ background:var(--panel-2); border:1px solid var(--grid); border-radius:var(--radius-lg); padding:16px; }
+  .card-title{ font-family:var(--font-mono); font-size:10.5px; color:var(--brass); text-transform:uppercase; letter-spacing:0.7px; margin-bottom:12px; }
+  .col-3{ grid-column:span 3; } .col-4{ grid-column:span 4; } .col-5{ grid-column:span 5; }
+  .col-6{ grid-column:span 6; } .col-7{ grid-column:span 7; } .col-8{ grid-column:span 8; } .col-12{ grid-column:span 12; }
+  @media (max-width:960px){ .col-3,.col-4,.col-5,.col-6,.col-7,.col-8{ grid-column:span 12; } }
+
+  .kpi-num{ font-family:var(--font-mono); font-size:26px; font-weight:700; color:var(--ink); }
+  .kpi-sub{ font-size:12px; color:var(--ink-dim); margin-top:4px; }
+  .kpi-num.buy{ color:var(--buy); } .kpi-num.sell{ color:var(--sell); }
+
+  .ai-insight{ font-size:13.5px; line-height:1.9; color:var(--ink); }
+  .ai-insight b{ color:var(--brass); }
+
+  .risk-gauge{ display:flex; gap:4px; margin:10px 0 8px; }
+  .risk-seg{ flex:1; height:8px; border-radius:3px; background:var(--grid-soft); border:1px solid var(--grid); }
+  .risk-seg.on{ background:var(--brass); border-color:var(--brass); box-shadow:0 0 8px 0 var(--brass-glow); }
+  .risk-seg.on.sell{ background:var(--sell); border-color:var(--sell); box-shadow:none; }
+
+  .mini-list{ display:flex; flex-direction:column; gap:8px; }
+  .mini-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 10px; background:var(--screen); border:1px solid var(--grid-soft); border-radius:var(--radius); cursor:pointer; }
+  .mini-row:hover{ border-color:var(--brass-dim); }
+  .mini-row-name{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--ink); }
+  .mini-row-right{ display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px; }
+  .mini-empty{ font-size:12.5px; color:var(--ink-faint); text-align:center; padding:18px 4px; font-family:var(--font-mono); }
+
+  .link-btn{ background:none; border:none; color:var(--brass); font-family:var(--font-mono); font-size:11.5px; cursor:pointer; padding:0; }
+  .link-btn:hover{ text-decoration:underline; }
+
+  /* ---------------- Sub-tabs (داخل صفحه‌ی «تنظیمات و گزارش‌ها») ---------------- */
+  nav.subtabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+
+  /* ---------------- Settings ---------------- */
+  .settings-row{
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:14px 4px; border-bottom:1px solid var(--grid-soft);
+  }
+  .settings-row:last-child{ border-bottom:none; }
+  .settings-label{ font-size:13.5px; color:var(--ink); font-weight:600; }
+  .settings-desc{ font-size:12px; color:var(--ink-faint); margin-top:3px; line-height:1.7; }
+
+  .switch{ position:relative; display:inline-block; width:42px; height:24px; flex:none; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .switch-track{
+    position:absolute; inset:0; background:var(--screen); border:1px solid var(--grid);
+    border-radius:999px; cursor:pointer; transition:background 0.2s ease, border-color 0.2s ease;
+  }
+  .switch-track::before{
+    content:''; position:absolute; width:16px; height:16px; right:3px; top:2.5px;
+    background:var(--ink-dim); border-radius:50%; transition:transform 0.2s ease, background 0.2s ease;
+  }
+  .switch input:checked + .switch-track{ background:var(--brass-dim); border-color:var(--brass); }
+  .switch input:checked + .switch-track::before{ transform:translateX(-18px); background:var(--brass); }
+
+  .settings-empty{
+    border:1px dashed var(--grid); border-radius:var(--radius); padding:22px 18px;
+    color:var(--ink-faint); font-size:12.5px; line-height:1.85; background:var(--panel-2); margin-top:4px;
+  }
+  .settings-empty b{ color:var(--ink-dim); }
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0;
+    background:var(--panel); border:1px solid var(--brass-dim); border-radius:var(--radius);
+    padding:10px 18px; font-size:12.5px; color:var(--ink); z-index:200; pointer-events:none;
+    box-shadow:0 10px 30px rgba(0,0,0,0.5); transition:opacity 0.25s ease, transform 0.25s ease;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -371,60 +489,169 @@
 
 <div class="alert-banner" id="alertBanner"></div>
 
-<nav class="tabs">
-  <button class="tab active" data-tab="live"><span class="tab-led"></span>تحلیل زنده</button>
-  <button class="tab" data-tab="transparency"><span class="tab-led"></span>شفافیت عملکرد</button>
-  <button class="tab" data-tab="portfolio"><span class="tab-led"></span>پرتفوی فرضی</button>
-  <button class="tab" data-tab="lab"><span class="tab-led"></span>آزمایشگاه</button>
-</nav>
+<div class="app-shell">
+  <aside class="sidebar">
+    <button class="side-link active" data-screen="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      داشبورد
+    </button>
+    <button class="side-link" data-screen="workspace">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10"/><path d="M4 7V5"/><path d="M12 19V13"/><path d="M12 10V5"/><path d="M20 19V15"/><path d="M20 12V5"/><rect x="1.6" y="10" width="4.8" height="3" rx="0.8"/><rect x="9.6" y="10" width="4.8" height="3" rx="0.8"/><rect x="17.6" y="12" width="4.8" height="3" rx="0.8"/></svg>
+      میزکار معاملاتی
+    </button>
+    <button class="side-link" data-screen="reports">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      تنظیمات و گزارش‌ها
+    </button>
+    <div class="sidebar-hr"></div>
+    <div class="sidebar-note">آرسان — پنل ابزار دقیق<br>نسخه‌ی تک‌صفحه‌ای SURÉNA</div>
+  </aside>
 
-<main>
-  <section id="panel-live" class="panel active">
-    <div class="toolbar">
-      <input id="search" type="text" placeholder="جست‌وجوی رمزارز… (مثلا bitcoin)">
-      <select id="riskProfile">
-        <option value="conservative">پروفایل: محافظه‌کار</option>
-        <option value="balanced" selected>پروفایل: متعادل</option>
-        <option value="aggressive">پروفایل: تهاجمی</option>
-      </select>
-    </div>
-    <p class="risk-note">تغییر پروفایل، آستانه‌های خرید/فروش را روی همون امتیاز محاسبه‌شده دوباره اعمال می‌کند. برای کوین‌هایی که به‌دلیل بی‌روند بودن بازار اصلاً امتیازی محاسبه نشده («صبر»)، تغییر پروفایل اثری ندارد.</p>
-    <div class="table-head"><span>نام</span><span>روند اخیر</span><span>قیمت</span><span>۲۴ساعت</span><span>وضعیت</span></div>
-    <div id="watchlist"><div class="loading">در حال دریافت آخرین تحلیل…</div></div>
-  </section>
+  <div class="app-main">
 
-  <section id="panel-transparency" class="panel">
-    <p class="transparency-intro">نرخ موفقیت واقعی سیگنال‌های «خرید» و «فروش» گذشته — هر سیگنال ۲۴ ساعت بعد از صدور، با قیمت واقعی بازار مقایسه و به‌صورت خودکار ارزیابی می‌شود. اینجا هیچ عددی دستکاری یا حذف نمی‌شود.</p>
-    <div id="transparencyBody"><div class="loading">در حال دریافت آمار…</div></div>
-  </section>
+    <!-- ================= صفحه‌ی ۱ — داشبورد ================= -->
+    <section id="screen-dashboard" class="screen active">
+      <div class="screen-head">
+        <h1 class="screen-title">داشبورد</h1>
+        <span class="screen-sub" id="dashGeneratedAt"></span>
+      </div>
+      <div class="dash-grid">
+        <div class="card col-4">
+          <div class="card-title">سود/زیان فرضی کل</div>
+          <div class="kpi-num" id="kpiPnl">—</div>
+          <div class="kpi-sub" id="kpiPnlSub">در حال دریافت داده‌ی پرتفوی…</div>
+        </div>
+        <div class="card col-4">
+          <div class="card-title">دقت کلی سیگنال‌ها</div>
+          <div class="kpi-num" id="kpiAccuracy">—</div>
+          <div class="kpi-sub" id="kpiAccuracySub">در حال دریافت آمار شفافیت…</div>
+        </div>
+        <div class="card col-4">
+          <div class="card-title">سطح ریسک فعال</div>
+          <div class="kpi-num" id="kpiRisk" style="font-size:18px;">متعادل</div>
+          <div class="risk-gauge" id="riskGauge"></div>
+          <div class="kpi-sub">قابل‌تغییر از میزکار معاملاتی</div>
+        </div>
 
-  <section id="panel-portfolio" class="panel">
-    <p class="transparency-intro">شبیه‌سازی: اگر کسی از ابتدا با مبلغ ثابت، همه‌ی سیگنال‌های خرید/فروش سیستم را دنبال می‌کرد، نتیجه چه می‌شد؟ این یک پرتفوی فرضی <b>سراسری</b> است، نه حساب شخصی شما — هیچ معامله‌ی واقعی انجام نشده.</p>
-    <div id="portfolioBody"><div class="loading">در حال دریافت داده‌ی پرتفوی…</div></div>
-  </section>
+        <div class="card col-7">
+          <div class="card-title">خلاصه‌ی هوشمند بازار</div>
+          <div class="ai-insight" id="aiInsight">در حال تحلیل وضعیت بازار…</div>
+        </div>
+        <div class="card col-5">
+          <div class="card-title">هشدارها</div>
+          <div class="mini-list" id="dashAlerts"><div class="mini-empty">هشدار فعالی وجود ندارد.</div></div>
+        </div>
 
-  <section id="panel-lab" class="panel">
-    <div class="lab-disclaimer">
-      <b>⚠ این یک شبیه‌سازی روی داده‌ی گذشته است، نه عملکرد زنده‌ی سیستم.</b>
-      آرسان فرض می‌کند در ۳۰ یا ۶۰ روز پیش قرار دارد و فقط با داده‌ی همان روز (بدون دیدن آینده) تصمیم می‌گیرد؛
-      یک روز بعد، نتیجه‌ی واقعی بازار را چک می‌کند. کاملاً جدا از تب «شفافیت عملکرد» و از هیچ داده‌ی زنده‌ای اثر نمی‌گیرد.
-      <ul id="labLimitations"></ul>
-    </div>
-    <div class="window-toggle">
-      <button class="window-btn active" data-window="30">بازه ۳۰ روزه</button>
-      <button class="window-btn" data-window="60">بازه ۶۰ روزه</button>
-    </div>
-    <div id="labBody"><div class="loading">در حال دریافت نتایج آزمایشگاه…</div></div>
+        <div class="card col-6">
+          <div class="card-title">دیده‌بان — بیشترین حرکت ۲۴ساعته</div>
+          <div class="mini-list" id="dashMovers"><div class="mini-empty">در حال دریافت…</div></div>
+          <div style="margin-top:12px; text-align:left;"><button class="link-btn" data-goto="workspace">مشاهده‌ی همه در میزکار معاملاتی ←</button></div>
+        </div>
+        <div class="card col-6">
+          <div class="card-title">آخرین معاملات فرضی</div>
+          <div class="mini-list" id="dashTrades"><div class="mini-empty">در حال دریافت…</div></div>
+          <div style="margin-top:12px; text-align:left;"><button class="link-btn" data-goto="reports" data-subtab="portfolio">مشاهده‌ی گزارش کامل پرتفوی ←</button></div>
+        </div>
+      </div>
+    </section>
 
-    <div class="horizon-section">
-      <h3 class="horizon-title">🔍 تست تشخیصی افق ارزیابی</h3>
-      <p class="method-note">همون سیگنال‌های بالا، فقط با فاصله‌ی زمانی متفاوت چک شدن: «۱ روزه» دقیقاً همون قانون استانداردِ سایته؛ «۳ روزه» و «۵ روزه» صرفاً برای بررسی این‌ان که آیا تاخیر شاخص‌های روندی (EMA) باعث خطای زودهنگام می‌شه یا نه. این بخش هیچ اثری روی سیگنال‌های واقعی سایت نداره و فقط دستی به‌روز می‌شه.</p>
-      <div id="horizonBody"><div class="loading">در حال دریافت نتایج تست افق…</div></div>
-    </div>
-  </section>
-</main>
+    <!-- ================= صفحه‌ی ۲ — میزکار معاملاتی ================= -->
+    <section id="screen-workspace" class="screen">
+      <div class="screen-head">
+        <h1 class="screen-title">میزکار معاملاتی</h1>
+        <span class="screen-sub">تحلیل زنده + جزئیات شاخص‌ها روی هر کوین</span>
+      </div>
+      <div class="toolbar">
+        <input id="search" type="text" placeholder="جست‌وجوی رمزارز… (مثلا bitcoin)">
+        <select id="riskProfile">
+          <option value="conservative">پروفایل: محافظه‌کار</option>
+          <option value="balanced" selected>پروفایل: متعادل</option>
+          <option value="aggressive">پروفایل: تهاجمی</option>
+        </select>
+      </div>
+      <p class="risk-note">تغییر پروفایل، آستانه‌های خرید/فروش را روی همون امتیاز محاسبه‌شده دوباره اعمال می‌کند. برای کوین‌هایی که به‌دلیل بی‌روند بودن بازار اصلاً امتیازی محاسبه نشده («صبر»)، تغییر پروفایل اثری ندارد.</p>
+      <div class="table-head"><span>نام</span><span>روند اخیر</span><span>قیمت</span><span>۲۴ساعت</span><span>وضعیت</span></div>
+      <div id="watchlist"><div class="loading">در حال دریافت آخرین تحلیل…</div></div>
+    </section>
+
+    <!-- ================= صفحه‌ی ۳ — تنظیمات و گزارش‌ها ================= -->
+    <section id="screen-reports" class="screen">
+      <div class="screen-head">
+        <h1 class="screen-title">تنظیمات و گزارش‌ها</h1>
+        <span class="screen-sub">عملکرد، پرتفوی، آزمایشگاه بک‌تست و تنظیمات پنل</span>
+      </div>
+
+      <nav class="subtabs">
+        <button class="tab active" data-subtab="transparency"><span class="tab-led"></span>شفافیت عملکرد</button>
+        <button class="tab" data-subtab="portfolio"><span class="tab-led"></span>پرتفوی فرضی</button>
+        <button class="tab" data-subtab="lab"><span class="tab-led"></span>آزمایشگاه</button>
+        <button class="tab" data-subtab="settings"><span class="tab-led"></span>تنظیمات</button>
+      </nav>
+
+      <section id="panel-transparency" class="panel active">
+        <p class="transparency-intro">نرخ موفقیت واقعی سیگنال‌های «خرید» و «فروش» گذشته — هر سیگنال ۲۴ ساعت بعد از صدور، با قیمت واقعی بازار مقایسه و به‌صورت خودکار ارزیابی می‌شود. اینجا هیچ عددی دستکاری یا حذف نمی‌شود.</p>
+        <div id="transparencyBody"><div class="loading">در حال دریافت آمار…</div></div>
+      </section>
+
+      <section id="panel-portfolio" class="panel">
+        <p class="transparency-intro">شبیه‌سازی: اگر کسی از ابتدا با مبلغ ثابت، همه‌ی سیگنال‌های خرید/فروش سیستم را دنبال می‌کرد، نتیجه چه می‌شد؟ این یک پرتفوی فرضی <b>سراسری</b> است، نه حساب شخصی شما — هیچ معامله‌ی واقعی انجام نشده.</p>
+        <div id="portfolioBody"><div class="loading">در حال دریافت داده‌ی پرتفوی…</div></div>
+      </section>
+
+      <section id="panel-lab" class="panel">
+        <div class="lab-disclaimer">
+          <b>⚠ این یک شبیه‌سازی روی داده‌ی گذشته است، نه عملکرد زنده‌ی سیستم.</b>
+          آرسان فرض می‌کند در ۳۰ یا ۶۰ روز پیش قرار دارد و فقط با داده‌ی همان روز (بدون دیدن آینده) تصمیم می‌گیرد؛
+          یک روز بعد، نتیجه‌ی واقعی بازار را چک می‌کند. کاملاً جدا از تب «شفافیت عملکرد» و از هیچ داده‌ی زنده‌ای اثر نمی‌گیرد.
+          <ul id="labLimitations"></ul>
+        </div>
+        <div class="window-toggle">
+          <button class="window-btn active" data-window="30">بازه ۳۰ روزه</button>
+          <button class="window-btn" data-window="60">بازه ۶۰ روزه</button>
+        </div>
+        <div id="labBody"><div class="loading">در حال دریافت نتایج آزمایشگاه…</div></div>
+
+        <div class="horizon-section">
+          <h3 class="horizon-title">🔍 تست تشخیصی افق ارزیابی</h3>
+          <p class="method-note">همون سیگنال‌های بالا، فقط با فاصله‌ی زمانی متفاوت چک شدن: «۱ روزه» دقیقاً همون قانون استانداردِ سایته؛ «۳ روزه» و «۵ روزه» صرفاً برای بررسی این‌ان که آیا تاخیر شاخص‌های روندی (EMA) باعث خطای زودهنگام می‌شه یا نه. این بخش هیچ اثری روی سیگنال‌های واقعی سایت نداره و فقط دستی به‌روز می‌شه.</p>
+          <div id="horizonBody"><div class="loading">در حال دریافت نتایج تست افق…</div></div>
+        </div>
+      </section>
+
+      <section id="panel-settings" class="panel">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">اعلان‌ها و جلوه‌های بصری</div>
+          <div class="settings-row">
+            <div>
+              <div class="settings-label">نوار هشدار بالای صفحه</div>
+              <div class="settings-desc">نمایش هشدارهای فعال (نوسان شدید و…) به‌صورت نوار بالای صفحه در همه‌ی صفحات.</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="toggleAlerts" checked><span class="switch-track"></span></label>
+          </div>
+          <div class="settings-row">
+            <div>
+              <div class="settings-label">جلوه‌های حرکتی (کرسر و تیکر متحرک)</div>
+              <div class="settings-desc">خاموش کردن انیمیشن کرسر سفارشی و توقف اسکرول خودکار تیکر قیمت.</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="toggleMotion" checked><span class="switch-track"></span></label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">اتصال صرافی و امنیت</div>
+          <div class="settings-empty">
+            <b>به‌زودی.</b> مدیریت کلید API نوبیتکس، تنظیمات امنیتی و پشتیبان‌گیری خودکار برای نسخه‌ی معاملات زنده‌ی آرسان در حال توسعه‌ست.
+            نسخه‌ی فعلی صرفاً یک پنل تحلیل و شبیه‌سازی است و هیچ معامله‌ی واقعی انجام نمی‌دهد.
+          </div>
+        </div>
+      </section>
+    </section>
+
+  </div>
+</div>
 
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
 
 <div id="cursor-ring" class="cursor-ring-outline"></div>
 
@@ -514,15 +741,63 @@ function toggleFavorite(id){
   renderWatchlist();
 }
 
-/* ---------------- Tabs ---------------- */
-document.querySelectorAll('.tab').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
-  });
+/* ---------------- ناوبری ۳ صفحه‌ی اصلی (سایدبار) ---------------- */
+function goToScreen(name, subtab){
+  document.querySelectorAll('.side-link').forEach(b=>b.classList.toggle('active', b.dataset.screen===name));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active', s.id==='screen-'+name));
+  if(name === 'reports' && subtab) goToSubtab(subtab);
+  window.scrollTo({top:0, behavior:'auto'});
+}
+document.querySelectorAll('.side-link').forEach(btn=>{
+  btn.addEventListener('click', ()=>goToScreen(btn.dataset.screen));
 });
+document.querySelectorAll('[data-goto]').forEach(btn=>{
+  btn.addEventListener('click', ()=>goToScreen(btn.dataset.goto, btn.dataset.subtab));
+});
+
+/* ---------------- زیرتب‌های صفحه‌ی «تنظیمات و گزارش‌ها» ---------------- */
+function goToSubtab(name){
+  document.querySelectorAll('#screen-reports > nav.subtabs .tab').forEach(b=>b.classList.toggle('active', b.dataset.subtab===name));
+  document.querySelectorAll('#screen-reports > .panel').forEach(p=>p.classList.toggle('active', p.id==='panel-'+name));
+}
+document.querySelectorAll('#screen-reports > nav.subtabs .tab').forEach(btn=>{
+  btn.addEventListener('click', ()=>goToSubtab(btn.dataset.subtab));
+});
+
+/* ---------------- Toast ---------------- */
+let toastTimer = null;
+function showToast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2200);
+}
+
+/* ---------------- تنظیمات (سوییچ‌های ذخیره‌شونده) ---------------- */
+const SETTINGS_KEY = 'arsan_settings';
+function getSettings(){
+  try{ return Object.assign({alerts:true, motion:true}, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); }
+  catch(e){ return {alerts:true, motion:true}; }
+}
+function saveSettings(s){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+function applySettings(){
+  const s = getSettings();
+  document.getElementById('toggleAlerts').checked = s.alerts;
+  document.getElementById('toggleMotion').checked = s.motion;
+  document.body.classList.toggle('motion-off', !s.motion);
+  if(!s.alerts) document.getElementById('alertBanner').classList.remove('show');
+  else if(window.lastAlertsData) renderAlerts(window.lastAlertsData);
+}
+document.getElementById('toggleAlerts').addEventListener('change', e=>{
+  const s = getSettings(); s.alerts = e.target.checked; saveSettings(s); applySettings();
+  showToast(s.alerts ? 'نمایش هشدارها فعال شد' : 'نمایش هشدارها خاموش شد');
+});
+document.getElementById('toggleMotion').addEventListener('change', e=>{
+  const s = getSettings(); s.motion = e.target.checked; saveSettings(s); applySettings();
+  showToast(s.motion ? 'جلوه‌های حرکتی فعال شد' : 'جلوه‌های حرکتی خاموش شد');
+});
+applySettings();
 
 /* ---------------- Freshness / status chip ---------------- */
 function updateStatusChip(generatedAtISO){
@@ -707,24 +982,112 @@ document.getElementById('riskProfile').addEventListener('change', e=>{
   currentRiskProfile = e.target.value;
   renderWatchlist();
   if(analysisData) renderTicker(analysisData.coins || []);
+  updateRiskGauge();
+  updateAiInsight();
 });
+
+/* ---------------- داشبورد — گیج ریسک، دیده‌بان و خلاصه‌ی هوشمند ---------------- */
+const RISK_LABELS = { conservative: 'محافظه‌کار', balanced: 'متعادل', aggressive: 'تهاجمی' };
+const RISK_ORDER = ['conservative','balanced','aggressive'];
+function updateRiskGauge(){
+  const kpiRisk = document.getElementById('kpiRisk');
+  const gauge = document.getElementById('riskGauge');
+  if(!kpiRisk || !gauge) return;
+  kpiRisk.textContent = RISK_LABELS[currentRiskProfile];
+  const idx = RISK_ORDER.indexOf(currentRiskProfile);
+  gauge.innerHTML = RISK_ORDER.map((r,i)=>`<div class="risk-seg ${i<=idx?'on':''} ${currentRiskProfile==='aggressive'&&i===2?'sell':''}"></div>`).join('');
+}
+
+function updateDashMovers(){
+  const el = document.getElementById('dashMovers');
+  if(!el) return;
+  if(!analysisData || !analysisData.coins || !analysisData.coins.length){
+    el.innerHTML = '<div class="mini-empty">داده‌ای موجود نیست.</div>'; return;
+  }
+  const top = [...analysisData.coins].sort((a,b)=>Math.abs(b.change_24h??0)-Math.abs(a.change_24h??0)).slice(0,5);
+  el.innerHTML = top.map(c=>{
+    const up = (c.change_24h ?? 0) >= 0;
+    const dec = effectiveDecision(c);
+    return `<div class="mini-row" onclick="goToScreen('workspace'); setTimeout(()=>openModal('${c.id}'),50)">
+      <div class="mini-row-name">${c.id}</div>
+      <div class="mini-row-right"><span class="${up?'wl-change up':'wl-change down'}">${up?'+':''}${(c.change_24h??0).toFixed(2)}٪</span><span class="code ${dec}">${DECISION_LABELS[dec]||dec}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function updateAiInsight(){
+  const el = document.getElementById('aiInsight');
+  if(!el) return;
+  if(!analysisData || !analysisData.coins || !analysisData.coins.length){
+    el.textContent = 'در حال تحلیل وضعیت بازار…'; return;
+  }
+  const coins = analysisData.coins;
+  const decisions = coins.map(effectiveDecision);
+  const buyCount = decisions.filter(d=>d==='buy').length;
+  const sellCount = decisions.filter(d=>d==='sell').length;
+  const holdCount = decisions.filter(d=>d==='hold').length;
+  const uncCount = decisions.filter(d=>d==='uncertain').length;
+  const summary = window.lastSummaryData;
+  const accTxt = (summary && summary.overall && summary.overall.total>0)
+    ? `دقت واقعی سیستم در ۲۴ ساعت گذشته <b>${summary.overall.accuracy_percent}٪</b> بوده.`
+    : 'هنوز آمار دقت کافی برای نمایش جمع نشده.';
+  el.innerHTML = `از میان <b>${coins.length}</b> رمزارز تحت پایش، با پروفایل «${RISK_LABELS[currentRiskProfile]}»:
+    <b>${buyCount}</b> سیگنال خرید، <b>${sellCount}</b> سیگنال فروش، ${holdCount} مورد صبر و ${uncCount} مورد نامشخص ثبت شده. ${accTxt}`;
+}
+
+function refreshDashboard(){
+  updateRiskGauge();
+  updateDashMovers();
+  updateAiInsight();
+  if(analysisData && analysisData.generated_at){
+    document.getElementById('dashGeneratedAt').textContent = 'آخرین به‌روزرسانی تحلیل: ' + new Date(analysisData.generated_at).toLocaleString('fa-IR');
+  }
+}
 
 /* ---------------- Alert banner ---------------- */
 function renderAlerts(data){
+  window.lastAlertsData = data;
   const el = document.getElementById('alertBanner');
   const now = new Date();
   const active = (data && data.alerts || []).filter(a => new Date(a.expires_at) > now);
-  if(!active.length){ el.classList.remove('show'); el.innerHTML=''; return; }
-  el.innerHTML = '⚡ ' + active.map(a => `<b>${a.coin}</b>: ${a.message}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
-  el.classList.add('show');
+  const alertsOn = getSettings().alerts;
+  if(!active.length || !alertsOn){ el.classList.remove('show'); el.innerHTML=''; }
+  else{
+    el.innerHTML = '⚡ ' + active.map(a => `<b>${a.coin}</b>: ${a.message}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+    el.classList.add('show');
+  }
+  const dashEl = document.getElementById('dashAlerts');
+  if(dashEl){
+    dashEl.innerHTML = active.length
+      ? active.map(a => `<div class="mini-row"><div class="mini-row-name">${a.coin}</div><div class="mini-row-right" style="color:var(--hold)">${a.message}</div></div>`).join('')
+      : '<div class="mini-empty">هشدار فعالی وجود ندارد.</div>';
+  }
 }
 
 /* ---------------- Portfolio panel ---------------- */
 function renderPortfolio(p){
   const body = document.getElementById('portfolioBody');
+  const kpiEl = document.getElementById('kpiPnl');
+  const kpiSubEl = document.getElementById('kpiPnlSub');
+  const dashTrades = document.getElementById('dashTrades');
   if(!p || !p.total_trades){
     body.innerHTML = `<div class="empty-state">${p ? p.note : 'داده‌ی پرتفوی در دسترس نیست.'}</div>`;
+    if(kpiEl){ kpiEl.textContent = '—'; kpiSubEl.textContent = 'داده‌ی پرتفوی در دسترس نیست.'; }
+    if(dashTrades) dashTrades.innerHTML = '<div class="mini-empty">معامله‌ی فرضی‌ای ثبت نشده.</div>';
     return;
+  }
+  if(kpiEl){
+    kpiEl.textContent = (p.total_pnl_usd>=0?'+':'') + '$' + p.total_pnl_usd;
+    kpiEl.className = 'kpi-num ' + (p.total_pnl_usd>=0 ? 'buy' : 'sell');
+    kpiSubEl.textContent = `بازده: ${p.return_percent !== null ? p.return_percent+'٪' : '—'} · ${p.total_trades} معامله‌ی فرضی`;
+  }
+  if(dashTrades){
+    const recent = (p.recent_trades || []).slice(-5).reverse();
+    dashTrades.innerHTML = recent.length ? recent.map(t => `
+      <div class="mini-row" onclick="goToScreen('reports','portfolio')">
+        <div class="mini-row-name"><span class="code ${t.decision}">${DECISION_LABELS[t.decision]||t.decision}</span> ${t.coin}</div>
+        <div class="mini-row-right ${t.pnl_usd>=0?'wl-change up':'wl-change down'}">${t.pnl_usd>=0?'+':''}$${t.pnl_usd}</div>
+      </div>`).join('') : '<div class="mini-empty">معامله‌ی فرضی‌ای ثبت نشده.</div>';
   }
   const pnlClass = p.total_pnl_usd >= 0 ? 'pnl-pos' : 'pnl-neg';
   const rows = (p.recent_trades || []).slice().reverse().map(t => `
@@ -755,15 +1118,25 @@ function renderPortfolio(p){
 
 /* ---------------- Transparency panel ---------------- */
 function renderTransparency(summary){
+  window.lastSummaryData = summary;
   const body = document.getElementById('transparencyBody');
+  const kpiEl = document.getElementById('kpiAccuracy');
+  const kpiSubEl = document.getElementById('kpiAccuracySub');
   if(!summary || summary.overall.total === 0){
     body.innerHTML = `
       <div class="empty-state">هنوز هیچ سیگنال «خرید» یا «فروشی» به موعد ارزیابی (۲۴ ساعت پس از صدور) نرسیده.
       به‌محض جمع‌شدن اولین نتایج، نرخ موفقیت واقعی سیستم اینجا نمایش داده می‌شود — هیچ عدد فرضی جایگزین آن نمی‌شود.</div>
       <p class="method-note">${methodNote()}</p>`;
+    if(kpiEl){ kpiEl.textContent = '—'; kpiSubEl.textContent = 'هنوز سیگنالی به موعد ارزیابی نرسیده.'; }
+    updateAiInsight();
     return;
   }
   const o = summary.overall, b = summary.by_decision.buy, s = summary.by_decision.sell;
+  if(kpiEl){
+    kpiEl.textContent = (o.accuracy_percent ?? '—') + (o.accuracy_percent!==null && o.accuracy_percent!==undefined ? '٪' : '');
+    kpiSubEl.textContent = `${o.correct} درست از ${o.total} سیگنال ارزیابی‌شده`;
+  }
+  updateAiInsight();
   const fmt = p => p === null || p === undefined ? '—' : p+'٪';
   body.innerHTML = `
     <div class="stat-grid">
@@ -884,9 +1257,11 @@ async function loadAnalysis(){
     updateStatusChip(analysisData.generated_at);
     renderTicker(analysisData.coins || []);
     renderWatchlist();
+    refreshDashboard();
   }catch(e){
     document.getElementById('watchlist').innerHTML = '<div class="empty">خطا در بارگذاری داده. لطفا بعدا دوباره تلاش کنید.</div>';
     updateStatusChip(null);
+    document.getElementById('dashMovers').innerHTML = '<div class="mini-empty">خطا در بارگذاری داده.</div>';
   }
 }
 async function loadSummary(){
@@ -930,6 +1305,7 @@ async function loadHorizon(){
   }
 }
 
+updateRiskGauge();
 loadAnalysis();
 loadSummary();
 loadAlerts();
@@ -977,7 +1353,7 @@ setInterval(loadLab, 60 * 60 * 1000);
     document.addEventListener('mouseenter', () => { targetScale = 1; });
 
     document.addEventListener('mouseover', e => {
-      const interactive = e.target.closest('button, a, input, select, .watchlist-row, .tab, .window-btn');
+      const interactive = e.target.closest('button, a, input, select, .watchlist-row, .tab, .window-btn, .side-link, .mini-row, label.switch');
       cursorRing.classList.toggle('expanded', !!interactive);
     });
 
