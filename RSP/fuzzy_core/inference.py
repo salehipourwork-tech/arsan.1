@@ -68,7 +68,15 @@ def _mamdani_aggregate(firing_strengths: Dict[str, float]) -> Dict[str, float]:
     به‌جای پیاده‌سازی کامل integral روی continuous domain،
     روی grid گسسته (0..100 با گام 1) approximate centroid می‌گیریم.
     """
-    opp_var = build_opportunity_quality_variable()
+    # BUG FIX (this session): `opp_var` was built here and never used — the
+    # rest of this function reinvents ad-hoc triangular MFs per rule instead
+    # (deliberately, per this function's own docstring: discrete 0..100 grid
+    # approximation rather than the canonical opportunity_quality variable,
+    # which is defined on a 0..1 domain and would need rescaling to be used
+    # here directly). Keeping an unused, unexplained call to a variable
+    # builder next to that design note reads as an abandoned half-wire-up;
+    # removing it so the function's real (documented) behavior isn't
+    # obscured by dead code that looks like it should matter but doesn't.
     # Grid: 0 to 100
     grid = {i: 0.0 for i in range(101)}
 
