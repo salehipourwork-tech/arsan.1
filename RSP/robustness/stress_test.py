@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from RSP.backtest_engine.backtest_engine import BacktestSummary, run_backtest
+from RSP.config import settings
 
 REGIME_TO_MARKET_TYPE = {
     "STRONG_UPTREND": "BULL", "UPTREND": "BULL", "WEAK_UPTREND": "BULL",
@@ -101,7 +102,21 @@ def _base_ohlcv(n, freq, drift, vol, start_price=100.0, seed=None):
     open_[0] = start_price
     high = np.maximum(open_, close) * (1 + np.abs(rng.normal(0, 0.002, n)))
     low = np.minimum(open_, close) * (1 - np.abs(rng.normal(0, 0.002, n)))
-    volume = np.abs(rng.normal(1000, 250, n))
+    # BUG FIX: volume used to be a fixed np.random.normal(1000, 250, n) unit
+    # count regardless of start_price/MIN_VOLUME_USD. At start_price=100 that
+    # is ~100k USD/bar notional, while backtest_engine's VOLUME_FILTER_ENABLED
+    # gate (MIN_VOLUME_USD=1,000,000 by default) silently rejected every
+    # single candidate trade in every scenario before it ever reached the
+    # fuzzy/risk gates. run_synthetic_scenarios() therefore always returned
+    # 0 trades for all 8 scenarios (BULL included) - the entire "engine
+    # doesn't crash and behaves sensibly" self-test this module exists for
+    # was never actually exercising a trade. Scale the synthetic volume so
+    # its USD notional sits safely above the live threshold (with realistic
+    # bar-to-bar variance, so the volume filter can still legitimately
+    # reject a low-liquidity bar here and there).
+    target_notional = max(settings.MIN_VOLUME_USD * 5.0, 1.0)
+    volume_mean = target_notional / max(start_price, 1e-9)
+    volume = np.abs(rng.normal(volume_mean, volume_mean * 0.25, n))
     return pd.DataFrame({"open": open_, "high": high, "low": low, "close": close, "volume": volume}, index=idx)
 
 
