@@ -78,6 +78,14 @@ def main():
           f"net_return_pct={summary.net_return_pct}")
     print("=" * 70)
 
+    # FIX (this session): failure_report was computed and then discarded —
+    # analyze_failures() already does the categorization work the rest of
+    # this script re-derives by hand below (per-regime loss breakdown); at
+    # minimum its headline finding should actually be printed.
+    print(f"\n### تحلیل خودکار الگوی شکست ###\n")
+    for note in failure_report.notes:
+        print(f"  {note}")
+
     # --- بخش ۱: نمونه‌های UNEXPLAINED ---
     print(f"\n### {args.samples} نمونه از معاملات UNEXPLAINED (با evidence_snapshot کامل) ###\n")
     shown = 0
@@ -90,7 +98,11 @@ def main():
         shown += 1
         print(f"--- نمونه {shown} ---")
         print(json.dumps({
-            "timestamp": trade.timestamp,
+            # BUG FIX (this session): TradeRecord has no `.timestamp` field
+            # (it's `.entry_timestamp` — see failure_analysis.py's own FIX
+            # v2.1 note, which fixed this exact mismatch internally but
+            # this script still had the old wrong attribute name).
+            "timestamp": str(trade.entry_timestamp),
             "action": trade.action,
             "regime": trade.regime,
             "pnl_pct": trade.pnl_pct,
@@ -100,9 +112,15 @@ def main():
             "trade_quality": trade.trade_quality,
             "confidence": trade.confidence,
             "evidence_snapshot": trade.evidence_snapshot,
-            "confirming_signals": ev.confirming_signals,
-            "misleading_signals": ev.misleading_signals,
-            "entry_quality_flag": ev.entry_quality_flag,
+            # BUG FIX (this session): SelfEvaluationResult has no
+            # confirming_signals/misleading_signals/entry_quality_flag
+            # fields (see self_evaluation.py) - those were never real.
+            # Its actual fields are supporting_evidence/opposing_evidence
+            # (the notes-based evidence split) and should_not_have_traded
+            # (the entry-quality verdict itself).
+            "supporting_evidence": ev.supporting_evidence,
+            "opposing_evidence": ev.opposing_evidence,
+            "should_not_have_traded": ev.should_not_have_traded,
         }, ensure_ascii=False, indent=2, default=str))
         print()
         if shown >= args.samples:
