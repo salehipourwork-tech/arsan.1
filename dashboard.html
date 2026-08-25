@@ -471,6 +471,56 @@
     box-shadow:0 10px 30px rgba(0,0,0,0.5); transition:opacity 0.25s ease, transform 0.25s ease;
   }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---------------- میزکار معاملاتی — چیدمان دو ستونه (کاکپیت) ---------------- */
+  .workspace-grid{ display:grid; grid-template-columns:1fr 400px; gap:14px; align-items:start; }
+  @media (max-width:1080px){ .workspace-grid{ grid-template-columns:1fr; } }
+  .watchlist-col{ min-width:0; }
+  .detail-col{
+    position:sticky; top:16px; background:var(--panel-2); border:1px solid var(--grid);
+    border-top:2px solid var(--brass); border-radius:var(--radius-lg); padding:20px;
+    max-height:calc(100vh - 32px); overflow-y:auto;
+  }
+  @media (max-width:1080px){ .detail-col{ position:static; max-height:none; } }
+  .detail-empty{
+    display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center;
+    color:var(--ink-faint); font-size:13px; padding:50px 14px; line-height:1.9;
+  }
+  .detail-empty svg{ width:34px; height:34px; stroke:var(--ink-faint); opacity:0.6; }
+
+  /* ---------------- ارتقای بصری کارت‌ها/سایدبار (لایه، آیکن، حالت هاور) ---------------- */
+  .card{ box-shadow:0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.18); transition:border-color 0.15s ease, transform 0.15s ease; }
+  .card:hover{ border-color:var(--grid); }
+  .kpi-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:2px; }
+  .kpi-icon{ width:15px; height:15px; stroke:var(--brass); opacity:0.85; flex:none; }
+  .mini-row{ transition:border-color 0.15s ease, background 0.15s ease; }
+  .mini-row:hover{ background:var(--panel); }
+
+  .sidebar{ box-shadow:0 8px 24px rgba(0,0,0,0.18); }
+  .side-link{ position:relative; }
+  .side-link svg{ transition:stroke 0.15s ease; }
+
+  /* ---------------- نوار پیشرفت (میزان توافق/دقت) ---------------- */
+  .agree-bar-wrap{ display:flex; align-items:center; gap:8px; }
+  .agree-bar{ flex:1; height:6px; border-radius:99px; background:var(--grid-soft); overflow:hidden; }
+  .agree-bar-fill{ height:100%; border-radius:99px; }
+  .agree-bar-fill.buy{ background:var(--buy); } .agree-bar-fill.sell{ background:var(--sell); }
+  .agree-bar-num{ font-family:var(--font-mono); font-size:11px; color:var(--ink-dim); width:34px; flex:none; text-align:left; }
+
+  /* ---------------- Skeleton loading ---------------- */
+  .skeleton-row{ height:52px; border-radius:var(--radius); background:linear-gradient(90deg, var(--panel-2) 25%, var(--grid-soft) 37%, var(--panel-2) 63%); background-size:400% 100%; animation:skeleton-shine 1.4s ease infinite; margin-bottom:8px; }
+  @keyframes skeleton-shine{ 0%{ background-position:100% 50%; } 100%{ background-position:0 50%; } }
+  @media (prefers-reduced-motion: reduce){ .skeleton-row{ animation:none; } }
+
+  /* ---------------- Order-style decision badge (داخل دتیل‌داک) ---------------- */
+  .order-badge{
+    display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border-radius:var(--radius);
+    font-family:var(--font-mono); font-weight:700; font-size:15px; letter-spacing:0.4px; margin-bottom:14px;
+  }
+  .order-badge.buy{ background:var(--buy-bg); color:var(--buy); border:1px solid rgba(51,214,141,0.35); }
+  .order-badge.sell{ background:var(--sell-bg); color:var(--sell); border:1px solid rgba(255,98,89,0.35); }
+  .order-badge.hold{ background:var(--hold-bg); color:var(--hold); border:1px solid rgba(240,180,41,0.35); }
+  .order-badge.uncertain{ background:var(--unc-bg); color:var(--unc); border:1px solid rgba(178,141,255,0.35); }
 </style>
 </head>
 <body>
@@ -517,17 +567,26 @@
       </div>
       <div class="dash-grid">
         <div class="card col-4">
-          <div class="card-title">سود/زیان فرضی کل</div>
+          <div class="kpi-head">
+            <div class="card-title" style="margin-bottom:0;">سود/زیان فرضی کل</div>
+            <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>
+          </div>
           <div class="kpi-num" id="kpiPnl">—</div>
           <div class="kpi-sub" id="kpiPnlSub">در حال دریافت داده‌ی پرتفوی…</div>
         </div>
         <div class="card col-4">
-          <div class="card-title">دقت کلی سیگنال‌ها</div>
+          <div class="kpi-head">
+            <div class="card-title" style="margin-bottom:0;">دقت کلی سیگنال‌ها</div>
+            <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+          </div>
           <div class="kpi-num" id="kpiAccuracy">—</div>
           <div class="kpi-sub" id="kpiAccuracySub">در حال دریافت آمار شفافیت…</div>
         </div>
         <div class="card col-4">
-          <div class="card-title">سطح ریسک فعال</div>
+          <div class="kpi-head">
+            <div class="card-title" style="margin-bottom:0;">سطح ریسک فعال</div>
+            <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6m0 0l4 5H8l4-5z"/><path d="M4 21h16"/></svg>
+          </div>
           <div class="kpi-num" id="kpiRisk" style="font-size:18px;">متعادل</div>
           <div class="risk-gauge" id="riskGauge"></div>
           <div class="kpi-sub">قابل‌تغییر از میزکار معاملاتی</div>
@@ -561,17 +620,27 @@
         <h1 class="screen-title">میزکار معاملاتی</h1>
         <span class="screen-sub">تحلیل زنده + جزئیات شاخص‌ها روی هر کوین</span>
       </div>
-      <div class="toolbar">
-        <input id="search" type="text" placeholder="جست‌وجوی رمزارز… (مثلا bitcoin)">
-        <select id="riskProfile">
-          <option value="conservative">پروفایل: محافظه‌کار</option>
-          <option value="balanced" selected>پروفایل: متعادل</option>
-          <option value="aggressive">پروفایل: تهاجمی</option>
-        </select>
+      <div class="workspace-grid">
+        <div class="watchlist-col">
+          <div class="toolbar">
+            <input id="search" type="text" placeholder="جست‌وجوی رمزارز… (مثلا bitcoin)">
+            <select id="riskProfile">
+              <option value="conservative">پروفایل: محافظه‌کار</option>
+              <option value="balanced" selected>پروفایل: متعادل</option>
+              <option value="aggressive">پروفایل: تهاجمی</option>
+            </select>
+          </div>
+          <p class="risk-note">تغییر پروفایل، آستانه‌های خرید/فروش را روی همون امتیاز محاسبه‌شده دوباره اعمال می‌کند. برای کوین‌هایی که به‌دلیل بی‌روند بودن بازار اصلاً امتیازی محاسبه نشده («صبر»)، تغییر پروفایل اثری ندارد.</p>
+          <div class="table-head"><span>نام</span><span>روند اخیر</span><span>قیمت</span><span>۲۴ساعت</span><span>وضعیت</span></div>
+          <div id="watchlist"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+        </div>
+        <aside class="detail-col" id="detailDock">
+          <div class="detail-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>
+            <div>یک کوین از لیست کنار انتخاب کنید تا نمودار، شاخص‌ها و دلایل تصمیم اینجا نمایش داده بشه.</div>
+          </div>
+        </aside>
       </div>
-      <p class="risk-note">تغییر پروفایل، آستانه‌های خرید/فروش را روی همون امتیاز محاسبه‌شده دوباره اعمال می‌کند. برای کوین‌هایی که به‌دلیل بی‌روند بودن بازار اصلاً امتیازی محاسبه نشده («صبر»)، تغییر پروفایل اثری ندارد.</p>
-      <div class="table-head"><span>نام</span><span>روند اخیر</span><span>قیمت</span><span>۲۴ساعت</span><span>وضعیت</span></div>
-      <div id="watchlist"><div class="loading">در حال دریافت آخرین تحلیل…</div></div>
     </section>
 
     <!-- ================= صفحه‌ی ۳ — تنظیمات و گزارش‌ها ================= -->
@@ -884,20 +953,16 @@ function buildAgreementRows(coin){
   const overallSign = (coin.score ?? 0) >= 0 ? 1 : -1;
   return Object.entries(coin.factors).map(([key, val])=>{
     const label = FACTOR_LABELS[key] || key;
-    let mark = '<span style="color:var(--ink-faint)">–</span>';
-    if(Math.abs(val) >= NEUTRAL_ZONE){
-      const sign = val > 0 ? 1 : -1;
-      mark = sign === overallSign
-        ? '<span style="color:var(--buy)">✓</span>'
-        : '<span style="color:var(--sell)">⚠</span>';
-    }
-    return `<tr><td>${label}</td><td>${val.toFixed(2)}</td><td>${mark}</td></tr>`;
+    const pct = Math.min(100, Math.round(Math.abs(val) * 100));
+    const aligned = Math.abs(val) >= NEUTRAL_ZONE ? (val > 0 ? 1 : -1) === overallSign : null;
+    const barClass = aligned === null ? '' : (aligned ? 'buy' : 'sell');
+    const mark = aligned === null ? '<span style="color:var(--ink-faint)">خنثی</span>' : (aligned ? '<span style="color:var(--buy)">هم‌راستا</span>' : '<span style="color:var(--sell)">مخالف</span>');
+    return `<tr><td>${label}</td><td><div class="agree-bar-wrap"><div class="agree-bar"><div class="agree-bar-fill ${barClass}" style="width:${pct}%"></div></div><span class="agree-bar-num">${val.toFixed(2)}</span></div></td><td>${mark}</td></tr>`;
   }).join('');
 }
 
-function openModal(id){
-  const coin = analysisData.coins.find(c => c.id === id);
-  if(!coin) return;
+/* رندر جزئیات یک کوین (چارت + شاخص‌ها + دلایل) — هم داخل دتیل‌داکِ دسکتاپ استفاده می‌شه، هم مودال موبایل */
+function buildCoinDetailHTML(coin, closeBtnHTML){
   const ind = coin.indicators;
   const ns = coin.news_sentiment;
   let sentimentRow = '', sentimentHeadlinesHtml = '';
@@ -913,20 +978,19 @@ function openModal(id){
       sentimentRow = `<tr><td>احساسات اخبار (۲۴ ساعت)</td><td>خبری پیدا نشد</td></tr>`;
     }
   }
-
   const dec = effectiveDecision(coin);
   const regime = coin.market_regime;
   const regimeColor = regime ? (REGIME_COLOR[regime.regime] || 'var(--ink-faint)') : 'var(--ink-faint)';
-  document.getElementById('modal').innerHTML = `
+  return `
     <div class="modal-header">
       <h2>${coin.id}</h2>
-      <button class="close-btn" onclick="closeModal()">✕</button>
+      ${closeBtnHTML}
     </div>
+    <div class="order-badge ${dec}">${DECISION_LABELS[dec]} · ${coin.score_percent !== null && coin.score_percent !== undefined ? coin.score_percent+'٪' : 'بدون امتیاز'}</div>
     <div class="score-line">
-      <span class="code ${dec}">${DECISION_LABELS[dec]}</span>
-      <span class="score-num">امتیاز: ${coin.score_percent !== null && coin.score_percent !== undefined ? coin.score_percent+'٪' : '—'}</span>
       ${dec !== coin.decision ? `<span class="score-num" style="color:var(--ink-faint)">(با پروفایل اصلی: ${DECISION_LABELS[coin.decision]})</span>` : ''}
       ${regime ? `<span class="regime-chip"><span class="regime-led" style="background:${regimeColor}"></span>${regime.label_fa}${regime.volatility_pct!==null && regime.volatility_pct!==undefined?` — نوسان ${regime.volatility_pct}٪`:''}</span>` : ''}
+      ${(!coin.trend_gate_triggered && coin.agreement_ratio !== null && coin.agreement_ratio !== undefined) ? `<span class="score-num">نسبت توافق شاخص‌ها: ${Math.round(coin.agreement_ratio*100)}٪</span>` : ''}
     </div>
     <div class="chart-frame"><canvas id="priceChart"></canvas></div>
 
@@ -948,16 +1012,19 @@ function openModal(id){
       <tr><td>کراس EMA</td><td>${ind.ema_cross}</td></tr>
       <tr><td>حمایت / مقاومت</td><td>$${ind.support.toFixed(4)} — $${ind.resistance.toFixed(4)}</td></tr>
       ${sentimentRow}
-      ${(!coin.trend_gate_triggered && coin.agreement_ratio !== null && coin.agreement_ratio !== undefined) ? `<tr><td>نسبت توافق</td><td>${Math.round(coin.agreement_ratio*100)}٪</td></tr>` : ''}
     </table>
     ${sentimentHeadlinesHtml}
     <div class="disclaimer">${coin.disclaimer}</div>
   `;
-  document.getElementById('overlay').classList.add('open');
+}
 
+function mountPriceChart(coin){
+  const regime = coin.market_regime;
   const labels = coin.price_history.map(p => new Date(p[0]).toLocaleDateString('fa-IR'));
   const prices = coin.price_history.map(p => p[1]);
-  const ctx = document.getElementById('priceChart').getContext('2d');
+  const canvas = document.getElementById('priceChart');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
   if(chartInstance) chartInstance.destroy();
   const lineColor = regime ? (regime.regime === 'downtrend' ? '#ff6259' : '#d1ac3c') : '#d1ac3c';
   const gradient = ctx.createLinearGradient(0, 0, 0, 190);
@@ -975,7 +1042,31 @@ function openModal(id){
     }
   });
 }
-function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+
+/* روی دسکتاپ (>1080px): جزئیات داخل دتیل‌داکِ کنار لیست رندر می‌شه.
+   روی موبایل/تبلت: همون رفتار قبلی — مودال تمام‌صفحه. */
+function openModal(id){
+  const coin = analysisData.coins.find(c => c.id === id);
+  if(!coin) return;
+  const inline = window.innerWidth >= 1080;
+  if(inline){
+    document.getElementById('detailDock').innerHTML = buildCoinDetailHTML(coin, '<button class="close-btn" onclick="closeModal()">✕</button>');
+  } else {
+    document.getElementById('modal').innerHTML = buildCoinDetailHTML(coin, '<button class="close-btn" onclick="closeModal()">✕</button>');
+    document.getElementById('overlay').classList.add('open');
+  }
+  mountPriceChart(coin);
+}
+function closeModal(){
+  document.getElementById('overlay').classList.remove('open');
+  const dock = document.getElementById('detailDock');
+  if(dock && window.innerWidth >= 1080){
+    dock.innerHTML = `<div class="detail-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>
+      <div>یک کوین از لیست کنار انتخاب کنید تا نمودار، شاخص‌ها و دلایل تصمیم اینجا نمایش داده بشه.</div>
+    </div>`;
+  }
+}
 document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
 document.getElementById('search').addEventListener('input', renderWatchlist);
 document.getElementById('riskProfile').addEventListener('change', e=>{
