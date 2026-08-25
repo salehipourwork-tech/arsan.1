@@ -314,8 +314,14 @@ def generate_markdown_report(all_results: list) -> str:
         f"**Meta Weights:** Net={META_WEIGHTS['net']*100:.0f}%, PF={META_WEIGHTS['pf']*100:.0f}%, "
         f"DD={META_WEIGHTS['dd']*100:.0f}%, WR={META_WEIGHTS['wr']*100:.0f}%",
         "",
-        "| Coin | Baseline | Rules | AHPv2 | Meta-Adaptive | Winner | Winner Reason |",
-        "|------|----------|-------|-------|----------------|--------|---------------|",
+        # BUG FIX (this session): pyflakes flagged `m` (meta_controller's own
+        # net_return_pct) as computed-but-unused a few lines below. This
+        # table header/row was missing the meta_controller column entirely -
+        # a real gap in the report, not just dead code, since meta_controller
+        # is the actual final routed decision the other columns (src/reason)
+        # describe. Added it as its own column rather than dropping `m`.
+        "| Coin | Baseline | Rules | AHPv2 | Meta-Adaptive | Meta-Controller | Winner | Winner Reason |",
+        "|------|----------|-------|-------|----------------|------------------|--------|---------------|",
     ]
     for r in all_results:
         coin = r["coin"].upper()
@@ -326,7 +332,7 @@ def generate_markdown_report(all_results: list) -> str:
         m = r["meta_controller"]["net_return_pct"] if r["meta_controller"] else 0
         src = r["meta_controller"].get("meta_source", "-") if r["meta_controller"] else "-"
         reason = r["meta_controller"].get("meta_reason", "-") if r["meta_controller"] else "-"
-        lines.append(f"| {coin} | {b:+.2f}% | {fr:+.2f}% | {fa:+.2f}% | {ma:+.2f}% | {src} | {reason} |")
+        lines.append(f"| {coin} | {b:+.2f}% | {fr:+.2f}% | {fa:+.2f}% | {ma:+.2f}% | {m:+.2f}% | {src} | {reason} |")
     lines.extend(["", "## Detailed Results", ""])
     for r in all_results:
         lines.append(f"### {r['coin'].upper()}")
