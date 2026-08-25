@@ -59,14 +59,31 @@ class SequenceRandomizationReport:
 
 
 def _max_drawdown_from_sequence(pnl_sequence: List[float]) -> float:
-    equity = 0.0
-    peak = 0.0
+    """
+    BUG FIX (this session): this used to accumulate pnl additively on a
+    zero-based equity line (`equity += pnl; max_dd = max(max_dd, peak -
+    equity)`), while backtest_engine.py's real `max_drawdown_pct` (which
+    `original_max_drawdown` above is set to, and which this whole report
+    exists to compare against) is computed on a COMPOUNDING equity curve
+    starting at 1.0 (`equity[-1] * (1 + pnl_pct/100)`) with drawdown as a
+    fraction of the peak (`(peak-equity)/peak`), then scaled to percent.
+    The two were different units/formulas entirely — comparing them (as
+    `order_dependent` and the printed notes below both do) was comparing
+    apples to oranges, silently producing a misleading order-dependence
+    verdict. This now mirrors backtest_engine.py's formula exactly.
+    """
+    equity = 1.0
+    peak = 1.0
     max_dd = 0.0
     for pnl in pnl_sequence:
-        equity += pnl
-        peak = max(peak, equity)
-        max_dd = max(max_dd, peak - equity)
-    return max_dd
+        equity *= (1 + pnl / 100.0)
+        if equity > peak:
+            peak = equity
+        if peak > 0:
+            dd = (peak - equity) / peak
+            if dd > max_dd:
+                max_dd = dd
+    return max_dd * 100
 
 
 def randomize_trade_sequence(summary: BacktestSummary, n_iterations: int = 200,
