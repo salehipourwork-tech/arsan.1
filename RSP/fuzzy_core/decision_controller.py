@@ -91,15 +91,46 @@ class FuzzyDecisionController:
         threshold_by_method = getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD", {})
         base_threshold = threshold_by_method.get(scoring_method, settings.FUZZY_OPPORTUNITY_THRESHOLD)
 
-        if settings.FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD and history:
-            eff_threshold = self._adaptive_threshold(history, base_threshold)
+        # BUG FIX (this session, root cause of the AHPv2/Meta-Adaptive
+        # collapse in the 2026-08-25 multi-coin run): `history` passed in
+        # from backtest_engine.py was always `None` (it never tracked
+        # anything to pass), so `FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD`
+        # (default True) never actually activated in any backtest — every
+        # run silently fell back to the single static `base_threshold` for
+        # the whole 90-day window, for both methods. That's a real problem
+        # specifically because "rules" (Sugeno weighted-average over fired
+        # rules, several of which have output_singleton>=90) and "ahp"
+        # (strict compensatory-weighted average over 4 raw 0..1 quality
+        # dimensions) are NOT on the same natural scale — the real BTC/ETH
+        # run measured rules averaging opp_score~72-74 against the same
+        # 75-80 threshold, while ahp averaged ~40-66 against a threshold
+        # that was *also* getting a flat +5 boost below (exactly backwards:
+        # boosting the bar for the method that already scores lower).
+        # Fix: self.history now tracks each coin's *actual* realized score
+        # distribution for whichever method is active this run (rules OR
+        # ahp - a run only ever uses one), and this is used as the history
+        # source whenever the caller doesn't supply one of its own. Once
+        # >=30 candidates have been seen this run, the adaptive threshold
+        # in _adaptive_threshold() settles on that method's own historical
+        # percentile instead of a shared static guess - self-correcting
+        # the rules/AHP scale mismatch without hand-tuned per-method
+        # constants that (as this session showed) can end up backwards.
+        effective_history = history if history else self.history.get(coin, [])
+        if settings.FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD and effective_history:
+            eff_threshold = self._adaptive_threshold(effective_history, base_threshold)
             notes.append(f"adaptive_threshold:{eff_threshold:.1f}")
         else:
             eff_threshold = base_threshold
 
-        if scoring_method == "ahp":
-            eff_threshold += 5.0
-            notes.append("ahp_threshold_boost:+5")
+        # BUG FIX (this session): the flat "+5 for ahp" boost below assumed
+        # AHP's raw score runs *higher* than Rules' and needed reining in.
+        # Production evidence shows the opposite (AHP averaged 8-32 points
+        # *lower* than Rules on the same setups, on both BTC and ETH) - so
+        # this boost was making an already-too-strict gate stricter still,
+        # and is exactly why Fuzzy+AHPv2 fell to 0-1 trades. Removed; the
+        # adaptive, per-method, per-coin calibration above (and the lower
+        # AHP starting base in multi_coin_meta_test.py's NEW_OPP_BY_METHOD)
+        # now does this job from real data instead of a guessed constant.
 
         opportunity = fuzzy_result.opportunity_score
         stability = fuzzy_result.stability_score
@@ -118,6 +149,23 @@ class FuzzyDecisionController:
             recommendation = "WATCH"
         else:
             recommendation = "NO_TRADE"
+
+        # NEW (this session): actually populate self.history so the
+        # adaptive-threshold fix above has real data to work with; this is
+        # the piece that was missing (the dict existed since v2.0 but
+        # nothing ever wrote to it).
+        if coin:
+            self.history.setdefault(coin, []).append(opportunity)
+            max_len = getattr(settings, "FUZZY_DECISION_HISTORY_LEN", 5)
+            # FUZZY_DECISION_HISTORY_LEN (5) is sized for the live/streaming
+            # use case (last N signals for hysteresis), not for building an
+            # adaptive-threshold distribution, which needs enough samples
+            # to be a meaningful percentile - keep at least 300 here so a
+            # 90-day/15M backtest has a real, current-ish window instead of
+            # 5 points or unbounded memory growth over ~8600 bars.
+            keep = max(300, max_len)
+            if len(self.history[coin]) > keep:
+                del self.history[coin][: len(self.history[coin]) - keep]
 
         return FuzzyDecisionResult(
             can_trade=can_trade, opportunity_score=round(opportunity, 2),
@@ -307,9 +355,14 @@ class FuzzyDecisionController:
             volatility_quality_v2_badness_raw=volatility_raw, entry_quality_raw=entry_raw,
         )
 
+        # BUG FIX (this session): dropped the same flat "+5" ahp boost as
+        # evaluate() above, for the same reason (see comment there) - this
+        # copy only feeds ahp_dec.rejected for the meta-controller's blend
+        # (fuse_decisions' "+0.3 NO_TRADE if both engines reject" nudge),
+        # but it was still backwards for the same measured reason.
         threshold_by_method = getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD", {})
         rules_threshold = threshold_by_method.get("rules", settings.FUZZY_OPPORTUNITY_THRESHOLD)
-        ahp_threshold = threshold_by_method.get("ahp", settings.FUZZY_OPPORTUNITY_THRESHOLD) + 5.0
+        ahp_threshold = threshold_by_method.get("ahp", settings.FUZZY_OPPORTUNITY_THRESHOLD)
 
         opportunity_score = ahp_score if settings.OPPORTUNITY_SCORING_METHOD == "ahp" else rules_score
 
@@ -333,11 +386,30 @@ class FuzzyDecisionController:
         return QualityResult(overall_score=70.0, components={})
 
     def _adaptive_threshold(self, history, base_threshold):
+        """
+        BUG FIX (this session): this used to be
+        `max(base_threshold, percentile_value)` - a ratchet that can only
+        ever RAISE the bar above the static base, never lower it. That's
+        fine for a method whose natural scores run high, but for a method
+        whose natural scores run systematically low (AHP, per this
+        session's production evidence) it's a no-op: the floor never
+        drops, so the threshold never approaches the ~25% acceptance rate
+        FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE (0.75) is meant to target,
+        and the method stays starved for the entire run regardless of how
+        much history accumulates.
+        Now uses the historical percentile directly once there's enough
+        history to trust (>=30 samples) - letting it settle above OR below
+        base_threshold, whichever the method's own realized distribution
+        calls for - clamped to a sane [35, 88] band so a short bad/good
+        stretch early in a run can't pin the threshold at an extreme for
+        the rest of it.
+        """
         if not history or len(history) < 30:
             return base_threshold
         sorted_scores = sorted(history)
         idx = int(len(sorted_scores) * settings.FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE)
-        return max(base_threshold, sorted_scores[min(idx, len(sorted_scores) - 1)])
+        percentile_value = sorted_scores[min(idx, len(sorted_scores) - 1)]
+        return max(35.0, min(88.0, percentile_value))
 
 
 # ---------------------------------------------------------------------------
