@@ -1,10 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RSP — Multi-Coin Meta Test v3.1
+RSP — Multi-Coin Meta Test v3.3
 - Meta-Controller multi-criteria (Net/PF/DD/WR)
 - Auto-calibrate threshold per-coin based on ATR%
 - Profitability bias
+
+FIX (this session — pre-live-test): Fuzzy+AHPv2 and Meta-Adaptive were
+collapsing to 0-4 trades per coin in the 2026-08-25 run. Root causes (see
+matching comments in RSP/fuzzy_core/decision_controller.py,
+RSP/backtest_engine/backtest_engine.py, and RSP/config/settings.py):
+  1. Rules vs AHP opportunity scores are on different natural scales
+     (measured ~72-74 avg vs ~40-66 avg on identical setups) but shared
+     one static threshold, plus AHP got a flat +5 penalty on top of an
+     already-lower score - removed, and AHP's base threshold lowered to
+     match its measured range.
+  2. The per-coin adaptive threshold (FUZZY_ADAPTIVE_OPPORTUNITY_THRESHOLD)
+     was wired to always receive history=None from the backtest loop, so
+     it silently never activated; now backed by real per-run, per-coin
+     score history, and can adjust the threshold down (not just up) when
+     a method's realized scores run low.
+  3. Meta-Adaptive's confidence-fusion score (a different scale again) was
+     being re-gated a second time against the static rules/ahp threshold
+     in the backtest loop, on top of its own correct internal gate -
+     removed; the meta-controller's own can_trade decision is now
+     authoritative.
 """
 
 import os
@@ -45,8 +65,22 @@ OLD_OPP = 50.0
 NEW_RR = 2.5
 NEW_SL_MULT = 1.5
 NEW_EXIT = "PROPORTIONAL"
+
+# CALIBRATION FIX (this session): "rules" (Sugeno weighted-average over
+# fired IF-THEN rules, several with output_singleton>=90) and "ahp" (strict
+# compensatory-weighted average over 4 raw 0..1 quality dimensions) are not
+# on the same natural scale. The 2026-08-25 production run measured this
+# directly: candidate opp_score avg for rules ~72-74 vs ahp ~40-66 on the
+# *same* BTC/ETH setups, against a shared 75 base (and ahp got a further
+# +5 static boost on top - see decision_controller.py fix). Giving both
+# methods the same starting base guaranteed AHP would almost never clear
+# the gate. AHP's base is now set lower to reflect its measured lower
+# natural range; decision_controller.py's adaptive-threshold fix (also
+# this session) then self-corrects both further from each run's *own*
+# realized score history, so this starting value only matters for the
+# first ~30 candidates of a run (cold start) rather than the whole window.
 NEW_OPP_BY_METHOD = dict(getattr(settings, "FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD",
-    {"rules": 75.0, "ahp": 75.0}))
+    {"rules": 72.0, "ahp": 58.0}))
 
 META_WEIGHTS = {"net": 0.35, "pf": 0.25, "dd": 0.25, "wr": 0.15}
 
@@ -310,7 +344,7 @@ def run_all_scenarios(coin: str) -> dict:
     time.sleep(RATE_LIMIT_SECONDS)
     meta_adaptive = run_scenario(coin, "Meta-Adaptive", use_fuzzy=True, use_ahp=False, use_meta=True)
     time.sleep(RATE_LIMIT_SECONDS)
-    print(f"\n>>> [{coin}] Meta-Controller v3.2 (Baseline vs Rules vs AHPv2 vs Meta-Adaptive)")
+    print(f"\n>>> [{coin}] Meta-Controller v3.3 (Baseline vs Rules vs AHPv2 vs Meta-Adaptive)")
     meta_result, meta_source, meta_reason = _select_meta(baseline, fuzzy_rules, fuzzy_ahp, meta_adaptive)
     print(f"    → Meta selected: {meta_source}")
     print(f"    → Reason: {meta_reason}")
@@ -333,14 +367,16 @@ def run_all_scenarios(coin: str) -> dict:
 
 def generate_markdown_report(all_results: list) -> str:
     lines = [
-        "# Multi-Coin Meta Test Report v3.1",
+        "# Multi-Coin Meta Test Report v3.3",
         f"**Generated:** {datetime.now(timezone.utc).isoformat()}",
         f"**Period:** {DAYS} days | **Timeframe:** {BASE_TF}",
         "**Baseline:** RR=2.0, SL=2.5ATR, SL_FIRST, Opp>=50",
-        f"**Fuzzy+Rules:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=75 (auto-calibrated ±15)",
-        f"**Fuzzy+AHPv2:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>=75 (auto-calibrated ±15)",
-        "**Meta-Adaptive:** same as Fuzzy+Rules params, but decision routed through "
-        "RSP.meta_controller (per-bar adaptive Rules/AHP blend by market context)",
+        f"**Fuzzy+Rules:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>={NEW_OPP_BY_METHOD['rules']:.0f} (auto-calibrated by ATR% + adaptive per-coin history)",
+        f"**Fuzzy+AHPv2:** RR=2.5, SL=1.5ATR, PROPORTIONAL, Opp>={NEW_OPP_BY_METHOD['ahp']:.0f} (auto-calibrated by ATR% + adaptive per-coin history)",
+        "**Meta-Adaptive:** same RR/SL/Exit as Fuzzy+Rules, but decision routed through "
+        "RSP.meta_controller (per-bar adaptive Rules/AHP blend by market context; its own "
+        "confidence-fusion score is gated by the meta-controller's internal logic, not by "
+        "the static rules/ahp opportunity threshold above - see backtest_engine.py fix)",
         f"**Meta Weights:** Net={META_WEIGHTS['net']*100:.0f}%, PF={META_WEIGHTS['pf']*100:.0f}%, "
         f"DD={META_WEIGHTS['dd']*100:.0f}%, WR={META_WEIGHTS['wr']*100:.0f}%",
         "",
@@ -384,14 +420,15 @@ def generate_markdown_report(all_results: list) -> str:
 
 def main():
     print("="*70)
-    print("Arsan — Multi-Coin Meta Test v3.2 (Auto-Calibrate + Meta-Adaptive)")
+    print("Arsan — Multi-Coin Meta Test v3.3 (Auto-Calibrate + Meta-Adaptive + Fuzzy/AHP Scale Fix)")
     print(f"Date: {datetime.now(timezone.utc).isoformat()}")
     print(f"Coins: {', '.join(c['symbol'] for c in COINS)}")
     print("Baseline: RR=2.0 | SL=2.5ATR | SL_FIRST | Opp>=50")
-    print(f"Fuzzy+Rules: RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>=75 (auto ±15)")
-    print(f"Fuzzy+AHPv2: RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>=75 (auto ±15)")
-    print(f"Meta-Adaptive: same params as Fuzzy+Rules, decision routed through "
-          f"RSP.meta_controller (per-bar adaptive Rules/AHP blend)")
+    print(f"Fuzzy+Rules: RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>={NEW_OPP_BY_METHOD['rules']:.0f} (auto ATR + adaptive)")
+    print(f"Fuzzy+AHPv2: RR=2.5 | SL=1.5ATR | PROPORTIONAL | Opp>={NEW_OPP_BY_METHOD['ahp']:.0f} (auto ATR + adaptive)")
+    print(f"Meta-Adaptive: same RR/SL/Exit as Fuzzy+Rules, decision routed through "
+          f"RSP.meta_controller (per-bar adaptive Rules/AHP blend, gated by its own "
+          f"confidence fusion, not the static rules/ahp threshold)")
     print(f"Meta Weights: Net={META_WEIGHTS['net']*100:.0f}% | PF={META_WEIGHTS['pf']*100:.0f}% | "
           f"DD={META_WEIGHTS['dd']*100:.0f}% | WR={META_WEIGHTS['wr']*100:.0f}%")
     print("="*70)
