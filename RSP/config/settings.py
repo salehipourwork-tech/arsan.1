@@ -124,6 +124,35 @@ FUZZY_TRADE_PERMISSION_MIN = 50.0
 
 OPPORTUNITY_SCORING_METHOD = "ahp"
 
+# ---------------------------------------------------------------------------
+# FUZZY MEMBERSHIP-FUNCTION / RULE-OUTPUT CALIBRATION (this session)
+# ---------------------------------------------------------------------------
+# Each 4-tuple is (weak_end, moderate_center, strong_center, extreme_start)
+# fed into membership.build_quality_variable() for the 5-term quality
+# variables (trend/momentum/entry/risk/stability/confidence). Defaults below
+# reproduce the original hardcoded breakpoints exactly - changing behavior
+# only if RSP/fuzzy_core/fuzzy_calibration_wf.py's walk-forward search picks
+# a different value here (only after confirming it doesn't just overfit the
+# training window - see that script's rejection rule). volatility_quality
+# and contradiction_severity keep their own custom (non-5-term) shapes and
+# are intentionally not exposed here - see membership.py's docstring on
+# volatility_quality_v2 for why its calibration is population/rank-based
+# rather than a simple breakpoint sweep.
+FUZZY_MF_TREND = (0.20, 0.40, 0.65, 0.85)
+FUZZY_MF_MOMENTUM = (0.25, 0.45, 0.70, 0.88)
+FUZZY_MF_ENTRY = (0.20, 0.40, 0.65, 0.85)
+FUZZY_MF_RISK = (0.25, 0.45, 0.70, 0.90)
+FUZZY_MF_STABILITY = (0.20, 0.40, 0.65, 0.85)
+FUZZY_MF_CONFIDENCE = (0.25, 0.45, 0.70, 0.88)
+
+# Uniform post-hoc calibration of every OPPORTUNITY_RULES output_singleton:
+# singleton' = clamp(singleton * MULTIPLIER + OFFSET, 0, 100) - see
+# FuzzyRule.effective_output_singleton() in rule_base.py. A single knob
+# rather than hand-editing 20 individually-designed rule outputs. No-op by
+# default (1.0 / 0.0).
+FUZZY_RULE_OUTPUT_MULTIPLIER = 1.0
+FUZZY_RULE_OUTPUT_OFFSET = 0.0
+
 VOLATILITY_REGIME_PRIOR_WEIGHT = 0.35
 USE_PERCENTILE_RISK_VOLATILITY = True
 VOLATILITY_PERCENTILE_MIN_SAMPLES = 30
