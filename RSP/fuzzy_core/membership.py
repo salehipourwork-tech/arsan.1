@@ -147,22 +147,26 @@ def build_quality_variable(
 
 def build_trend_quality_variable() -> LinguisticVariable:
     """Phase 29: Fuzzy Trend Quality"""
-    return build_quality_variable("trend_quality", 0.20, 0.40, 0.65, 0.85)
+    from ..config import settings
+    return build_quality_variable("trend_quality", *getattr(settings, "FUZZY_MF_TREND", (0.20, 0.40, 0.65, 0.85)))
 
 
 def build_momentum_quality_variable() -> LinguisticVariable:
     """Phase 30: Fuzzy Momentum Quality"""
-    return build_quality_variable("momentum_quality", 0.25, 0.45, 0.70, 0.88)
+    from ..config import settings
+    return build_quality_variable("momentum_quality", *getattr(settings, "FUZZY_MF_MOMENTUM", (0.25, 0.45, 0.70, 0.88)))
 
 
 def build_entry_quality_variable() -> LinguisticVariable:
     """Phase 31: Fuzzy Entry Quality"""
-    return build_quality_variable("entry_quality", 0.20, 0.40, 0.65, 0.85)
+    from ..config import settings
+    return build_quality_variable("entry_quality", *getattr(settings, "FUZZY_MF_ENTRY", (0.20, 0.40, 0.65, 0.85)))
 
 
 def build_risk_quality_variable() -> LinguisticVariable:
     """Phase 32: Fuzzy Risk Quality"""
-    return build_quality_variable("risk_quality", 0.25, 0.45, 0.70, 0.90)
+    from ..config import settings
+    return build_quality_variable("risk_quality", *getattr(settings, "FUZZY_MF_RISK", (0.25, 0.45, 0.70, 0.90)))
 
 
 def build_volatility_quality_variable() -> LinguisticVariable:
@@ -218,7 +222,8 @@ def build_volatility_quality_variable_v2() -> LinguisticVariable:
 
 def build_market_stability_variable() -> LinguisticVariable:
     """Phase 34: Fuzzy Market Stability"""
-    return build_quality_variable("market_stability", 0.20, 0.40, 0.65, 0.85)
+    from ..config import settings
+    return build_quality_variable("market_stability", *getattr(settings, "FUZZY_MF_STABILITY", (0.20, 0.40, 0.65, 0.85)))
 
 
 def build_signal_strength_variable() -> LinguisticVariable:
@@ -239,7 +244,8 @@ def build_signal_strength_variable() -> LinguisticVariable:
 
 def build_signal_confidence_variable() -> LinguisticVariable:
     """Phase 36: Fuzzy Signal Confidence"""
-    return build_quality_variable("signal_confidence", 0.25, 0.45, 0.70, 0.88)
+    from ..config import settings
+    return build_quality_variable("signal_confidence", *getattr(settings, "FUZZY_MF_CONFIDENCE", (0.25, 0.45, 0.70, 0.88)))
 
 
 def build_contradiction_severity_variable() -> LinguisticVariable:
