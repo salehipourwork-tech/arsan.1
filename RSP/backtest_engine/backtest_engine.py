@@ -169,7 +169,25 @@ def run_backtest(bars_by_tf: Dict[str, pd.DataFrame], base_tf: str = "15M",
             if not fuzzy_result.can_trade:
                 fuzzy_rejection_reasons["can_trade_false"] += 1
                 continue
-            if fuzzy_result.opportunity_score < threshold:
+
+            # BUG FIX (this session, root cause of Meta-Adaptive's collapse
+            # in the 2026-08-25 run - e.g. ETH: 0 trades, candidate opp
+            # score avg=4.0 with max=77.4): when META_CONTROLLER_ENABLED,
+            # fuzzy_result.opportunity_score is meta.final_confidence*100 -
+            # a weighted-vote confidence over the Rules/AHP blend, already
+            # gated by meta_controller's own internal logic (fuse_decisions'
+            # TRADE_THRESHOLD=0.35, select_mode's PRESERVATION handling)
+            # and already fully reflected in `can_trade` just above. That
+            # score is on a fundamentally different scale from the static
+            # single-method "rules"/"ahp" opportunity score that `threshold`
+            # here is calibrated for (FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD),
+            # so re-applying it a second time here isn't a safety margin -
+            # it's a second, uncalibrated gate that rejected the large
+            # majority of trades the meta-controller had already legitimately
+            # approved. Only apply this static-scale check for the static
+            # (non-meta) scoring path, where it's the intended (if partly
+            # redundant with can_trade) safety check.
+            if not meta_mode and fuzzy_result.opportunity_score < threshold:
                 fuzzy_rejection_reasons["below_opportunity_threshold"] += 1
                 continue
 
