@@ -51,7 +51,7 @@ def _sugeno_defuzzify(firing_strengths: Dict[str, float]) -> float:
     if total <= 0:
         return 0.0
     weighted = sum(
-        strength * (next((r.output_singleton for r in OPPORTUNITY_RULES if r.rule_id == rid), 0))
+        strength * (next((r.effective_output_singleton() for r in OPPORTUNITY_RULES if r.rule_id == rid), 0))
         for rid, strength in firing_strengths.items()
     )
     return round(weighted / total, 2)
@@ -85,7 +85,7 @@ def _mamdani_aggregate(firing_strengths: Dict[str, float]) -> Dict[str, float]:
         if not rule:
             continue
         # Output singleton position maps to center of a triangular MF
-        center = rule.output_singleton
+        center = rule.effective_output_singleton()
         # Create a triangular MF around center with base width ~30
         a = max(0, center - 20)
         b = center
