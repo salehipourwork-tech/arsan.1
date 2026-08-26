@@ -38,7 +38,13 @@ MAX_SL_DISTANCE_PCT = 0.05
 
 MIN_OPPORTUNITY_SCORE_FOR_TRADE = 75.0
 FUZZY_OPPORTUNITY_THRESHOLD = 75.0
-FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = {"rules": 75.0, "ahp": 75.0}
+# CALIBRATION FIX (this session): "rules" and "ahp" opportunity scores are
+# not on the same natural scale (rules runs ~72-74 avg, ahp ~40-66 avg on
+# identical setups per the 2026-08-25 production run) - giving them the
+# same base threshold starved ahp almost entirely. ahp's base is lowered
+# to reflect its measured range; see decision_controller.py's adaptive-
+# threshold fix for the per-run, per-coin self-correction on top of this.
+FUZZY_OPPORTUNITY_THRESHOLD_BY_METHOD = {"rules": 72.0, "ahp": 58.0}
 FUZZY_ADAPTIVE_OPPORTUNITY_PERCENTILE = 0.75
 
 TRX_BLACKLIST = ["tron", "TRX", "tronix"]
