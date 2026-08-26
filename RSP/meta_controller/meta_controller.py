@@ -35,6 +35,14 @@ MODE_WEIGHTS = {
     "PRESERVATION":  {"rules": 0.00, "ahp": 0.00, "no_trade": 1.00},
 }
 
+# CALIBRATION FIX (RSP calibration system): this was a magic number hardcoded
+# *inside* fuse_decisions() (`TRADE_THRESHOLD = 0.35`) — invisible to any
+# override/optimizer, so nothing in the calibration system could ever tune
+# it. Promoted to a module constant with the exact same default value; no
+# behavior change unless something explicitly overrides it (see
+# RSP/calibration/param_registry.py).
+META_TRADE_THRESHOLD = 0.35
+
 @dataclass
 class EngineDecision:
     engine: str
@@ -198,10 +206,10 @@ def fuse_decisions(mode: str, rules_dec: EngineDecision, ahp_dec: EngineDecision
     best_dir = max(votes, key=votes.get)
     best_score = votes[best_dir]
     
-    TRADE_THRESHOLD = 0.35
-    if best_dir in ("LONG", "SHORT") and best_score < TRADE_THRESHOLD:
+    trade_threshold = META_TRADE_THRESHOLD
+    if best_dir in ("LONG", "SHORT") and best_score < trade_threshold:
         best_dir = "NO_TRADE"
-        meta.fusion_notes.append(f"Score {best_score:.2f} below threshold {TRADE_THRESHOLD}")
+        meta.fusion_notes.append(f"Score {best_score:.2f} below threshold {trade_threshold}")
     
     meta.final_direction = best_dir
     meta.final_confidence = min(1.0, best_score)
