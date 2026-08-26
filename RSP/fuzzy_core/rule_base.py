@@ -41,6 +41,25 @@ class FuzzyRule:
         # Standard min T-norm
         return min(degrees) * self.weight
 
+    def effective_output_singleton(self) -> float:
+        """
+        NEW (this session): single calibration knob for the whole rule base.
+        Every consumer of `.output_singleton` (inference.py's Sugeno
+        defuzzifier AND conflict_resolution.py's several resolution
+        methods - both read it directly) now goes through this instead,
+        so a walk-forward calibration search (see
+        RSP/fuzzy_core/fuzzy_calibration_wf.py) can uniformly scale/shift
+        overall rule generosity via
+        settings.FUZZY_RULE_OUTPUT_MULTIPLIER/_OFFSET without hand-editing
+        any of the 20 individually-designed singleton values above (each
+        has its own documented rationale) and without missing one of the
+        several read sites. Defaults to a no-op (1.0 / 0.0).
+        """
+        from ..config import settings
+        mult = getattr(settings, "FUZZY_RULE_OUTPUT_MULTIPLIER", 1.0)
+        off = getattr(settings, "FUZZY_RULE_OUTPUT_OFFSET", 0.0)
+        return max(0.0, min(100.0, self.output_singleton * mult + off))
+
 
 # =============================================================================
 # Rule Base: Opportunity Quality Rules
