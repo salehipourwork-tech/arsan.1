@@ -48,7 +48,7 @@ def detect_conflicts(firing_strengths: Dict[str, float]) -> List[List[str]]:
     for rid, strength in active.items():
         rule = _get_rule(rid)
         if rule:
-            items.append((rid, rule.output_singleton, strength))
+            items.append((rid, rule.effective_output_singleton(), strength))
     items.sort(key=lambda x: x[1])
 
     # Cluster by gap > 30
@@ -102,7 +102,7 @@ def resolve_conflicts(
         return report
 
     weighted_sum = sum(
-        strength * (_get_rule(rid).output_singleton if _get_rule(rid) else 0)
+        strength * (_get_rule(rid).effective_output_singleton() if _get_rule(rid) else 0)
         for rid, strength in active.items()
     )
     weighted_avg = weighted_sum / total_firing
@@ -111,13 +111,13 @@ def resolve_conflicts(
         report.resolved_score = round(weighted_avg, 2)
         # Winning rule = closest to output
         report.winning_rule = min(active.keys(),
-            key=lambda rid: abs((_get_rule(rid).output_singleton if _get_rule(rid) else 0) - weighted_avg))
+            key=lambda rid: abs((_get_rule(rid).effective_output_singleton() if _get_rule(rid) else 0) - weighted_avg))
 
     elif method == "winner_takes_all":
         # Winner = max(firing_strength * singleton) — not just max firing
         winner = max(active.keys(),
-            key=lambda rid: active[rid] * (_get_rule(rid).output_singleton if _get_rule(rid) else 0))
-        report.resolved_score = round(_get_rule(winner).output_singleton if _get_rule(winner) else 0, 2)
+            key=lambda rid: active[rid] * (_get_rule(rid).effective_output_singleton() if _get_rule(rid) else 0))
+        report.resolved_score = round(_get_rule(winner).effective_output_singleton() if _get_rule(winner) else 0, 2)
         report.winning_rule = winner
 
     elif method == "conservative_weighted":
@@ -139,9 +139,9 @@ def resolve_conflicts(
         # "conservative" intent without an all-or-nothing floor.
         min_rid = min(
             active.keys(),
-            key=lambda rid: (_get_rule(rid).output_singleton if _get_rule(rid) else 100),
+            key=lambda rid: (_get_rule(rid).effective_output_singleton() if _get_rule(rid) else 100),
         )
-        min_singleton = _get_rule(min_rid).output_singleton if _get_rule(min_rid) else 100
+        min_singleton = _get_rule(min_rid).effective_output_singleton() if _get_rule(min_rid) else 100
         min_rule_weight = active[min_rid] / total_firing  # 0..1 share of total firing
         pulled = weighted_avg - min_rule_weight * (weighted_avg - min_singleton)
         report.resolved_score = round(max(0.0, min(100.0, pulled)), 2)
@@ -153,10 +153,10 @@ def resolve_conflicts(
     elif method == "conservative_override":
         low_rules = [
             rid for rid in active.keys()
-            if _get_rule(rid) and _get_rule(rid).output_singleton < conservative_threshold
+            if _get_rule(rid) and _get_rule(rid).effective_output_singleton() < conservative_threshold
         ]
         if low_rules:
-            min_low = min(_get_rule(rid).output_singleton for rid in low_rules if _get_rule(rid))
+            min_low = min(_get_rule(rid).effective_output_singleton() for rid in low_rules if _get_rule(rid))
             report.resolved_score = round(min(weighted_avg, min_low), 2)
             report.notes.append(f"Conservative override: low rule(s) {low_rules} capped output to {min_low}")
         else:
