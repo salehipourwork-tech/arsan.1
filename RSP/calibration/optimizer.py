@@ -91,11 +91,18 @@ class CalibrationResult:
 def calibrate_on_is(bars_by_tf_is: Dict, mode: str, coin_id: Optional[str],
                      base_tf: str = "15M", min_history: int = 200,
                      n_passes: int = 2, params: Optional[List[reg.ParamSpec]] = None,
-                     fold_label: str = "fold") -> CalibrationResult:
+                     fold_label: str = "fold", n_workers: int = 1) -> CalibrationResult:
     """
     Coordinate ascent on the IS slice only. Returns the locked parameter
     dict (only params that actually improved the IS composite score are
     included — everything else stays at its shipped default).
+
+    n_workers > 1: evaluates all candidate values for a given parameter IN
+    PARALLEL (separate processes) instead of one at a time. Safe because
+    each candidate evaluation is fully independent (apply_overrides ->
+    run_backtest -> restore, nothing shared across candidates) — this
+    does NOT touch the decision engine or change any result, it only
+    evaluates the same candidates concurrently instead of sequentially.
     """
     params = params if params is not None else reg.params_for_mode(mode)
     locked: Dict = {}
@@ -105,18 +112,29 @@ def calibrate_on_is(bars_by_tf_is: Dict, mode: str, coin_id: Optional[str],
         summary = run_one(bars_by_tf_is, mode, coin_id, overrides, base_tf, min_history)
         return WindowScore.from_summary("IS", summary).composite_score()
 
+    def score_many(trials: List[Dict]) -> List[float]:
+        if n_workers <= 1 or len(trials) <= 1:
+            return [score_with(t) for t in trials]
+        import concurrent.futures as cf
+        with cf.ProcessPoolExecutor(
+                max_workers=min(n_workers, len(trials)),
+                initializer=_init_worker,
+                initargs=(bars_by_tf_is, mode, coin_id, base_tf, min_history)) as ex:
+            return list(ex.map(_worker_score, trials))
+
     current_score = score_with(locked)
     for _pass in range(n_passes):
         improved_this_pass = False
         for spec in params:
             if spec.kind in ("bool",) and len(spec.calibration_grid) <= 1:
                 continue
+            if not spec.calibration_grid:
+                continue
             best_val = locked.get(spec.name, spec.current_value())
             best_score = current_score
-            for candidate_val in spec.calibration_grid:
-                trial = dict(locked)
-                trial[spec.name] = candidate_val
-                s = score_with(trial)
+            trials = [dict(locked, **{spec.name: cv}) for cv in spec.calibration_grid]
+            scores = score_many(trials)
+            for candidate_val, s in zip(spec.calibration_grid, scores):
                 if s > best_score:
                     best_score = s
                     best_val = candidate_val
@@ -134,3 +152,24 @@ def calibrate_on_is(bars_by_tf_is: Dict, mode: str, coin_id: Optional[str],
     result.locked_params = locked
     result.final_is_score = current_score
     return result
+
+
+# --- worker-process helpers for score_many's ProcessPoolExecutor -----------
+_WORKER_STATE = {}
+
+
+def _init_worker(bars_by_tf_is, mode, coin_id, base_tf, min_history):
+    """Runs once per worker process — stashes the (large, unchanging) bars
+    dict in that process's memory so each submitted trial only needs to
+    pickle its small {param: value} dict, not the whole dataset again."""
+    _WORKER_STATE["bars"] = bars_by_tf_is
+    _WORKER_STATE["mode"] = mode
+    _WORKER_STATE["coin_id"] = coin_id
+    _WORKER_STATE["base_tf"] = base_tf
+    _WORKER_STATE["min_history"] = min_history
+
+
+def _worker_score(trial_overrides: Dict) -> float:
+    summary = run_one(_WORKER_STATE["bars"], _WORKER_STATE["mode"], _WORKER_STATE["coin_id"],
+                       trial_overrides, _WORKER_STATE["base_tf"], _WORKER_STATE["min_history"])
+    return WindowScore.from_summary("IS", summary).composite_score()
