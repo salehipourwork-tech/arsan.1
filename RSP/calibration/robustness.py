@@ -136,8 +136,13 @@ def run_robustness_suite(bars_by_tf_oos: Dict, mode: str, coin_id: Optional[str]
     baseline_score = WindowScore.from_summary("OOS_locked", oos_summary).composite_score()
     report = RobustnessReport(locked_params=locked_params, baseline_oos_score=baseline_score)
 
-    # 1) perturbation ±5/±10%
-    points = perturbation_sensitivity(bars_by_tf_oos, mode, coin_id, locked_params, base_tf, min_history)
+    # 1) perturbation ±5/±10% — ONLY on params that were actually locked (i.e.
+    # moved away from their shipped default). Sweeping the full mode registry
+    # here was wasteful: most params stay at default and perturbing a default
+    # nobody chose tells you nothing about the candidate that's being shipped.
+    locked_specs = [reg.PARAMS_BY_NAME[k] for k in locked_params if k in reg.PARAMS_BY_NAME]
+    points = perturbation_sensitivity(bars_by_tf_oos, mode, coin_id, locked_params, base_tf, min_history,
+                                       params=locked_specs if locked_specs else None)
     report.perturbation_points = points
     report.plateau, report.fragile_params = _assess_plateau(oos_summary.net_return_pct, points)
 
