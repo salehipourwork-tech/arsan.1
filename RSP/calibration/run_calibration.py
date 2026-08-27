@@ -72,7 +72,45 @@ def main():
     ap.add_argument("--n-folds", type=int, default=3)
     ap.add_argument("--purge-bars", type=int, default=24)
     ap.add_argument("--min-history", type=int, default=200)
+    ap.add_argument("--n-passes", type=int, default=2,
+                     help="Coordinate-ascent passes over the param grid per fold (default 2). "
+                          "1 pass is ~2x faster and usually captures most of the improvement.")
+    ap.add_argument("--grid-cap", type=int, default=None,
+                     help="Coarsen every parameter's calibration grid to at most N candidates "
+                          "before running (e.g. --grid-cap 3). Biggest single lever on runtime: "
+                          "cost is roughly linear in total grid points evaluated.")
+    ap.add_argument("--parallel-modes", action="store_true",
+                     help="Run Baseline/Fuzzy/AHP/Meta as 4 separate processes instead of "
+                          "sequentially. Close to a 4x speedup on a >=4-core machine for the "
+                          "mode-comparison stage. Safe: each mode's parameter overrides only "
+                          "affect its own process.")
+    ap.add_argument("--fast", action="store_true",
+                     help="Preset for a first pass / sanity check, NOT a substitute for the full "
+                          "run: --grid-cap 3 --n-passes 1 --n-folds 1 --parallel-modes. Expect this "
+                          "to finish in well under an hour instead of ~24h, but treat its numbers "
+                          "as a rough signal — confirm anything promising with a full run before "
+                          "trusting it for the golden-rule verdict.")
+    ap.add_argument("--other-coins", nargs="*", default=[],
+                     help="Coin ids (e.g. ethereum solana) to test the WINNING mode's locked "
+                          "parameters on, unchanged, as a generalization check. Does NOT "
+                          "re-calibrate for them — answers 'does this edge hold up elsewhere or "
+                          "is it overfit to --coin specifically'. Leave empty to skip (default).")
     args = ap.parse_args()
+
+    if args.fast:
+        args.grid_cap = args.grid_cap or 3
+        args.n_passes = 1
+        args.n_folds = min(args.n_folds, 1)
+        args.parallel_modes = True
+        print("[--fast] preset applied: grid-cap=3, n-passes=1, n-folds=1, parallel-modes=on")
+
+    if args.grid_cap:
+        original_sizes = reg.trim_grids(max_points=args.grid_cap)
+        if original_sizes:
+            total_before = sum(original_sizes.values())
+            total_after = sum(min(v, args.grid_cap) for v in original_sizes.values())
+            print(f"[grid-cap={args.grid_cap}] {len(original_sizes)} params coarsened "
+                  f"({total_before} -> {total_after} grid points total)")
 
     print("=" * 78)
     print(f"RSP Calibration System — coin={args.coin} base_tf={args.base_tf} "
@@ -107,7 +145,8 @@ def main():
     # locks them, evaluates once on OOS per fold.
     # -----------------------------------------------------------------
     mode_results = compare_all_modes(bars_by_tf, args.base_tf, plan, coin_id=args.coin,
-                                      min_history=args.min_history)
+                                      min_history=args.min_history, n_calibration_passes=args.n_passes,
+                                      parallel=args.parallel_modes)
 
     print("\n--- Mode comparison (identical IS->Purge->OOS protocol) ---")
     for mode in MODES_TO_COMPARE:
@@ -192,13 +231,40 @@ def main():
         print(f"\n[WARN] Final holdout too small ({holdout_n} bars) to evaluate reliably.")
 
     # -----------------------------------------------------------------
+    # Multi-coin generalization check (optional, --other-coins). Uses the
+    # winner's locked params AS-IS on other coins' OOS — no re-tuning.
+    # -----------------------------------------------------------------
+    multi_coin_report = None
+    if args.other_coins and winner_mode != reg.MODE_BASELINE and winner_result.locked_params_by_fold:
+        from .multi_coin import check_generalization
+        print(f"\n--- Multi-coin generalization check ({winner_mode}'s locked params, unmodified, "
+              f"on: {', '.join(args.other_coins)}) ---")
+        multi_coin_report = check_generalization(
+            load_bars_fn=lambda c: _load_bars(c, args.days, args.synthetic),
+            primary_coin=args.coin, primary_locked_params=winner_result.locked_params_by_fold[-1],
+            primary_oos_agg=winner_result.oos_agg, mode=winner_mode, other_coins=args.other_coins,
+            base_tf=args.base_tf, min_history=args.min_history,
+            holdout_frac=args.holdout_frac, purge_bars=args.purge_bars, n_folds=min(args.n_folds, 2))
+        for r in multi_coin_report.per_coin:
+            print(f"  {r.coin_id:12s} {'HOLDS UP' if r.holds_up else 'FAILS':9s} — {r.reason}")
+        print(f"  => {multi_coin_report.verdict_note}")
+        if not multi_coin_report.generalizes:
+            # Doesn't override the single-coin holdout_confirms verdict (that
+            # verdict is honestly about --coin only) but the printed final
+            # verdict below is annotated so this can't be silently missed.
+            print(f"  [NOTE] این یافته روی برچسب SUCCESS/NOT CONFIRMED زیر تأثیری نمی‌گذارد — آن فقط "
+                  f"درباره‌ی {args.coin} است؛ این خط جداگانه درباره‌ی تعمیم‌پذیری است.")
+
+    # -----------------------------------------------------------------
     # Final verdict — success is declared ONLY when OOS improvement (not
     # just IS) is confirmed AND the untouched final holdout agrees.
     # -----------------------------------------------------------------
     print("\n" + "=" * 78)
     if winner_mode != reg.MODE_BASELINE and winner_result.verdict.accepted and holdout_confirms:
-        print(f"[SUCCESS] {winner_mode} روی OOS و Final Holdout (هردو) نسبت به Baseline بهبود سود خالص "
+        print(f"[SUCCESS for {args.coin}] {winner_mode} روی OOS و Final Holdout (هردو) نسبت به Baseline بهبود سود خالص "
               f"با ریسک کنترل‌شده تأیید شد. توصیه: پارامترهای قفل‌شده را برای production اعمال کنید.")
+        if args.other_coins:
+            print(f"           تعمیم به کوین‌های دیگر: {'تأیید شد' if multi_coin_report and multi_coin_report.generalizes else 'تأیید نشد — به بخش بالا نگاه کنید'}")
     elif winner_mode != reg.MODE_BASELINE and winner_result.verdict.accepted and not holdout_confirms:
         print(f"[NOT CONFIRMED] {winner_mode} در OOS (walk-forward) بهتر بود اما روی Final Holdout دست‌نخورده "
               f"تأیید نشد — طبق قانون این پروژه، موفقیت اعلام نمی‌شود. باید دوباره با داده‌ی بیشتر/فولدهای دیگر بررسی شود.")
@@ -234,6 +300,7 @@ def main():
             "winner": _to_jsonable(holdout_score) if holdout_score else None,
             "confirmed": holdout_confirms,
         },
+        "multi_coin_generalization": _to_jsonable(multi_coin_report) if multi_coin_report else None,
         "before_params_snapshot": {k: (list(v) if isinstance(v, tuple) else v) for k, v in before_snapshot.items()},
         "after_params_snapshot": {k: (list(v) if isinstance(v, tuple) else v) for k, v in after_snapshot.items()},
         "final_verdict": (
