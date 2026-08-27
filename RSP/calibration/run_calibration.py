@@ -84,6 +84,13 @@ def main():
                           "sequentially. Close to a 4x speedup on a >=4-core machine for the "
                           "mode-comparison stage. Safe: each mode's parameter overrides only "
                           "affect its own process.")
+    ap.add_argument("--parallel-grid", type=int, default=1,
+                     help="Evaluate this many candidate values for a parameter concurrently "
+                          "(separate processes) instead of one at a time, within each mode's "
+                          "calibration. Safe (each candidate evaluation is fully independent). "
+                          "If combined with --parallel-modes, total processes = 4 x this number "
+                          "— set it based on cores_available / 4, not total cores, or you'll "
+                          "oversubscribe the CPU and it can get SLOWER, not faster.")
     ap.add_argument("--fast", action="store_true",
                      help="Preset for a first pass / sanity check, NOT a substitute for the full "
                           "run: --grid-cap 3 --n-passes 1 --n-folds 1 --parallel-modes. Expect this "
@@ -146,7 +153,7 @@ def main():
     # -----------------------------------------------------------------
     mode_results = compare_all_modes(bars_by_tf, args.base_tf, plan, coin_id=args.coin,
                                       min_history=args.min_history, n_calibration_passes=args.n_passes,
-                                      parallel=args.parallel_modes)
+                                      parallel=args.parallel_modes, grid_workers=args.parallel_grid)
 
     print("\n--- Mode comparison (identical IS->Purge->OOS protocol) ---")
     for mode in MODES_TO_COMPARE:
