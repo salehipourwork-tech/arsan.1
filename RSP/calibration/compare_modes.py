@@ -44,14 +44,14 @@ class ModeResult:
 
 def run_mode_across_folds(bars_by_tf: Dict, base_tf: str, plan: CalibrationProtocolPlan,
                            mode: str, coin_id: Optional[str], min_history: int,
-                           n_calibration_passes: int = 2) -> ModeResult:
+                           n_calibration_passes: int = 2, grid_workers: int = 1) -> ModeResult:
     result = ModeResult(mode=mode)
     for fold_idx, (is_split, oos_split) in enumerate(plan.calibration_windows):
         is_bars = materialize_tf(bars_by_tf, base_tf, is_split)
         oos_bars = materialize_tf(bars_by_tf, base_tf, oos_split)
 
         calib = calibrate_on_is(is_bars, mode, coin_id, base_tf=base_tf, min_history=min(min_history, len(is_bars.get(base_tf, [])) or min_history),
-                                 n_passes=n_calibration_passes, fold_label=f"fold{fold_idx}")
+                                 n_passes=n_calibration_passes, fold_label=f"fold{fold_idx}", n_workers=grid_workers)
         result.fold_is_scores.append(calib.final_is_score)
         result.locked_params_by_fold.append(calib.locked_params)
 
@@ -73,7 +73,8 @@ def run_mode_across_folds(bars_by_tf: Dict, base_tf: str, plan: CalibrationProto
 
 def compare_all_modes(bars_by_tf: Dict, base_tf: str, plan: CalibrationProtocolPlan,
                        coin_id: Optional[str] = None, min_history: int = 200,
-                       n_calibration_passes: int = 2, parallel: bool = False) -> Dict[str, ModeResult]:
+                       n_calibration_passes: int = 2, parallel: bool = False,
+                       grid_workers: int = 1) -> Dict[str, ModeResult]:
     results: Dict[str, ModeResult] = {}
     if parallel:
         # The 4 modes are fully independent (each mutates module-level
@@ -86,7 +87,7 @@ def compare_all_modes(bars_by_tf: Dict, base_tf: str, plan: CalibrationProtocolP
         import concurrent.futures as cf
         with cf.ProcessPoolExecutor(max_workers=min(4, len(MODES_TO_COMPARE))) as ex:
             futures = {ex.submit(run_mode_across_folds, bars_by_tf, base_tf, plan, mode,
-                                  coin_id, min_history, n_calibration_passes): mode
+                                  coin_id, min_history, n_calibration_passes, grid_workers): mode
                        for mode in MODES_TO_COMPARE}
             for fut in cf.as_completed(futures):
                 mode = futures[fut]
@@ -94,7 +95,7 @@ def compare_all_modes(bars_by_tf: Dict, base_tf: str, plan: CalibrationProtocolP
     else:
         for mode in MODES_TO_COMPARE:
             results[mode] = run_mode_across_folds(bars_by_tf, base_tf, plan, mode, coin_id,
-                                                    min_history, n_calibration_passes)
+                                                    min_history, n_calibration_passes, grid_workers)
 
     baseline_oos_windows = results[reg.MODE_BASELINE].fold_oos_windows
     for mode in MODES_TO_COMPARE:
