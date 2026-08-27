@@ -72,10 +72,29 @@ def run_mode_across_folds(bars_by_tf: Dict, base_tf: str, plan: CalibrationProto
 
 
 def compare_all_modes(bars_by_tf: Dict, base_tf: str, plan: CalibrationProtocolPlan,
-                       coin_id: Optional[str] = None, min_history: int = 200) -> Dict[str, ModeResult]:
+                       coin_id: Optional[str] = None, min_history: int = 200,
+                       n_calibration_passes: int = 2, parallel: bool = False) -> Dict[str, ModeResult]:
     results: Dict[str, ModeResult] = {}
-    for mode in MODES_TO_COMPARE:
-        results[mode] = run_mode_across_folds(bars_by_tf, base_tf, plan, mode, coin_id, min_history)
+    if parallel:
+        # The 4 modes are fully independent (each mutates module-level
+        # settings via apply_overrides/temporary_override, then restores
+        # them) — safe to run as SEPARATE PROCESSES (each gets its own
+        # memory, so no shared-state race), NOT threads. On a machine with
+        # >=4 cores this is close to a 4x wall-clock reduction for the mode
+        # comparison stage, which is normally the single biggest chunk of
+        # a full run.
+        import concurrent.futures as cf
+        with cf.ProcessPoolExecutor(max_workers=min(4, len(MODES_TO_COMPARE))) as ex:
+            futures = {ex.submit(run_mode_across_folds, bars_by_tf, base_tf, plan, mode,
+                                  coin_id, min_history, n_calibration_passes): mode
+                       for mode in MODES_TO_COMPARE}
+            for fut in cf.as_completed(futures):
+                mode = futures[fut]
+                results[mode] = fut.result()
+    else:
+        for mode in MODES_TO_COMPARE:
+            results[mode] = run_mode_across_folds(bars_by_tf, base_tf, plan, mode, coin_id,
+                                                    min_history, n_calibration_passes)
 
     baseline_oos_windows = results[reg.MODE_BASELINE].fold_oos_windows
     for mode in MODES_TO_COMPARE:
