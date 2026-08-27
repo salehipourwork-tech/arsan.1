@@ -313,3 +313,54 @@ class override_scope:
 def snapshot_all() -> Dict[str, Any]:
     """Full current value of every registered parameter (for before/after logs)."""
     return {p.name: p.current_value() for p in ALL_PARAMS}
+
+
+def trim_grids(max_points: int = 3) -> Dict[str, int]:
+    """
+    Coarsen every param's calibration_grid down to at most `max_points`
+    candidates (keeps first, last, and evenly-spaced points in between).
+    This is the single biggest lever on wall-clock time: optimizer cost is
+    roughly O(sum of grid sizes) backtest calls per pass, and each
+    run_backtest call itself grows faster than linearly with bar count
+    (indicators are recomputed from scratch per bar, a pre-existing,
+    documented cost — see RSP/README.md). Halving grid size roughly halves
+    calibration time; this trims to a fixed cap in one call.
+    Returns {param_name: original_grid_size} so a caller can report what
+    was coarsened, and restore_full_grids() can undo it.
+    """
+    original_sizes: Dict[str, int] = {}
+    for p in ALL_PARAMS:
+        n = len(p.calibration_grid)
+        if n <= max_points:
+            continue
+        original_sizes[p.name] = n
+        if max_points <= 1:
+            p.calibration_grid = p.calibration_grid[:1]
+        else:
+            idx = sorted(set(round(i * (n - 1) / (max_points - 1)) for i in range(max_points)))
+            p.calibration_grid = [p.calibration_grid[i] for i in idx]
+    return original_sizes
+
+
+_FULL_GRIDS_BACKUP: Dict[str, List[Any]] = {}
+
+
+def trim_grids_inplace_with_backup(max_points: int = 3) -> None:
+    """Same as trim_grids() but remembers the untrimmed grids so
+    restore_full_grids() can put them back (used by run_calibration.py's
+    --grid-cap so a --fast run doesn't permanently coarsen the registry for
+    later full runs in the same process)."""
+    global _FULL_GRIDS_BACKUP
+    if not _FULL_GRIDS_BACKUP:
+        _FULL_GRIDS_BACKUP = {p.name: list(p.calibration_grid) for p in ALL_PARAMS}
+    trim_grids(max_points)
+
+
+def restore_full_grids() -> None:
+    global _FULL_GRIDS_BACKUP
+    if not _FULL_GRIDS_BACKUP:
+        return
+    for p in ALL_PARAMS:
+        if p.name in _FULL_GRIDS_BACKUP:
+            p.calibration_grid = list(_FULL_GRIDS_BACKUP[p.name])
+    _FULL_GRIDS_BACKUP = {}
