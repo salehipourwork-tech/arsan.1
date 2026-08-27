@@ -1,0 +1,805 @@
+{
+  "generated_at": "2026-08-27T16:46:36.762152+00:00",
+  "coin": "bitcoin",
+  "base_tf": "15M",
+  "synthetic_data": false,
+  "protocol": {
+    "base_tf": "15M",
+    "total_bars": 8640,
+    "final_holdout": {
+      "label": "FINAL_HOLDOUT",
+      "start_idx": 7344,
+      "end_idx": 8640
+    },
+    "calibration_windows": [
+      [
+        {
+          "label": "IS_fold0",
+          "start_idx": 0,
+          "end_idx": 4039
+        },
+        {
+          "label": "OOS_fold0",
+          "start_idx": 4063,
+          "end_idx": 5531
+        }
+      ]
+    ],
+    "purge_bars": 24,
+    "notes": [
+      "1 fold ساخته شد | purge=24 bar | final holdout = آخرین 1296 bar (15%) — کاملاً دست‌نخورده تا گزارش نهایی"
+    ]
+  },
+  "mode_comparison": {
+    "ahp": {
+      "oos_agg": {
+        "label": "OOS_AGG",
+        "trades": 7,
+        "net_return_pct": -2.602,
+        "profit_factor": 0.078,
+        "max_drawdown_pct": 2.602,
+        "win_rate": 28.57,
+        "expectancy_pct": -0.3752,
+        "avg_r": 0.286,
+        "reliable": false
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "IS score=81.0 بالا رفت ولی OOS score=21.9 افت کرد (gap=59.1) — طبق قانون طلایی این یک شکست حساب می‌شود، نه بهبود.",
+        "hard_disqualified": false
+      },
+      "locked_params_last_fold": {
+        "opp_threshold_rules": {
+          "rules": 64.0,
+          "ahp": 50.0
+        },
+        "ahp_weights": {
+          "trend_quality": 0.35,
+          "risk_quality_v2": 0.3,
+          "volatility_quality_v2": 0.2,
+          "entry_quality": 0.15
+        },
+        "rr_target": 3.5,
+        "sl_atr_multiplier": 2.5,
+        "atr_period": 20,
+        "cooldown_after_tp": 0,
+        "daily_max_trades": 12,
+        "cooldown_after_sl": 9
+      },
+      "fold_is_scores": [
+        81.01
+      ]
+    },
+    "meta": {
+      "oos_agg": {
+        "label": "OOS_AGG",
+        "trades": 3,
+        "net_return_pct": -2.084,
+        "profit_factor": 0.0,
+        "max_drawdown_pct": 2.084,
+        "win_rate": 0.0,
+        "expectancy_pct": -0.6988,
+        "avg_r": -1.0,
+        "reliable": false
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "IS score=89.8 بالا رفت ولی OOS score=20.3 افت کرد (gap=69.5) — طبق قانون طلایی این یک شکست حساب می‌شود، نه بهبود.",
+        "hard_disqualified": false
+      },
+      "locked_params_last_fold": {
+        "meta_vol_preservation_pct": 93.0,
+        "meta_trade_threshold": 0.25,
+        "rr_target": 3.5,
+        "sl_atr_multiplier": 2.5,
+        "cooldown_after_tp": 0,
+        "daily_max_trades": 12,
+        "atr_period": 10
+      },
+      "fold_is_scores": [
+        89.83
+      ]
+    },
+    "fuzzy": {
+      "oos_agg": {
+        "label": "OOS_AGG",
+        "trades": 3,
+        "net_return_pct": -2.084,
+        "profit_factor": 0.0,
+        "max_drawdown_pct": 2.084,
+        "win_rate": 0.0,
+        "expectancy_pct": -0.6988,
+        "avg_r": -1.0,
+        "reliable": false
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "IS score=55.8 بالا رفت ولی OOS score=20.3 افت کرد (gap=35.5) — طبق قانون طلایی این یک شکست حساب می‌شود، نه بهبود.",
+        "hard_disqualified": false
+      },
+      "locked_params_last_fold": {
+        "rule_output_multiplier": 1.1,
+        "rr_target": 3.5,
+        "sl_atr_multiplier": 2.5,
+        "cooldown_after_tp": 0,
+        "daily_max_trades": 3
+      },
+      "fold_is_scores": [
+        55.8
+      ]
+    },
+    "baseline": {
+      "oos_agg": {
+        "label": "OOS_AGG",
+        "trades": 0,
+        "net_return_pct": 0,
+        "profit_factor": 0,
+        "max_drawdown_pct": 0,
+        "win_rate": 0,
+        "expectancy_pct": 0,
+        "avg_r": 0,
+        "reliable": false
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "OOS trade count = 0 برای این candidate — قابل قضاوت نیست، رد می‌شود.",
+        "hard_disqualified": true
+      },
+      "locked_params_last_fold": {
+        "contradiction_block_threshold": 0.1,
+        "mtf_sma_slow": 15,
+        "min_volume_usd": 2000000,
+        "rr_target": 3.5,
+        "sl_atr_multiplier": 2.5,
+        "cooldown_after_sl": 12,
+        "cooldown_after_tp": 0,
+        "daily_max_trades": 12,
+        "min_confidence_to_trade": 65.0,
+        "mtf_sma_fast": 14
+      },
+      "fold_is_scores": [
+        91.27
+      ]
+    }
+  },
+  "ablation": [
+    {
+      "label": "baseline_risk_only",
+      "engine_flags": {
+        "FUZZY_BACKTEST_ENABLED": false,
+        "META_CONTROLLER_ENABLED": false
+      },
+      "oos_agg": {
+        "label": "OOS_AGG",
+        "trades": 7,
+        "net_return_pct": -4.403,
+        "profit_factor": 0.0,
+        "max_drawdown_pct": 4.403,
+        "win_rate": 0.0,
+        "expectancy_pct": -0.6408,
+        "avg_r": -1.0,
+        "reliable": false
+      },
+      "delta_net_vs_previous": 0.0,
+      "verdict": {
+        "accepted": true,
+        "reason": "پایه‌ی مقایسه (Baseline risk-only) — همیشه نگه داشته می‌شود.",
+        "hard_disqualified": false
+      }
+    },
+    {
+      "label": "plus_fuzzy_rules",
+      "engine_flags": {
+        "FUZZY_BACKTEST_ENABLED": true,
+        "META_CONTROLLER_ENABLED": false,
+        "OPPORTUNITY_SCORING_METHOD": "rules"
+      },
+      "oos_agg": {
+        "label": "OOS_AGG",
+        "trades": 2,
+        "net_return_pct": -1.454,
+        "profit_factor": 0.0,
+        "max_drawdown_pct": 1.454,
+        "win_rate": 0.0,
+        "expectancy_pct": -0.729,
+        "avg_r": -1.0,
+        "reliable": false
+      },
+      "delta_net_vs_previous": 2.949,
+      "verdict": {
+        "accepted": false,
+        "reason": "تعداد معاملات OOS (2) کمتر از 50% baseline (7) است — شبهه‌ی 'سود ظاهری با کاهش شدید تعداد معاملات'، رد می‌شود.",
+        "hard_disqualified": true
+      }
+    },
+    {
+      "label": "plus_ahp_instead_of_rules",
+      "engine_flags": {
+        "FUZZY_BACKTEST_ENABLED": true,
+        "META_CONTROLLER_ENABLED": false,
+        "OPPORTUNITY_SCORING_METHOD": "ahp"
+      },
+      "oos_agg": {
+        "label": "OOS_AGG",
+        "trades": 4,
+        "net_return_pct": -1.855,
+        "profit_factor": 0.0,
+        "max_drawdown_pct": 1.855,
+        "win_rate": 0.0,
+        "expectancy_pct": -0.467,
+        "avg_r": -1.0,
+        "reliable": false
+      },
+      "delta_net_vs_previous": -0.401,
+      "verdict": {
+        "accepted": true,
+        "reason": "OOS Net -4.40%→-1.85%, DD کنترل‌شده (1.9% vs 4.4%), PF 0.00→0.00, Expectancy -0.641%→-0.467%, consistency=50/100 — نگه‌داشتن ارزش دارد.",
+        "hard_disqualified": false
+      }
+    },
+    {
+      "label": "plus_meta_controller",
+      "engine_flags": {
+        "FUZZY_BACKTEST_ENABLED": true,
+        "META_CONTROLLER_ENABLED": true,
+        "OPPORTUNITY_SCORING_METHOD": "rules"
+      },
+      "oos_agg": {
+        "label": "OOS_AGG",
+        "trades": 2,
+        "net_return_pct": -1.454,
+        "profit_factor": 0.0,
+        "max_drawdown_pct": 1.454,
+        "win_rate": 0.0,
+        "expectancy_pct": -0.729,
+        "avg_r": -1.0,
+        "reliable": false
+      },
+      "delta_net_vs_previous": 0.401,
+      "verdict": {
+        "accepted": false,
+        "reason": "تعداد معاملات OOS (2) کمتر از 50% baseline (7) است — شبهه‌ی 'سود ظاهری با کاهش شدید تعداد معاملات'، رد می‌شود.",
+        "hard_disqualified": true
+      }
+    }
+  ],
+  "robustness_winner": {
+    "locked_params": {
+      "contradiction_block_threshold": 0.1,
+      "mtf_sma_slow": 15,
+      "min_volume_usd": 2000000,
+      "rr_target": 3.5,
+      "sl_atr_multiplier": 2.5,
+      "cooldown_after_sl": 12,
+      "cooldown_after_tp": 0,
+      "daily_max_trades": 12,
+      "min_confidence_to_trade": 65.0,
+      "mtf_sma_fast": 14
+    },
+    "baseline_oos_score": -999.0,
+    "perturbation_points": [
+      {
+        "param": "contradiction_block_threshold",
+        "pct": -0.1,
+        "value": 0.09000000000000001,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "contradiction_block_threshold",
+        "pct": -0.05,
+        "value": 0.095,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "contradiction_block_threshold",
+        "pct": 0.05,
+        "value": 0.10500000000000001,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "contradiction_block_threshold",
+        "pct": 0.1,
+        "value": 0.11000000000000001,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "mtf_sma_slow",
+        "pct": -0.1,
+        "value": 14,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "mtf_sma_slow",
+        "pct": -0.05,
+        "value": 14,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "mtf_sma_slow",
+        "pct": 0.05,
+        "value": 16,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "mtf_sma_slow",
+        "pct": 0.1,
+        "value": 16,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "min_volume_usd",
+        "pct": -0.1,
+        "value": 1800000.0,
+        "net_return_pct": -1.3221000000000038,
+        "profit_factor": 0.0,
+        "max_drawdown_pct": 1.3221000000000038,
+        "trades": 1
+      },
+      {
+        "param": "min_volume_usd",
+        "pct": -0.05,
+        "value": 1900000.0,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "min_volume_usd",
+        "pct": 0.05,
+        "value": 2100000.0,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "min_volume_usd",
+        "pct": 0.1,
+        "value": 2200000.0,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "rr_target",
+        "pct": -0.1,
+        "value": 3.15,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "rr_target",
+        "pct": -0.05,
+        "value": 3.3249999999999997,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "rr_target",
+        "pct": 0.05,
+        "value": 3.6750000000000003,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "rr_target",
+        "pct": 0.1,
+        "value": 3.8500000000000005,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "sl_atr_multiplier",
+        "pct": -0.1,
+        "value": 2.25,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "sl_atr_multiplier",
+        "pct": -0.05,
+        "value": 2.375,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "sl_atr_multiplier",
+        "pct": 0.05,
+        "value": 2.625,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "sl_atr_multiplier",
+        "pct": 0.1,
+        "value": 2.75,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "cooldown_after_sl",
+        "pct": -0.1,
+        "value": 11,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "cooldown_after_sl",
+        "pct": -0.05,
+        "value": 11,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "cooldown_after_sl",
+        "pct": 0.05,
+        "value": 13,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "cooldown_after_sl",
+        "pct": 0.1,
+        "value": 13,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "cooldown_after_tp",
+        "pct": -0.1,
+        "value": 1,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "cooldown_after_tp",
+        "pct": -0.05,
+        "value": 1,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "cooldown_after_tp",
+        "pct": 0.05,
+        "value": 1,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "cooldown_after_tp",
+        "pct": 0.1,
+        "value": 1,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "daily_max_trades",
+        "pct": -0.1,
+        "value": 11,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "daily_max_trades",
+        "pct": -0.05,
+        "value": 11,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "daily_max_trades",
+        "pct": 0.05,
+        "value": 13,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "daily_max_trades",
+        "pct": 0.1,
+        "value": 13,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "min_confidence_to_trade",
+        "pct": -0.1,
+        "value": 58.5,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "min_confidence_to_trade",
+        "pct": -0.05,
+        "value": 61.75,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "min_confidence_to_trade",
+        "pct": 0.05,
+        "value": 68.25,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "min_confidence_to_trade",
+        "pct": 0.1,
+        "value": 71.5,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "mtf_sma_fast",
+        "pct": -0.1,
+        "value": 13,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "mtf_sma_fast",
+        "pct": -0.05,
+        "value": 13,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "mtf_sma_fast",
+        "pct": 0.05,
+        "value": 15,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      },
+      {
+        "param": "mtf_sma_fast",
+        "pct": 0.1,
+        "value": 15,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "trades": 0
+      }
+    ],
+    "plateau": true,
+    "fragile_params": [],
+    "fee_slippage_results": {
+      "low_cost": {
+        "label": "low_cost",
+        "trades": 0,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "win_rate": 0.0,
+        "expectancy_pct": 0.0,
+        "avg_r": 0.0,
+        "reliable": false
+      },
+      "baseline_cost": {
+        "label": "baseline_cost",
+        "trades": 0,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "win_rate": 0.0,
+        "expectancy_pct": 0.0,
+        "avg_r": 0.0,
+        "reliable": false
+      },
+      "high_cost": {
+        "label": "high_cost",
+        "trades": 0,
+        "net_return_pct": 0.0,
+        "profit_factor": "inf",
+        "max_drawdown_pct": 0.0,
+        "win_rate": 0.0,
+        "expectancy_pct": 0.0,
+        "avg_r": 0.0,
+        "reliable": false
+      }
+    },
+    "fee_slippage_fragile": false,
+    "sequence_dd_p95": 0.0,
+    "sequence_order_dependent": false,
+    "regime_breakdown": [],
+    "weakest_regime": "",
+    "trade_count_sanity_ok": false,
+    "trade_count_sanity_note": "فقط 0 معامله در OOS (< 8) — سود/زیان گزارش‌شده از نظر آماری قابل‌اتکا نیست، صرف‌نظر از درصد آن.",
+    "notes": [
+      "Plateau=YES (هیچ پارامتری با ±5%/±10% جهت سود را عوض نکرد)"
+    ]
+  },
+  "final_holdout": {
+    "winner_mode": "baseline",
+    "winner": {
+      "label": "FINAL_HOLDOUT",
+      "trades": 8,
+      "net_return_pct": 26.71778763232946,
+      "profit_factor": 7.4307120056981555,
+      "max_drawdown_pct": 2.517400000000007,
+      "win_rate": 75.0,
+      "expectancy_pct": 3.0471125,
+      "avg_r": 2.375,
+      "reliable": false
+    },
+    "confirmed": true
+  },
+  "multi_coin_generalization": null,
+  "before_params_snapshot": {
+    "rr_target": 2.5,
+    "sl_atr_multiplier": 1.5,
+    "max_sl_distance_pct": 0.05,
+    "max_risk_percent_per_trade": 1.0,
+    "min_acceptable_rr": 1.5,
+    "atr_period": 14,
+    "trailing_stop_enabled": false,
+    "trailing_activate_atr": 1.0,
+    "trailing_atr": 1.0,
+    "min_trade_distance_bars": 12,
+    "cooldown_after_sl": 6,
+    "cooldown_after_tp": 3,
+    "daily_max_trades": 5,
+    "min_confidence_to_trade": 55.0,
+    "min_trade_quality_score": 60.0,
+    "contradiction_block_threshold": 0.15,
+    "exhaustion_net_score_threshold": 0.7,
+    "mtf_sma_fast": 10,
+    "mtf_sma_slow": 20,
+    "mtf_threshold_pct": 0.001,
+    "min_volume_usd": 1000000,
+    "mf_trend": [
+      0.2,
+      0.4,
+      0.65,
+      0.85
+    ],
+    "mf_momentum": [
+      0.25,
+      0.45,
+      0.7,
+      0.88
+    ],
+    "mf_entry": [
+      0.2,
+      0.4,
+      0.65,
+      0.85
+    ],
+    "mf_risk": [
+      0.25,
+      0.45,
+      0.7,
+      0.9
+    ],
+    "mf_stability": [
+      0.2,
+      0.4,
+      0.65,
+      0.85
+    ],
+    "mf_confidence": [
+      0.25,
+      0.45,
+      0.7,
+      0.88
+    ],
+    "rule_output_multiplier": 1.0,
+    "rule_output_offset": 0.0,
+    "opp_threshold_rules": {
+      "rules": 72.0,
+      "ahp": 58.0
+    },
+    "fuzzy_hysteresis_drop": 25.0,
+    "fuzzy_stability_min_consistent": 3,
+    "fuzzy_trade_permission_min": 50.0,
+    "ahp_weights": {
+      "trend_quality": 0.3,
+      "risk_quality_v2": 0.35,
+      "volatility_quality_v2": 0.25,
+      "entry_quality": 0.1
+    },
+    "meta_vol_defensive_pct": 75.0,
+    "meta_vol_preservation_pct": 90.0,
+    "meta_rules_win_rate_min": 0.3,
+    "meta_adaptive_window": 20,
+    "meta_history_maxlen": 100,
+    "meta_trade_threshold": 0.35,
+    "meta_mode_weights": {
+      "OPPORTUNITY": {
+        "rules": 0.85,
+        "ahp": 0.15,
+        "no_trade": 0.0
+      },
+      "DEFENSIVE": {
+        "rules": 0.2,
+        "ahp": 0.8,
+        "no_trade": 0.0
+      },
+      "PRESERVATION": {
+        "rules": 0.0,
+        "ahp": 0.0,
+        "no_trade": 1.0
+      }
+    }
+  },
+  "after_params_snapshot": {},
+  "final_verdict": "NO_IMPROVEMENT_KEEP_BASELINE"
+}
