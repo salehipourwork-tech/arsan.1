@@ -2,7 +2,23 @@
 # در GitHub Actions. عمداً جدا از requirements.txt اصلی نگه داشته شده تا
 # torch/transformers (که فقط برای news_sentiment در analyzer/main.py لازم‌اند
 # و اینجا اصلاً صدا زده نمی‌شوند) نصب/دانلود نشوند — CI سریع‌تر و سبک‌تر.
+# RSP engine_router / paper_trading — وابستگی‌های سبک برای اجرای Shadow
+# در GitHub Actions. عمداً جدا از requirements.txt اصلی نگه داشته شده تا
+# torch/transformers (که فقط برای news_sentiment در analyzer/main.py لازم‌اند
+# و اینجا اصلاً صدا زده نمی‌شوند) نصب/دانلود نشوند — CI سریع‌تر و سبک‌تر.
 requests
 pandas
-numpy
-pandas_ta
+
+# نکته‌ی مهم درباره‌ی pandas_ta:
+# پکیج اصلی pandas_ta/pandas-ta چند ماهه از PyPI و حتی از مخزن اصلی
+# گیت‌هابش (twopirllc/pandas-ta) به‌طور کامل حذف شده (ماجرای عوض‌شدن
+# مالکیت/maintainer که در Issue های خودِ پروژه هم ثبت شده) — برای همین
+# `pip install pandas_ta` دیگر هیچ نسخه‌ای پیدا نمی‌کند (خطای
+# "No matching distribution found"). این ربطی به کد RSP ندارد.
+# جایگزین قابل‌اعتماد: یک fork آینه (mirror) از همان کد قبل از حذف، که
+# دقیقاً همان نام import (`import pandas_ta as ta`) را حفظ کرده — پس
+# نیازی به تغییر هیچ فایلی در RSP/ نیست. به یک commit مشخص پین شده تا
+# در آینده هم رفتار یکسان و تکرارپذیر بماند. numpy را خودِ این پکیج روی
+# 1.26.4 قفل می‌کند (نسخه‌ی سازگار شناخته‌شده با آن)، پس numpy را جدا
+# لیست نکردیم تا با آن تداخل نکند.
+pandas_ta @ git+https://github.com/MerlinR/Pandas-ta-fork.git@45db59038e6414216195dd1c24413d56ff829958
