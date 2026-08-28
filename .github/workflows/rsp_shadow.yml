@@ -1,0 +1,60 @@
+name: RSP Shadow Validation
+
+# اجرای مداوم Shadow (legacy + RSP روی همون کوین) در فضای ابری گیت‌هاب —
+# بدون نیاز به لپ‌تاپ روشن. فقط داده‌ی زنده، بدون سفارش واقعی، بدون
+# tuning. هر اجرا نتیجه را در RSP/paper_trading/logs/ و
+# RSP/engine_router/shadow_log/ ثبت و commit می‌کند (دقیقاً همان الگوی
+# analyze.yml موجود پروژه).
+
+on:
+  # هر ۱۵ دقیقه، تمام شبانه‌روز (بازار کریپتو ۲۴/۷ است؛ برخلاف analyze.yml
+  # که فقط ساعات روز ایران اجرا می‌شود، اینجا محدودیت زمانی نمی‌گذاریم چون
+  # RSP روی کندل‌های 15M زنده کار می‌کند و باید هر بسته‌شدن کندل را ببیند).
+  # ریپو Public است → طبق مستندات گیت‌هاب (بررسی‌شده) Actions روی
+  # runnerهای استاندارد کاملاً رایگان و بدون سقف دقیقه است، پس محدودیتی
+  # برای فرکانس اجرا از این بابت وجود ندارد.
+  schedule:
+    - cron: "*/15 * * * *"
+  # اجرای دستی از تب Actions
+  workflow_dispatch:
+  # trigger خارجی پایدارتر (مثلاً از cron-job.org)، مشابه همان الگوی
+  # analyze.yml موجود در پروژه.
+  repository_dispatch:
+    types: [rsp-shadow-trigger]
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    concurrency:
+      # جلوگیری از هم‌پوشانی دو اجرای موازی اگر یک چرخه بیشتر از ۱۵ دقیقه طول بکشد
+      group: rsp-shadow
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-shadow-${{ runner.os }}-${{ hashFiles('RSP/requirements-shadow.txt') }}
+
+      - name: Install dependencies
+        run: pip install -r RSP/requirements-shadow.txt
+
+      - name: Run RSP Engine Router (shadow mode)
+        run: python -m RSP.engine_router.router --coins bitcoin --mode shadow
+
+      - name: Commit and push updated logs
+        run: |
+          git config --global user.name "arsan-bot"
+          git config --global user.email "arsan-bot@users.noreply.github.com"
+          git add RSP/paper_trading/logs/ RSP/engine_router/shadow_log/
+          git diff --staged --quiet || git commit -m "RSP shadow run - $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git pull --rebase --autostash -X theirs origin main
+          git push
