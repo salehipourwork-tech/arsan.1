@@ -1,0 +1,8 @@
+# RSP engine_router / paper_trading — وابستگی‌های سبک برای اجرای Shadow
+# در GitHub Actions. عمداً جدا از requirements.txt اصلی نگه داشته شده تا
+# torch/transformers (که فقط برای news_sentiment در analyzer/main.py لازم‌اند
+# و اینجا اصلاً صدا زده نمی‌شوند) نصب/دانلود نشوند — CI سریع‌تر و سبک‌تر.
+requests
+pandas
+numpy
+pandas_ta
