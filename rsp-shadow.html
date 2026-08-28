@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>آرسان | RSP Shadow — پنل مقایسه‌ی دو کانال</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Noto+Naskh+Arabic:wght@600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  /* =========================================================
+     همون هویت بصری «پنل ابزار دقیق» سایت اصلی — این صفحه یک کانال
+     دوم روی همون دستگاهه: اسیلوسکوپ دو-کاناله که ردِ تصمیم Legacy
+     (روزانه) رو بالا و ردِ تصمیم RSP (۱۵ دقیقه‌ای زنده) رو پایین
+     نشون می‌ده، تا هر اختلاف/هم‌راستایی بین دو موتور، مثل دو موج
+     روی یک صفحه، قابل مقایسه باشه.
+     ========================================================= */
+  :root{
+    --case: #0a0e13; --panel: #121920; --panel-2: #0e141a; --screen: #0a131b;
+    --grid: #223040; --grid-soft: #16202a;
+    --brass: #d1ac3c; --brass-dim: #8a7220; --brass-glow: rgba(209,172,60,0.35);
+    --ink: #e7edf3; --ink-dim: #8b98a6; --ink-faint: #526071;
+    --buy: #33d68d;  --buy-bg: rgba(51,214,141,0.12);
+    --sell: #ff6259; --sell-bg: rgba(255,98,89,0.12);
+    --hold: #f0b429; --hold-bg: rgba(240,180,41,0.12);
+    --err:  #ff6259; --err-bg: rgba(255,98,89,0.10);
+    --radius: 6px; --radius-lg: 12px;
+    --font-display: 'Noto Naskh Arabic', serif;
+    --font-body: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; line-height:1.6;
+    background: radial-gradient(ellipse 900px 500px at 50% -10%, rgba(209,172,60,0.05), transparent 60%), var(--case);
+    color:var(--ink); font-family:var(--font-body); position:relative;
+  }
+  body::before{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.5;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 64px),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 64px);
+  }
+  ::selection{ background:var(--brass); color:#1a1305; }
+  :focus-visible{ outline:2px solid var(--brass); outline-offset:2px; border-radius:2px; }
+  a{ color:inherit; }
+
+  header.masthead{
+    position:relative; z-index:1; display:flex; justify-content:space-between; align-items:center;
+    flex-wrap:wrap; gap:14px; padding:16px 20px; max-width:1040px; margin:0 auto; border-bottom:1px solid var(--grid);
+  }
+  .brand-plate{
+    display:inline-flex; align-items:center; gap:12px; padding:9px 18px;
+    background:linear-gradient(180deg, #182029, #0d1319); border:1px solid var(--brass-dim); border-radius:5px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.45);
+  }
+  .brand-mark{ font-family:var(--font-display); font-weight:700; font-size:22px; color:var(--brass); text-shadow:0 1px 0 rgba(0,0,0,0.7); }
+  .brand-sub{ color:var(--ink-faint); font-size:11.5px; font-family:var(--font-mono); border-right:1px solid var(--grid); padding-right:10px; margin-right:2px; }
+  @media (max-width:640px){ .brand-sub{ display:none; } }
+
+  .status-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .status-chip{
+    display:inline-flex; align-items:center; gap:9px; padding:8px 14px; font-family:var(--font-mono);
+    font-size:11.5px; color:var(--ink-dim); border:1px solid var(--grid); border-radius:5px; background:var(--panel);
+  }
+  .status-dot{ width:8px; height:8px; border-radius:50%; background:var(--ink-faint); flex:none; }
+  .status-chip.fresh .status-dot{ background:var(--buy); box-shadow:0 0 8px 1px var(--buy); animation:blip 2.4s ease-in-out infinite; }
+  .status-chip.stale .status-dot{ background:var(--hold); box-shadow:0 0 6px 1px var(--hold); }
+  .status-chip.old .status-dot{ background:var(--sell); box-shadow:0 0 6px 1px var(--sell); }
+  @keyframes blip{ 0%,100%{ opacity:1; } 50%{ opacity:0.45; } }
+  @media (prefers-reduced-motion: reduce){ .status-chip.fresh .status-dot{ animation:none; } }
+
+  main{
+    position:relative; z-index:1; max-width:1040px; margin:22px auto 80px; padding:0 20px;
+    display:flex; flex-direction:column; gap:18px;
+  }
+
+  .honesty-note{
+    background:var(--panel); border:1px solid var(--grid); border-right:3px solid var(--brass);
+    border-radius:var(--radius); padding:14px 16px; font-size:12.5px; color:var(--ink-dim);
+  }
+  .honesty-note b{ color:var(--ink); }
+
+  .channels{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:720px){ .channels{ grid-template-columns:1fr; } }
+
+  .card{
+    background:var(--panel); border:1px solid var(--grid); border-radius:var(--radius-lg); padding:16px;
+  }
+  .card-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; gap:8px; flex-wrap:wrap; }
+  .card-title{ font-weight:700; font-size:14px; color:var(--ink); }
+  .card-tf{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint); }
+
+  .decision-badge{
+    display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:var(--radius);
+    font-family:var(--font-mono); font-weight:700; font-size:16px; letter-spacing:0.5px; margin-bottom:10px;
+  }
+  .decision-badge.buy{ background:var(--buy-bg); color:var(--buy); }
+  .decision-badge.sell{ background:var(--sell-bg); color:var(--sell); }
+  .decision-badge.hold{ background:var(--hold-bg); color:var(--hold); }
+  .decision-badge.err{ background:var(--err-bg); color:var(--err); }
+
+  .kv{ display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px dashed var(--grid-soft); color:var(--ink-dim); }
+  .kv b{ color:var(--ink); font-family:var(--font-mono); font-weight:600; }
+
+  .reasons{ margin:10px 0 0; padding-right:18px; font-size:12px; color:var(--ink-dim); }
+  .reasons li{ margin-bottom:4px; }
+
+  /* ---- امضای صفحه: ردِ دوکاناله‌ی توافق/اختلاف، مثل دو موج روی اسیلوسکوپ ---- */
+  .trace-card{ background:var(--screen); border:1px solid var(--grid); border-radius:var(--radius-lg); padding:16px;
+    box-shadow: inset 0 3px 10px rgba(0,0,0,0.55); }
+  .trace-title{ font-size:13px; font-weight:700; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
+  .trace-legend{ display:flex; gap:12px; font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint); }
+  .trace-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .dot-sw{ width:8px; height:8px; border-radius:2px; display:inline-block; }
+  .trace-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .trace-label{ width:56px; flex:none; font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint); }
+  .trace-strip{ display:flex; gap:2px; flex:1; overflow-x:auto; padding:2px 0; }
+  .tick{ width:9px; height:20px; border-radius:2px; flex:none; background:var(--grid); cursor:default; }
+  .tick.buy{ background:var(--buy); } .tick.sell{ background:var(--sell); } .tick.hold{ background:var(--hold); } .tick.err{ background:var(--err); opacity:0.55; }
+  .agree-row .tick{ height:6px; }
+  .agree-row .tick.agree{ background:var(--brass); } .agree-row .tick.disagree{ background:var(--ink-faint); }
+
+  table.log{ width:100%; border-collapse:collapse; font-size:11.5px; font-family:var(--font-mono); }
+  table.log th{ text-align:right; color:var(--ink-faint); font-weight:600; padding:8px 6px; border-bottom:1px solid var(--grid); }
+  table.log td{ padding:7px 6px; border-bottom:1px solid var(--grid-soft); color:var(--ink-dim); }
+  table.log tr:hover td{ background:var(--panel-2); }
+  .pill{ display:inline-block; padding:2px 8px; border-radius:10px; font-size:10.5px; font-weight:700; }
+  .pill.buy{ background:var(--buy-bg); color:var(--buy); } .pill.sell{ background:var(--sell-bg); color:var(--sell); }
+  .pill.hold{ background:var(--hold-bg); color:var(--hold); } .pill.err{ background:var(--err-bg); color:var(--err); }
+  .pill.agree{ background:rgba(209,172,60,0.15); color:var(--brass); } .pill.disagree{ background:var(--panel-2); color:var(--ink-faint); }
+
+  .stats-strip{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  @media (max-width:640px){ .stats-strip{ grid-template-columns:repeat(2,1fr); } }
+  .stat{ background:var(--panel); border:1px solid var(--grid); border-radius:var(--radius); padding:12px; text-align:center; }
+  .stat .num{ font-family:var(--font-mono); font-size:20px; font-weight:700; color:var(--brass); }
+  .stat .lbl{ font-size:10.5px; color:var(--ink-faint); margin-top:4px; }
+
+  .empty{ text-align:center; padding:40px 20px; color:var(--ink-dim); font-size:13px; }
+  .empty b{ color:var(--ink); }
+
+  .toolbar{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  button.refresh{
+    font-family:var(--font-body); font-weight:600; font-size:12.5px; color:var(--ink);
+    background:var(--panel-2); border:1px solid var(--grid); border-radius:var(--radius);
+    padding:8px 16px; cursor:pointer;
+  }
+  button.refresh:hover{ border-color:var(--brass-dim); color:var(--brass); }
+  .last-fetch{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint); }
+
+  footer{ text-align:center; padding:20px; font-size:11px; color:var(--ink-faint); }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="brand-plate">
+    <span class="brand-mark">آرسان</span>
+    <span class="brand-sub">RSP SHADOW · مقایسه‌ی زنده‌ی دو موتور</span>
+  </div>
+  <div class="status-row" id="statusRow">
+    <span class="status-chip" id="chipLegacy"><span class="status-dot"></span>Legacy —</span>
+    <span class="status-chip" id="chipRsp"><span class="status-dot"></span>RSP —</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="honesty-note">
+    این صفحه فقط <b>خواندنی</b> است — هیچ سفارش واقعی و سرمایه‌ی واقعی درگیر نیست.
+    <b>Legacy</b> با داده‌ی <b>روزانه</b> و <b>RSP</b> با کندل <b>۱۵ دقیقه‌ای زنده</b> کار می‌کند؛
+    این دو هیچ‌وقت از «داده‌ی کاملاً یکسان» استفاده نمی‌کنند — فقط در یک بازه‌ی زمانی مشترک
+    (هر اجرای شادو) کنار هم صدا زده می‌شوند. تصمیم نهایی سایت هنوز طبق موتور Legacy است؛
+    RSP فقط در حال جمع‌آوری سابقه برای اثبات عملکرد است.
+  </div>
+
+  <div class="toolbar">
+    <button class="refresh" id="refreshBtn">↻ به‌روزرسانی</button>
+    <span class="last-fetch" id="lastFetch"></span>
+  </div>
+
+  <div id="content">
+    <div class="empty">در حال خواندن آخرین داده…</div>
+  </div>
+
+</main>
+
+<footer>آرسان — RSP در فاز Shadow/Paper Testing. هیچ توصیه‌ی مالی نیست.</footer>
+
+<script>
+const SHADOW_URL = './RSP/engine_router/shadow_log/bitcoin_shadow_compare.jsonl';
+const CLOSED_TRADES_URL = './RSP/paper_trading/logs/bitcoin_closed_trades.jsonl';
+const OPEN_POS_URL = './RSP/paper_trading/logs/bitcoin_open_positions.json';
+const MAX_TRACE = 60; // آخرین N چرخه در نوار رد
+
+function normDecision(engine, raw){
+  if(raw == null) return 'err';
+  const a = String(raw).toUpperCase();
+  if(a === 'BUY') return 'buy';
+  if(a === 'SELL') return 'sell';
+  if(a === 'HOLD' || a === 'WAIT' || a === 'NO_TRADE') return 'hold';
+  return 'err';
+}
+function fmtTime(iso){
+  if(!iso) return '—';
+  try{
+    const d = new Date(iso);
+    return d.toLocaleString('fa-IR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+  }catch(e){ return String(iso); }
+}
+function minutesAgo(iso){
+  if(!iso) return Infinity;
+  const d = new Date(iso).getTime();
+  if(isNaN(d)) return Infinity;
+  return (Date.now() - d) / 60000;
+}
+function setChip(id, label, iso, staleAfterMin, oldAfterMin){
+  const el = document.getElementById(id);
+  const mins = minutesAgo(iso);
+  let cls = 'old';
+  if(mins <= staleAfterMin) cls = 'fresh';
+  else if(mins <= oldAfterMin) cls = 'stale';
+  el.className = 'status-chip ' + cls;
+  el.innerHTML = '<span class="status-dot"></span>' + label + (iso ? ' · ' + fmtTime(iso) : ' · بدون داده');
+}
+
+async function fetchJsonl(url){
+  try{
+    const res = await fetch(url + '?t=' + Date.now());
+    if(!res.ok) return null;
+    const text = await res.text();
+    return text.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      try{ return JSON.parse(l); }catch(e){ return null; }
+    }).filter(Boolean);
+  }catch(e){ return null; }
+}
+async function fetchJson(url){
+  try{
+    const res = await fetch(url + '?t=' + Date.now());
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(e){ return null; }
+}
+
+function renderEmpty(){
+  document.getElementById('content').innerHTML =
+    '<div class="empty"><b>هنوز هیچ اجرای شادو ثبت نشده.</b><br>' +
+    'بعد از اولین اجرای موفق workflow «RSP Shadow Validation» (خودکار یا دستی از تب Actions)، ' +
+    'این صفحه پر می‌شود.</div>';
+}
+
+function badgeClass(engine, decision){
+  return normDecision(engine, decision);
+}
+
+function renderLatestCard(title, tf, rec){
+  if(!rec) return '<div class="card"><div class="card-head"><span class="card-title">'+title+'</span><span class="card-tf">'+tf+'</span></div><div class="empty">داده‌ای نیست</div></div>';
+  const err = rec.error;
+  const decCls = err ? 'err' : badgeClass(title, rec.decision);
+  const decLabel = err ? 'خطا' : (rec.decision || '—');
+  let reasons = rec.reasons || rec.why || [];
+  if(!Array.isArray(reasons)) reasons = [];
+  const reasonItems = reasons.slice(0,3).map(r => '<li>'+String(r).replace(/</g,'&lt;')+'</li>').join('');
+  return `
+    <div class="card">
+      <div class="card-head"><span class="card-title">${title}</span><span class="card-tf">${tf}</span></div>
+      <div class="decision-badge ${decCls}">${decLabel}</div>
+      ${err ? `<div class="kv"><span>خطا</span><b>${String(err).slice(0,80).replace(/</g,'&lt;')}</b></div>` : `
+      <div class="kv"><span>regime</span><b>${rec.market_regime || rec.regime || '—'}</b></div>
+      <div class="kv"><span>freshness داده</span><b>${fmtTime(rec.data_freshness_iso)}</b></div>
+      ${rec.confidence != null ? `<div class="kv"><span>confidence</span><b>${rec.confidence}</b></div>` : ''}
+      ${rec.score_percent != null ? `<div class="kv"><span>score</span><b>${rec.score_percent}</b></div>` : ''}
+      <ul class="reasons">${reasonItems}</ul>`}
+    </div>`;
+}
+
+function renderTrace(rows){
+  const legacyTicks = rows.map(r => {
+    const cls = r.legacy && !r.legacy.error ? normDecision('legacy', r.legacy.decision) : 'err';
+    const label = r.legacy && !r.legacy.error ? (r.legacy.decision || '') : 'error';
+    return `<div class="tick ${cls}" title="Legacy ${fmtTime(r.router_run_started_at)}: ${label}"></div>`;
+  }).join('');
+  const rspTicks = rows.map(r => {
+    const cls = r.rsp && !r.rsp.error ? normDecision('rsp', r.rsp.decision) : 'err';
+    const label = r.rsp && !r.rsp.error ? (r.rsp.decision || '') : 'error';
+    return `<div class="tick ${cls}" title="RSP ${fmtTime(r.router_run_started_at)}: ${label}"></div>`;
+  }).join('');
+  const agreeTicks = rows.map(r => {
+    const cls = r.decisions_agree ? 'agree' : 'disagree';
+    return `<div class="tick ${cls}" title="${r.decisions_agree ? 'هم‌جهت' : 'اختلاف'}"></div>`;
+  }).join('');
+  return `
+    <div class="trace-card">
+      <div class="trace-title">
+        <span>رَدِ دو کاناله — آخرین ${rows.length} چرخه</span>
+        <span class="trace-legend">
+          <span><i class="dot-sw" style="background:var(--buy)"></i>BUY</span>
+          <span><i class="dot-sw" style="background:var(--sell)"></i>SELL</span>
+          <span><i class="dot-sw" style="background:var(--hold)"></i>HOLD/NO_TRADE</span>
+          <span><i class="dot-sw" style="background:var(--err)"></i>خطا</span>
+        </span>
+      </div>
+      <div class="trace-row"><span class="trace-label">Legacy</span><div class="trace-strip">${legacyTicks}</div></div>
+      <div class="trace-row"><span class="trace-label">RSP</span><div class="trace-strip">${rspTicks}</div></div>
+      <div class="trace-row agree-row"><span class="trace-label">توافق</span><div class="trace-strip">${agreeTicks}</div></div>
+    </div>`;
+}
+
+function renderTable(rows){
+  const trs = rows.slice().reverse().map(r => {
+    const l = r.legacy || {}; const rs = r.rsp || {};
+    const lCls = l.error ? 'err' : badgeClass('legacy', l.decision);
+    const rCls = rs.error ? 'err' : badgeClass('rsp', rs.decision);
+    return `<tr>
+      <td>${fmtTime(r.router_run_started_at)}</td>
+      <td><span class="pill ${lCls}">${l.error ? 'خطا' : (l.decision || '—')}</span></td>
+      <td>${fmtTime(l.data_freshness_iso)}</td>
+      <td><span class="pill ${rCls}">${rs.error ? 'خطا' : (rs.decision || '—')}</span></td>
+      <td>${fmtTime(rs.data_freshness_iso)}</td>
+      <td><span class="pill ${r.decisions_agree ? 'agree' : 'disagree'}">${r.decisions_agree ? 'هم‌جهت' : 'اختلاف'}</span></td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="card" style="overflow-x:auto;">
+      <div class="card-head"><span class="card-title">تاریخچه‌ی اجراهای شادو</span><span class="card-tf">جدیدترین بالا</span></div>
+      <table class="log">
+        <thead><tr>
+          <th>زمان اجرا</th><th>Legacy</th><th>freshness Legacy</th>
+          <th>RSP</th><th>freshness RSP</th><th>وضعیت</th>
+        </tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderPaperStats(closed, openPos){
+  const n = closed.length;
+  const wins = closed.filter(t => t.outcome === 'TP').length;
+  const winRate = n ? Math.round(wins/n*1000)/10 : null;
+  const net = n ? Math.round(closed.reduce((s,t)=>s+(t.pnl_pct||0),0)*100)/100 : null;
+  return `
+    <div class="stats-strip">
+      <div class="stat"><div class="num">${n}</div><div class="lbl">پوزیشن کاغذی بسته‌شده</div></div>
+      <div class="stat"><div class="num">${winRate != null ? winRate+'%' : '—'}</div><div class="lbl">Win Rate ${n < 30 ? '(نمونه کم)' : ''}</div></div>
+      <div class="stat"><div class="num">${net != null ? net+'%' : '—'}</div><div class="lbl">Net Return تجمعی</div></div>
+      <div class="stat"><div class="num">${(openPos && openPos.length) || 0}</div><div class="lbl">پوزیشن باز فعلی</div></div>
+    </div>`;
+}
+
+async function load(){
+  document.getElementById('lastFetch').textContent = 'در حال خواندن…';
+  const [rows, closed, openPos] = await Promise.all([
+    fetchJsonl(SHADOW_URL),
+    fetchJsonl(CLOSED_TRADES_URL),
+    fetchJson(OPEN_POS_URL),
+  ]);
+
+  document.getElementById('lastFetch').textContent = 'آخرین خواندن: ' + new Date().toLocaleTimeString('fa-IR');
+
+  if(!rows || rows.length === 0){
+    renderEmpty();
+    setChip('chipLegacy', 'Legacy', null, 0, 0);
+    setChip('chipRsp', 'RSP', null, 0, 0);
+    return;
+  }
+
+  const latest = rows[rows.length - 1];
+  setChip('chipLegacy', 'Legacy', latest.legacy && latest.legacy.data_freshness_iso, 60*36, 60*72); // روزانه: ۳۶/۷۲ ساعت
+  setChip('chipRsp', 'RSP', latest.rsp && latest.rsp.data_freshness_iso, 20, 60); // ۱۵ دقیقه‌ای: ۲۰/۶۰ دقیقه
+
+  const traceRows = rows.slice(-MAX_TRACE);
+
+  let html = '';
+  html += '<div class="channels">' +
+            renderLatestCard('Legacy', 'روزانه', latest.legacy) +
+            renderLatestCard('RSP', '۱۵ دقیقه‌ای زنده', latest.rsp) +
+          '</div>';
+  html += renderTrace(traceRows);
+  if(closed && closed.length){
+    html += renderPaperStats(closed, openPos);
+  }
+  html += renderTable(rows.slice(-200));
+
+  document.getElementById('content').innerHTML = html;
+}
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+load();
+setInterval(load, 5 * 60 * 1000); // هر ۵ دقیقه خودکار رفرش سبک (فقط خواندن فایل، بدون هزینه)
+</script>
+
+</body>
+</html>
