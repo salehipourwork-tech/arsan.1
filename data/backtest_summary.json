@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-30T08:58:11.644891+00:00",
+  "generated_at": "2026-09-06T07:41:14.341518+00:00",
   "type": "historical_simulation",
   "coins": [
     "bitcoin",
@@ -19,15 +19,15 @@
     "30": {
       "window_days": 30,
       "overall": {
-        "total": 2,
-        "correct": 0,
-        "accuracy_percent": 0.0
+        "total": 6,
+        "correct": 1,
+        "accuracy_percent": 16.7
       },
       "by_decision": {
         "buy": {
-          "total": 1,
-          "correct": 0,
-          "accuracy_percent": 0.0
+          "total": 5,
+          "correct": 1,
+          "accuracy_percent": 20.0
         },
         "sell": {
           "total": 1,
@@ -37,10 +37,10 @@
       },
       "by_coin": {
         "bitcoin": {
-          "total": 0,
+          "total": 1,
           "correct": 0,
-          "accuracy_percent": null,
-          "hold_or_uncertain_days": 30
+          "accuracy_percent": 0.0,
+          "hold_or_uncertain_days": 29
         },
         "ethereum": {
           "total": 0,
@@ -49,38 +49,74 @@
           "hold_or_uncertain_days": 30
         },
         "binancecoin": {
-          "total": 0,
-          "correct": 0,
-          "accuracy_percent": null,
-          "hold_or_uncertain_days": 30
+          "total": 1,
+          "correct": 1,
+          "accuracy_percent": 100.0,
+          "hold_or_uncertain_days": 29
         },
         "ripple": {
-          "total": 1,
+          "total": 2,
           "correct": 0,
           "accuracy_percent": 0.0,
-          "hold_or_uncertain_days": 29
+          "hold_or_uncertain_days": 28
         },
         "solana": {
-          "total": 1,
+          "total": 2,
           "correct": 0,
           "accuracy_percent": 0.0,
-          "hold_or_uncertain_days": 29
+          "hold_or_uncertain_days": 28
         }
       },
       "sample_trades": [
         {
-          "coin": "solana",
-          "date": "2026-08-30",
+          "coin": "ripple",
+          "date": "2026-09-06",
           "day_index": 149,
           "decision": "buy",
+          "entry_price": 1.4122708256630054,
+          "exit_price": 1.4153295215200212,
+          "correct": false
+        },
+        {
+          "coin": "binancecoin",
+          "date": "2026-09-05",
+          "day_index": 148,
+          "decision": "buy",
+          "entry_price": 721.4302698070193,
+          "exit_price": 766.4092879330625,
+          "correct": true
+        },
+        {
+          "coin": "bitcoin",
+          "date": "2026-09-04",
+          "day_index": 147,
+          "decision": "buy",
+          "entry_price": 81264.70153038795,
+          "exit_price": 79671.25767420157,
+          "correct": false
+        },
+        {
+          "coin": "solana",
+          "date": "2026-09-04",
+          "day_index": 147,
+          "decision": "buy",
+          "entry_price": 103.96051784332946,
+          "exit_price": 101.92907583272797,
+          "correct": false
+        },
+        {
+          "coin": "solana",
+          "date": "2026-08-30",
+          "day_index": 142,
+          "decision": "buy",
           "entry_price": 105.5938871300456,
-          "exit_price": 104.69157747403287,
+          "exit_price": 101.68286901296827,
           "correct": false
         },
         {
           "coin": "ripple",
           "date": "2026-08-18",
-          "day_index": 137,
+          "day_index": 130,
           "decision": "sell",
           "entry_price": 1.0024131723623284,
           "exit_price": 1.0011429230744608,
@@ -91,68 +127,104 @@
     "60": {
       "window_days": 60,
       "overall": {
-        "total": 12,
-        "correct": 4,
-        "accuracy_percent": 33.3
+        "total": 14,
+        "correct": 3,
+        "accuracy_percent": 21.4
       },
       "by_decision": {
         "buy": {
-          "total": 1,
-          "correct": 0,
-          "accuracy_percent": 0.0
+          "total": 5,
+          "correct": 1,
+          "accuracy_percent": 20.0
         },
         "sell": {
-          "total": 11,
-          "correct": 4,
-          "accuracy_percent": 36.4
+          "total": 9,
+          "correct": 2,
+          "accuracy_percent": 22.2
         }
       },
       "by_coin": {
         "bitcoin": {
-          "total": 1,
+          "total": 2,
           "correct": 0,
           "accuracy_percent": 0.0,
-          "hold_or_uncertain_days": 59
+          "hold_or_uncertain_days": 58
         },
         "ethereum": {
-          "total": 3,
-          "correct": 1,
-          "accuracy_percent": 33.3,
-          "hold_or_uncertain_days": 57
+          "total": 2,
+          "correct": 0,
+          "accuracy_percent": 0.0,
+          "hold_or_uncertain_days": 58
         },
         "binancecoin": {
-          "total": 0,
-          "correct": 0,
-          "accuracy_percent": null,
-          "hold_or_uncertain_days": 60
+          "total": 1,
+          "correct": 1,
+          "accuracy_percent": 100.0,
+          "hold_or_uncertain_days": 59
         },
         "ripple": {
           "total": 7,
-          "correct": 3,
-          "accuracy_percent": 42.9,
+          "correct": 2,
+          "accuracy_percent": 28.6,
           "hold_or_uncertain_days": 53
         },
         "solana": {
-          "total": 1,
+          "total": 2,
           "correct": 0,
           "accuracy_percent": 0.0,
-          "hold_or_uncertain_days": 59
+          "hold_or_uncertain_days": 58
         }
       },
       "sample_trades": [
         {
-          "coin": "solana",
-          "date": "2026-08-30",
+          "coin": "ripple",
+          "date": "2026-09-06",
           "day_index": 149,
           "decision": "buy",
+          "entry_price": 1.4122708256630054,
+          "exit_price": 1.4153295215200212,
+          "correct": false
+        },
+        {
+          "coin": "binancecoin",
+          "date": "2026-09-05",
+          "day_index": 148,
+          "decision": "buy",
+          "entry_price": 721.4302698070193,
+          "exit_price": 766.4092879330625,
+          "correct": true
+        },
+        {
+          "coin": "bitcoin",
+          "date": "2026-09-04",
+          "day_index": 147,
+          "decision": "buy",
+          "entry_price": 81264.70153038795,
+          "exit_price": 79671.25767420157,
+          "correct": false
+        },
+        {
+          "coin": "solana",
+          "date": "2026-09-04",
+          "day_index": 147,
+          "decision": "buy",
+          "entry_price": 103.96051784332946,
+          "exit_price": 101.92907583272797,
+          "correct": false
+        },
+        {
+          "coin": "solana",
+          "date": "2026-08-30",
+          "day_index": 142,
+          "decision": "buy",
           "entry_price": 105.5938871300456,
-          "exit_price": 104.69157747403287,
+          "exit_price": 101.68286901296827,
           "correct": false
         },
         {
           "coin": "ripple",
           "date": "2026-08-18",
-          "day_index": 137,
+          "day_index": 130,
           "decision": "sell",
           "entry_price": 1.0024131723623284,
           "exit_price": 1.0011429230744608,
@@ -161,7 +233,7 @@
         {
           "coin": "ripple",
           "date": "2026-07-28",
-          "day_index": 116,
+          "day_index": 109,
           "decision": "sell",
           "entry_price": 1.0651155264803904,
           "exit_price": 1.0680196954265415,
@@ -170,7 +242,7 @@
         {
           "coin": "ripple",
           "date": "2026-07-12",
-          "day_index": 100,
+          "day_index": 93,
           "decision": "sell",
           "entry_price": 1.096197339470673,
           "exit_price": 1.0854933916295033,
@@ -179,7 +251,7 @@
         {
           "coin": "ripple",
           "date": "2026-07-11",
-          "day_index": 99,
+          "day_index": 92,
           "decision": "sell",
           "entry_price": 1.104005366846566,
           "exit_price": 1.096197339470673,
@@ -188,7 +260,7 @@
         {
           "coin": "ethereum",
           "date": "2026-07-10",
-          "day_index": 98,
+          "day_index": 91,
           "decision": "sell",
           "entry_price": 1744.6953884606253,
           "exit_price": 1795.2394655119474,
@@ -197,7 +269,7 @@
         {
           "coin": "ripple",
           "date": "2026-07-10",
-          "day_index": 98,
+          "day_index": 91,
           "decision": "sell",
           "entry_price": 1.0927141951064325,
           "exit_price": 1.104005366846566,
@@ -206,7 +278,7 @@
         {
           "coin": "bitcoin",
           "date": "2026-07-09",
-          "day_index": 97,
+          "day_index": 90,
           "decision": "sell",
           "entry_price": 62247.1304822092,
           "exit_price": 63192.8789720319,
@@ -215,7 +287,7 @@
         {
           "coin": "ethereum",
           "date": "2026-07-09",
-          "day_index": 97,
+          "day_index": 90,
           "decision": "sell",
           "entry_price": 1742.2494536901065,
           "exit_price": 1744.6953884606253,
@@ -224,29 +296,11 @@
         {
           "coin": "ripple",
           "date": "2026-07-09",
-          "day_index": 97,
+          "day_index": 90,
           "decision": "sell",
           "entry_price": 1.0901740623941096,
           "exit_price": 1.0927141951064325,
           "correct": false
-        },
-        {
-          "coin": "ethereum",
-          "date": "2026-07-08",
-          "day_index": 96,
-          "decision": "sell",
-          "entry_price": 1771.2223954004269,
-          "exit_price": 1742.2494536901065,
-          "correct": true
-        },
-        {
-          "coin": "ripple",
-          "date": "2026-07-08",
-          "day_index": 96,
-          "decision": "sell",
-          "entry_price": 1.1120051240230528,
-          "exit_price": 1.0901740623941096,
-          "correct": true
         }
       ]
     }
