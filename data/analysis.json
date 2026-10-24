@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-10-24T08:33:00.723316+00:00",
+  "generated_at": "2026-10-24T09:00:47.064049+00:00",
   "had_error": true,
   "coins": [
     {
       "id": "bitcoin",
-      "current_price": 80723,
-      "change_24h": -1.20811146341684,
+      "current_price": 80649,
+      "change_24h": -1.2796102993704828,
       "decision": "hold",
-      "score": 9.7,
-      "score_percent": 54.9,
+      "score": 9.4,
+      "score_percent": 54.7,
       "reasons": [
         "رژیم بازار «تغییر روند» تشخیص داده شد؛ وزن فاکتورهای تاخیری روندی به‌شدت کاهش یافت (پرریسک‌ترین حالت).",
-        "RSI در محدوده اشباع فروش قرار دارد (41.6).",
+        "RSI در محدوده اشباع فروش قرار دارد (41.4).",
         "MACD منفی و در جهت تضعیف است.",
         "روند قیمت صعودی ضعیف تشخیص داده شده است.",
         "قیمت نزدیک باند پایین بولینگر است.",
@@ -24,15 +24,15 @@
       ],
       "factors": {
         "rsi": 0.4,
-        "macd": -0.6327185485560239,
-        "trend": 0.39544909284751495,
+        "macd": -0.6304595705149958,
+        "trend": 0.39403723157187237,
         "volume_trend": 0.0,
         "bollinger": 1.0,
         "stochastic_rsi": 0.0,
         "obv_trend": -1.2,
-        "ema_cross": 0.6327185485560239,
+        "ema_cross": 0.6304595705149958,
         "support_resistance": 1.6,
-        "news_sentiment": -0.396,
+        "news_sentiment": -0.454,
         "btc_alignment": 0.0
       },
       "disclaimer": "این تحلیل صرفاً بر اساس داده‌های بازار و شاخص‌های تکنیکال تولید شده و هیچ تضمینی برای سود یا پیش‌بینی قطعی قیمت نیست. تصمیم نهایی همیشه با شماست.",
@@ -42,17 +42,17 @@
       "market_regime": {
         "regime": "trend_change",
         "label_fa": "تغییر روند (احتمال برگشت اخیر)",
-        "volatility_pct": 1.42,
+        "volatility_pct": 1.43,
         "volatility_regime": "low",
         "trend_diff_pct": 1.84,
         "trend_strength": 18.4,
         "trend_change_detected": true,
-        "recent_momentum_pct": -4.0
+        "recent_momentum_pct": -4.08
       },
       "news_sentiment": {
         "coin": "bitcoin",
-        "score": -0.198,
-        "articles_analyzed": 23,
+        "score": -0.227,
+        "articles_analyzed": 22,
         "note": null,
         "sample_headlines": [
           "Robinhood sees surge in bitcoin, gold prediction markets as traders move beyond sports",
@@ -63,29 +63,29 @@
         ]
       },
       "indicators": {
-        "rsi": 41.64,
+        "rsi": 41.4,
         "macd": {
-          "macd": -181.1889025856508,
-          "signal": 112.0312106181294,
-          "histogram": -293.2201132037802,
+          "macd": -187.06425341652357,
+          "signal": 110.85614045195484,
+          "histogram": -297.9203938684784,
           "histogram_prev": -247.96991934868964
         },
         "trend": {
           "label": "صعودی ضعیف",
-          "diff_pct": 1.8408896173125533
+          "diff_pct": 1.8358472556138299
         },
         "volume_trend": {
           "label": "متوسط",
-          "change_pct": -2.5704935631839247
+          "change_pct": -2.560362844072436
         },
-        "support": 80723.0947054154,
+        "support": 80649.44298607139,
         "resistance": 86489.73482686514,
         "bollinger": {
-          "upper": 85328.30172372944,
-          "lower": 79784.46475603525,
-          "position": 0.16931052533648838
+          "upper": 85335.05030228228,
+          "lower": 79770.35100554801,
+          "position": 0.15797654709559614
         },
-        "stochastic_rsi": 41.71,
+        "stochastic_rsi": 40.54,
         "obv_trend": "تاییدکننده نزول",
         "ema_cross": "کراس طلایی اخیر (صعودی)",
         "trend_strength": 18.4
@@ -492,15 +492,15 @@
           81102.31316582682
         ],
         [
-          1792830600000,
-          80723.0947054154
+          1792832270000,
+          80649.44298607139
         ]
       ]
     },
     {
       "id": "ethereum",
-      "current_price": 2370.94,
-      "change_24h": -1.4790203451801072,
+      "current_price": 2367.61,
+      "change_24h": -1.5391533582048544,
       "decision": "hold",
       "score": 0.0,
       "score_percent": null,
@@ -517,10 +517,10 @@
         "label_fa": "بازار رنج/خنثی",
         "volatility_pct": 1.79,
         "volatility_regime": "normal",
-        "trend_diff_pct": -0.18,
-        "trend_strength": 1.8,
+        "trend_diff_pct": -0.19,
+        "trend_strength": 1.9,
         "trend_change_detected": false,
-        "recent_momentum_pct": -4.12
+        "recent_momentum_pct": -4.25
       },
       "news_sentiment": {
         "coin": "ethereum",
@@ -535,32 +535,32 @@
         ]
       },
       "indicators": {
-        "rsi": 36.23,
+        "rsi": 35.98,
         "macd": {
-          "macd": -49.96964483506463,
-          "signal": -40.85102870127719,
-          "histogram": -9.118616133787441,
+          "macd": -50.23429592009916,
+          "signal": -40.9039589182841,
+          "histogram": -9.33033700181506,
           "histogram_prev": -9.282447159087866
         },
         "trend": {
           "label": "خنثی",
-          "diff_pct": -0.18295183927469874
+          "diff_pct": -0.1904864298077219
         },
         "volume_trend": {
           "label": "متوسط",
-          "change_pct": -14.2457055136788
+          "change_pct": -14.482657431178641
         },
-        "support": 2370.8462933036603,
+        "support": 2367.52870291626,
         "resistance": 2725.9105379372454,
         "bollinger": {
-          "upper": 2662.997189423746,
-          "lower": 2284.623174161252,
-          "position": 0.22787801398727608
+          "upper": 2663.2168565920715,
+          "lower": 2284.071747954186,
+          "position": 0.22011876999257912
         },
-        "stochastic_rsi": 71.26,
+        "stochastic_rsi": 69.89,
         "obv_trend": "تاییدکننده نزول",
         "ema_cross": "بدون کراس اخیر",
-        "trend_strength": 1.8
+        "trend_strength": 1.9
       },
       "price_history": [
         [
@@ -964,15 +964,15 @@
           2384.7498314209515
         ],
         [
-          1792830600000,
-          2370.8462933036603
+          1792832260000,
+          2367.52870291626
         ]
       ]
     },
     {
       "id": "binancecoin",
-      "current_price": 734.31,
-      "change_24h": -1.4815018655521535,
+      "current_price": 733.29,
+      "change_24h": -1.4767542338851982,
       "decision": "hold",
       "score": 0.0,
       "score_percent": null,
@@ -989,10 +989,10 @@
         "label_fa": "تغییر روند (احتمال برگشت اخیر)",
         "volatility_pct": 1.33,
         "volatility_regime": "low",
-        "trend_diff_pct": 1.05,
-        "trend_strength": 10.5,
+        "trend_diff_pct": 1.04,
+        "trend_strength": 10.4,
         "trend_change_detected": true,
-        "recent_momentum_pct": -1.57
+        "recent_momentum_pct": -1.69
       },
       "news_sentiment": {
         "coin": "binancecoin",
@@ -1004,32 +1004,32 @@
         ]
       },
       "indicators": {
-        "rsi": 43.34,
+        "rsi": 42.98,
         "macd": {
-          "macd": -4.923557580126953,
-          "signal": -4.529277850226933,
-          "histogram": -0.39427972990002047,
+          "macd": -4.999120629050253,
+          "signal": -4.544390460011593,
+          "histogram": -0.45473016903866004,
           "histogram_prev": -0.6377754676566987
         },
         "trend": {
           "label": "صعودی ضعیف",
-          "diff_pct": 1.045462324375512
+          "diff_pct": 1.038273720531125
         },
         "volume_trend": {
           "label": "متوسط",
-          "change_pct": 9.108302650279773
+          "change_pct": 9.058299778579089
         },
         "support": 717.4127111216546,
         "resistance": 795.1820050446804,
         "bollinger": {
-          "upper": 779.0711720781562,
-          "lower": 704.2016836216324,
-          "position": 0.4020222550438227
+          "upper": 779.0652612523301,
+          "lower": 704.1128707682727,
+          "position": 0.3901246705532204
         },
-        "stochastic_rsi": 78.58,
+        "stochastic_rsi": 77.17,
         "obv_trend": "واگرایی هشداردهنده (نزول بدون فشار فروش واقعی)",
         "ema_cross": "بدون کراس اخیر",
-        "trend_strength": 10.5
+        "trend_strength": 10.4
       },
       "price_history": [
         [
@@ -1433,15 +1433,15 @@
           738.7518905879542
         ],
         [
-          1792830600000,
-          734.3008842049015
+          1792832280000,
+          733.3536474130419
         ]
       ]
     },
     {
       "id": "solana",
-      "current_price": 101.98,
-      "change_24h": -2.4564678072072863,
+      "current_price": 101.86,
+      "change_24h": -2.592073402991668,
       "decision": "hold",
       "score": 0.0,
       "score_percent": null,
@@ -1458,10 +1458,10 @@
         "label_fa": "بازار رنج/خنثی",
         "volatility_pct": 1.85,
         "volatility_regime": "normal",
-        "trend_diff_pct": 0.73,
-        "trend_strength": 7.3,
+        "trend_diff_pct": 0.72,
+        "trend_strength": 7.2,
         "trend_change_detected": false,
-        "recent_momentum_pct": -4.64
+        "recent_momentum_pct": -4.75
       },
       "news_sentiment": {
         "coin": "solana",
@@ -1473,32 +1473,32 @@
         ]
       },
       "indicators": {
-        "rsi": 31.94,
+        "rsi": 31.77,
         "macd": {
-          "macd": -2.3319951950451383,
-          "signal": -1.6858636596587062,
-          "histogram": -0.6461315353864321,
+          "macd": -2.341613246898177,
+          "signal": -1.6877872700293142,
+          "histogram": -0.653825976868863,
           "histogram_prev": -0.6541931016353482
         },
         "trend": {
           "label": "خنثی",
-          "diff_pct": 0.7250778198949852
+          "diff_pct": 0.7187534784915827
         },
         "volume_trend": {
           "label": "پایین",
-          "change_pct": -17.318664831583273
+          "change_pct": -17.27246926674859
         },
-        "support": 101.97888037016158,
+        "support": 101.85831122014689,
         "resistance": 122.0809849549597,
         "bollinger": {
-          "upper": 118.9864045125223,
-          "lower": 96.7798793544301,
-          "position": 0.2341204208546303
+          "upper": 118.99399625745662,
+          "lower": 96.76023069449431,
+          "position": 0.22929451654132385
         },
-        "stochastic_rsi": 75.12,
+        "stochastic_rsi": 74.17,
         "obv_trend": "تاییدکننده نزول",
         "ema_cross": "بدون کراس اخیر",
-        "trend_strength": 7.3
+        "trend_strength": 7.2
       },
       "price_history": [
         [
@@ -1902,21 +1902,21 @@
           102.73717190607486
         ],
         [
-          1792830690000,
-          101.97888037016158
+          1792832350000,
+          101.85831122014689
         ]
       ]
     },
     {
       "id": "dogecoin",
-      "current_price": 0.07775,
-      "change_24h": -2.76324734748538,
+      "current_price": 0.077506,
+      "change_24h": -3.6794678794176168,
       "decision": "hold",
       "score": 1.5,
       "score_percent": 50.8,
       "reasons": [
         "رژیم بازار «روند نزولی پایدار» تشخیص داده شد؛ وزن فاکتورهای دنباله‌روی روند (MACD، کراس EMA) افزایش یافت.",
-        "RSI در محدوده اشباع فروش قرار دارد (29.7).",
+        "RSI در محدوده اشباع فروش قرار دارد (29.3).",
         "MACD منفی و در جهت تضعیف است.",
         "روند قیمت نزولی ضعیف تشخیص داده شده است.",
         "وضعیت حجم تجمعی (OBV): تاییدکننده نزول.",
@@ -1928,8 +1928,8 @@
       ],
       "factors": {
         "rsi": 0.72,
-        "macd": -0.5003437237179321,
-        "trend": -0.5003437237179321,
+        "macd": -0.5048901561567056,
+        "trend": -0.5048901561567056,
         "volume_trend": 0.0,
         "bollinger": 0.0,
         "stochastic_rsi": 0.0,
@@ -1948,10 +1948,10 @@
         "label_fa": "روند نزولی پایدار",
         "volatility_pct": 2.19,
         "volatility_regime": "normal",
-        "trend_diff_pct": -2.22,
-        "trend_strength": 22.2,
+        "trend_diff_pct": -2.23,
+        "trend_strength": 22.3,
         "trend_change_detected": false,
-        "recent_momentum_pct": -5.07
+        "recent_momentum_pct": -5.36
       },
       "news_sentiment": {
         "coin": "dogecoin",
@@ -1961,32 +1961,32 @@
         "sample_headlines": []
       },
       "indicators": {
-        "rsi": 29.7,
+        "rsi": 29.33,
         "macd": {
-          "macd": -0.002894811117875193,
-          "signal": -0.002462435913657225,
-          "histogram": -0.00043237520421796766,
+          "macd": -0.002914096912071215,
+          "signal": -0.00246629307249643,
+          "histogram": -0.0004478038395747852,
           "histogram_prev": -0.0004518273216629568
         },
         "trend": {
           "label": "نزولی ضعیف",
-          "diff_pct": -2.2155132989926147
+          "diff_pct": -2.23175055770252
         },
         "volume_trend": {
           "label": "پایین",
-          "change_pct": -32.30235417195816
+          "change_pct": -32.4749810065469
         },
-        "support": 0.07776453269847713,
+        "support": 0.07752277149266257,
         "resistance": 0.09894577126685326,
         "bollinger": {
-          "upper": 0.0930615039342241,
-          "lower": 0.07363944726204433,
-          "position": 0.21239179279821555
+          "upper": 0.09307924877204966,
+          "lower": 0.07359752630363729,
+          "position": 0.20148347741785463
         },
-        "stochastic_rsi": 59.67,
+        "stochastic_rsi": 57.68,
         "obv_trend": "تاییدکننده نزول",
         "ema_cross": "بدون کراس اخیر",
-        "trend_strength": 22.2
+        "trend_strength": 22.3
       },
       "price_history": [
         [
@@ -2390,15 +2390,15 @@
           0.078546910636348
         ],
         [
-          1792830680000,
-          0.07776453269847713
+          1792832360000,
+          0.07752277149266257
         ]
       ]
     },
     {
       "id": "cardano",
-      "current_price": 0.208359,
-      "change_24h": -3.523590246537471,
+      "current_price": 0.207428,
+      "change_24h": -4.34600475287952,
       "decision": "hold",
       "score": 0.0,
       "score_percent": null,
@@ -2415,10 +2415,10 @@
         "label_fa": "بازار رنج/خنثی",
         "volatility_pct": 2.71,
         "volatility_regime": "normal",
-        "trend_diff_pct": 0.34,
-        "trend_strength": 3.4,
+        "trend_diff_pct": 0.32,
+        "trend_strength": 3.2,
         "trend_change_detected": false,
-        "recent_momentum_pct": -7.48
+        "recent_momentum_pct": -7.84
       },
       "news_sentiment": {
         "coin": "cardano",
@@ -2428,32 +2428,32 @@
         "sample_headlines": []
       },
       "indicators": {
-        "rsi": 20.99,
+        "rsi": 20.75,
         "macd": {
-          "macd": -0.006780054549712838,
-          "signal": -0.003426046059818465,
-          "histogram": -0.0033540084898943732,
+          "macd": -0.006844603358833579,
+          "signal": -0.003438955821642613,
+          "histogram": -0.0034056475371909657,
           "histogram_prev": -0.0033783541387939434
         },
         "trend": {
           "label": "خنثی",
-          "diff_pct": 0.339304172781799
+          "diff_pct": 0.3192900711406959
         },
         "volume_trend": {
           "label": "پایین",
-          "change_pct": -30.99932358562269
+          "change_pct": -30.976093519506108
         },
-        "support": 0.208267674892158,
+        "support": 0.20745850946353758,
         "resistance": 0.2704105568382824,
         "bollinger": {
-          "upper": 0.26902624802176167,
-          "lower": 0.1971119498728468,
-          "position": 0.15512527141974936
+          "upper": 0.269104912587744,
+          "lower": 0.1969523687640024,
+          "position": 0.14561012187179687
         },
         "stochastic_rsi": 0.0,
         "obv_trend": "تاییدکننده نزول",
         "ema_cross": "بدون کراس اخیر",
-        "trend_strength": 3.4
+        "trend_strength": 3.2
       },
       "price_history": [
         [
@@ -2857,15 +2857,15 @@
           0.21067942688885574
         ],
         [
-          1792830690000,
-          0.208267674892158
+          1792832350000,
+          0.20745850946353758
         ]
       ]
     },
     {
       "id": "tron",
-      "current_price": 0.329562,
-      "change_24h": -0.05157209936082938,
+      "current_price": 0.329615,
+      "change_24h": -0.030692334416338774,
       "decision": "hold",
       "score": 0.0,
       "score_percent": null,
@@ -2882,10 +2882,10 @@
         "label_fa": "بازار رنج و آرام (نوسان کم)",
         "volatility_pct": 0.6,
         "volatility_regime": "low",
-        "trend_diff_pct": -0.43,
-        "trend_strength": 4.3,
+        "trend_diff_pct": -0.44,
+        "trend_strength": 4.4,
         "trend_change_detected": false,
-        "recent_momentum_pct": -0.27
+        "recent_momentum_pct": -0.31
       },
       "news_sentiment": {
         "coin": "tron",
@@ -2895,32 +2895,32 @@
         "sample_headlines": []
       },
       "indicators": {
-        "rsi": 47.75,
+        "rsi": 47.41,
         "macd": {
-          "macd": -0.0014075596270751722,
-          "signal": -0.0012871932341139692,
-          "histogram": -0.00012036639296120308,
+          "macd": -0.0014183999897682265,
+          "signal": -0.00128936130665258,
+          "histogram": -0.00012903868311564645,
           "histogram_prev": -0.00013946230063044537
         },
         "trend": {
           "label": "خنثی",
-          "diff_pct": -0.4334231062442903
+          "diff_pct": -0.4357143283684117
         },
         "volume_trend": {
           "label": "متوسط",
-          "change_pct": -13.161620059338864
+          "change_pct": -13.196399736909687
         },
         "support": 0.3271753178590095,
         "resistance": 0.33811701537636407,
         "bollinger": {
-          "upper": 0.3366387218322941,
-          "lower": 0.32679932438924025,
-          "position": 0.29980952911124625
+          "upper": 0.33664374282751836,
+          "lower": 0.32678071422506866,
+          "position": 0.28720017988544316
         },
-        "stochastic_rsi": 84.39,
+        "stochastic_rsi": 82.94,
         "obv_trend": "تاییدکننده نزول",
         "ema_cross": "بدون کراس اخیر",
-        "trend_strength": 4.3
+        "trend_strength": 4.4
       },
       "price_history": [
         [
@@ -3324,8 +3324,8 @@
           0.3297112087875291
         ],
         [
-          1792830700000,
-          0.3297492695033806
+          1792832350000,
+          0.3296133778139075
         ]
       ]
     }
